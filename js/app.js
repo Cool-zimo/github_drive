@@ -635,6 +635,8 @@ class App {
     // ==================== 仓库体积监控 ====================
     
     async getRepoSize() {
+        // 如果之前已经失败过，直接返回，避免重复请求
+        if (this._repoSizeFailed) return null;
         try {
             const config = this.storage.getConfig();
             const repo = config.repo || 'github_drive';
@@ -649,7 +651,8 @@ class App {
                 full_name: repoInfo.full_name
             };
         } catch (e) {
-            // 仓库不存在或无权限，静默处理，不显示红色错误
+            // 仓库不存在或无权限，标记失败，避免重复请求
+            this._repoSizeFailed = true;
             console.debug('获取仓库体积失败（可能仓库不存在）:', e.message);
             return null;
         }
