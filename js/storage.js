@@ -192,7 +192,13 @@ class Storage {
         repos.forEach(r => { r.isDefault = (r.owner === owner && r.repo === repo); });
         this.set(this.keys.REPOS, repos);
     }
-    getDefaultRepo() { const repos = this.getRepos(); return repos.find(r => r.isDefault) || repos[0] || null; }
+    getDefaultRepo() {
+        const repos = this.getRepos();
+        const currentUser = this.getUser()?.login;
+        // 只返回 owner 匹配的仓库
+        const validRepos = currentUser ? repos.filter(r => r.owner === currentUser) : repos;
+        return validRepos.find(r => r.isDefault) || validRepos[0] || null;
+    }
     findRepo(owner, repo) { return this.getRepos().find(r => r.owner === owner && r.repo === repo); }
 
     // ==================== 虚拟文件系统 (VFS) ====================

@@ -42,10 +42,21 @@ class FileManager {
     // ==================== 智能仓库分配 ====================
     async autoSelectRepo(neededSize) {
         const config = this.storage.getStorageConfig();
-        const repos = this.storage.getRepos();
+        const currentUser = this.storage.getUser()?.login;
+        let repos = this.storage.getRepos();
+        
+        // 关键修复：只选择 owner 和当前用户匹配的仓库，避免访问其他账号的仓库导致 401
+        if (currentUser) {
+            const validRepos = repos.filter(r => r.owner === currentUser);
+            if (validRepos.length !== repos.length) {
+                console.warn(`[FileManager] 过滤掉 ${repos.length - validRepos.length} 个 owner 不匹配的仓库`);
+                repos = validRepos;
+                this.storage.setRepos(validRepos);
+            }
+        }
 
         const defaultRepo = this.storage.getDefaultRepo();
-        if (defaultRepo && this.storage.canRepoFit(defaultRepo.owner, defaultRepo.repo, neededSize)) {
+        if (defaultRepo && defaultRepo.owner === currentUser && this.storage.canRepoFit(defaultRepo.owner, defaultRepo.repo, neededSize)) {
             return defaultRepo;
         }
 
