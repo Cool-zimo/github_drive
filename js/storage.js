@@ -157,6 +157,25 @@ class Storage {
         }
         return account;
     }
+    
+    // 清除当前账号的所有本地数据（VFS、收藏、最近使用、分享、仓库列表等）
+    // 切换账号时调用，确保数据严格隔离
+    clearCurrentAccountData() {
+        const accountId = this._getAccountId();
+        if (!accountId) return;
+        
+        console.log(`[Storage] 清除账号 ${accountId} 的所有本地数据`);
+        this.accountScopedKeys.forEach(key => {
+            const accountKey = this.prefix + 'account_' + accountId + '_' + key;
+            localStorage.removeItem(accountKey);
+        });
+        
+        // 同时清除全局的旧格式数据（如果有的话）
+        this.accountScopedKeys.forEach(key => {
+            const oldKey = this.prefix + key;
+            localStorage.removeItem(oldKey);
+        });
+    }
 
     // ==================== 用户信息 ====================
     getUser() { return this.get(this.keys.USER, null); }

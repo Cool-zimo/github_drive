@@ -153,18 +153,42 @@ class App {
         const user = this.storage.getUser();
         if (user) this.ui.renderUserInfo(user);
         
-        // 数据修复：检查仓库列表里的 owner 是否和当前用户匹配
-        // 如果不匹配，说明是从其他账号迁移过来的错误数据，清理后自动创建新仓库
+        // 数据修复 + 实时同步：从 GitHub 获取当前用户的所有 drive-storage-* 仓库
+        // 覆盖本地可能混乱的仓库列表，确保数据严格隔离
         if (user && user.login) {
-            const repos = this.storage.getRepos();
-            const mismatched = repos.filter(r => r.owner !== user.login);
-            if (mismatched.length > 0) {
-                console.warn(`[App] 发现 ${mismatched.length} 个仓库 owner 不匹配，自动清理`);
-                // 只保留 owner 匹配的仓库
-                const validRepos = repos.filter(r => r.owner === user.login);
-                this.storage.setRepos(validRepos);
-                // 重置仓库体积缓存
+            try {
+                const allRepos = await this.api.listRepositories(100, 1);
+                const storageRepos = allRepos
+                    .filter(r => r.name.startsWith('drive-storage-') && r.owner.login === user.login)
+                    .map(r => ({
+                        owner: r.owner.login,
+                        repo: r.name,
+                        name: r.name,
+                        description: r.description || '',
+                        branch: r.default_branch || 'main',
+                        isDefault: false,
+                        addedAt: new Date().toISOString()
+                    }));
+                
+                // 按更新时间排序，最新的作为默认仓库
+                if (storageRepos.length > 0) {
+                    storageRepos[0].isDefault = true;
+                }
+                
+                const oldRepos = this.storage.getRepos();
+                if (JSON.stringify(oldRepos) !== JSON.stringify(storageRepos)) {
+                    console.log(`[App] 从 GitHub 同步仓库列表: ${oldRepos.length} → ${storageRepos.length} 个存储仓库`);
+                    this.storage.setRepos(storageRepos);
+                }
                 this._repoSizeFailed = false;
+            } catch (e) {
+                console.warn('[App] 同步仓库列表失败，使用本地缓存:', e.message);
+                // 同步失败时，至少清理 owner 不匹配的仓库
+                const repos = this.storage.getRepos();
+                const validRepos = repos.filter(r => r.owner === user.login);
+                if (validRepos.length !== repos.length) {
+                    this.storage.setRepos(validRepos);
+                }
             }
         }
         // 恢复上次浏览状态
@@ -183,6 +207,9 @@ class App {
     async switchAccount(accountId) {
         // 先保存当前账号的最后浏览状态
         try { this.saveLastState(); } catch(e) {}
+        // 严格数据隔离：切换账号前清除当前账号的所有本地缓存
+        // 这样新账号会从远程重新读取 config，不会和旧账号数据混淆
+        this.storage.clearCurrentAccountData();
         const account = this.storage.setCurrentAccount(accountId);
         if (account) {
             location.reload();
