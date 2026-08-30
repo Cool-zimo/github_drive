@@ -874,29 +874,37 @@ class UI {
     setupDragAndDrop() {
         const fileArea = document.querySelector('.file-area');
         const dropOverlay = document.getElementById('drop-overlay');
-        let dragCounter = 0;
 
+        // 用 relatedTarget 判断是否真的离开，避免子元素 stopPropagation 导致计数错误
         fileArea.addEventListener('dragenter', (e) => {
             e.preventDefault();
-            dragCounter++;
             dropOverlay.classList.remove('hidden');
         });
 
         fileArea.addEventListener('dragover', (e) => {
             e.preventDefault();
+            // dragover 时确保遮罩显示（防止各种异常情况）
+            dropOverlay.classList.remove('hidden');
         });
 
         fileArea.addEventListener('dragleave', (e) => {
             e.preventDefault();
-            dragCounter--;
-            if (dragCounter === 0) {
+            // 只有当 relatedTarget 不在 fileArea 内时，才真正隐藏
+            const related = e.relatedTarget;
+            if (!related || !fileArea.contains(related)) {
+                dropOverlay.classList.add('hidden');
+            }
+        });
+
+        // 额外监听 document 的 dragleave，防止离开窗口时遮罩不消失
+        document.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget === null) {
                 dropOverlay.classList.add('hidden');
             }
         });
 
         fileArea.addEventListener('drop', async (e) => {
             e.preventDefault();
-            dragCounter = 0;
             dropOverlay.classList.add('hidden');
             const items = e.dataTransfer.items;
             if (items && items.length > 0 && items[0].webkitGetAsEntry) {
