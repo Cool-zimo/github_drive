@@ -179,9 +179,20 @@ class FileManager {
             // 上传失败，清理已上传的分片，避免垃圾文件堆积
             console.warn(`[FileManager] 上传失败，正在清理 ${chunks.length} 个已上传分片...`);
             
-            // 401 错误说明 token 无效，给用户明确提示
-            if (uploadError.status === 401) {
-                uploadError.message = 'Token 无效或已过期，请重新登录（可能是切换账号后 token 不匹配）';
+            // 401/404 错误：可能是仓库列表里有无效仓库（其他账号的或已删除的），自动清理
+            if (uploadError.status === 401 || uploadError.status === 404) {
+                const currentUser = this.storage.getUser()?.login;
+                if (currentUser) {
+                    const repos = this.storage.getRepos();
+                    const validRepos = repos.filter(r => r.owner === currentUser);
+                    if (validRepos.length !== repos.length) {
+                        console.warn(`[FileManager] 自动清理 ${repos.length - validRepos.length} 个无效仓库记录`);
+                        this.storage.setRepos(validRepos);
+                    }
+                }
+                uploadError.message = uploadError.status === 401 
+                    ? 'Token 无效或仓库无权限，已自动清理无效仓库记录，请重试'
+                    : '仓库不存在或无权限，已自动清理无效仓库记录，请重试';
             }
             for (const chunk of chunks) {
                 try {
