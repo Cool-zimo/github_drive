@@ -1674,19 +1674,27 @@ class UI {
             return;
         }
 
+        // 获取当前用户信息（分享人）
+        const user = this.app.storage.getUser();
+        const avatar = user?.avatar_url || '';
+        const username = user?.login || 'unknown';
+
         container.className = 'share-list';
         container.innerHTML = shares.map(share => {
             const d = new Date(share.createdAt);
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             const filesHtml = (share.files || []).map(f => `<span class="share-file-tag">${f.name}</span>`).join('');
-            const safeUrl = share.shareUrl.replace(/'/g, "\\'");
+            const safeUrl = share.shareUrl.replace(/'/g, "\'");
             return `
                 <div class="share-card">
-                    <div class="share-card-header">
-                        <div class="share-card-title">📦 ${share.description || I18n.t('share.unnamed')}</div>
-                        <div class="share-card-date">${dateStr}</div>
+                    <div class="share-card-header" style="display:flex;gap:12px;align-items:flex-start;">
+                        <img src="${avatar}" alt="${username}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;">
+                        <div style="flex:1;min-width:0;">
+                            <div class="share-card-title" style="margin-bottom:4px;">${share.description || I18n.t('share.unnamed')}</div>
+                            <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">@${username} · ${dateStr}</div>
+                            <div class="share-card-files">${filesHtml}</div>
+                        </div>
                     </div>
-                    <div class="share-card-files">${filesHtml}</div>
                     <div class="share-card-link">
                         <input type="text" value="${share.shareUrl}" readonly onclick="this.select()" title="点击选中">
                         <button class="btn-secondary btn-sm" onclick="ui.copyToClipboard('${safeUrl}')"><span data-i18n='btn.copy'>Copy</span></button>
@@ -1699,7 +1707,9 @@ class UI {
                 </div>
             `;
         }).join('');
+        I18n.apply();
     }
+
 
     // 发现分享：加载状态
     showExploreLoading() {
