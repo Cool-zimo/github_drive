@@ -69,24 +69,8 @@ class Storage {
             }
         });
         
-        // 2. 如果当前账号没数据，从 default 账号迁移（之前迁移错了的情况）
-        const defaultKey = this.prefix + 'account_default_' + this.keys.VFS;
-        const currentKey = this.prefix + 'account_' + accountId + '_' + this.keys.VFS;
-        const hasData = localStorage.getItem(currentKey) !== null;
-        const defaultHasData = localStorage.getItem(defaultKey) !== null;
-        
-        if (accountId !== 'default' && !hasData && defaultHasData) {
-            // 把 default 账号的所有数据复制到当前账号
-            this.accountScopedKeys.forEach(key => {
-                const defKey = this.prefix + 'account_default_' + key;
-                const curKey = this.prefix + 'account_' + accountId + '_' + key;
-                const defValue = localStorage.getItem(defKey);
-                const curValue = localStorage.getItem(curKey);
-                if (defValue !== null && curValue === null) {
-                    localStorage.setItem(curKey, defValue);
-                }
-            });
-        }
+        // 2. 新账号从空数据开始，不复制其他账号的数据（避免仓库列表混乱导致 401）
+        // 每个账号有自己独立的存储仓库，自动创建即可
     }
 
     get(key, defaultValue = null) {
@@ -180,6 +164,7 @@ class Storage {
 
     // ==================== 关联仓库 ====================
     getRepos() { return this.get(this.keys.REPOS, []); }
+    setRepos(repos) { this.set(this.keys.REPOS, repos); }
     addRepo(repoInfo) {
         const repos = this.getRepos();
         const exists = repos.find(r => r.owner === repoInfo.owner && r.repo === repoInfo.repo);

@@ -152,6 +152,21 @@ class App {
         }
         const user = this.storage.getUser();
         if (user) this.ui.renderUserInfo(user);
+        
+        // 数据修复：检查仓库列表里的 owner 是否和当前用户匹配
+        // 如果不匹配，说明是从其他账号迁移过来的错误数据，清理后自动创建新仓库
+        if (user && user.login) {
+            const repos = this.storage.getRepos();
+            const mismatched = repos.filter(r => r.owner !== user.login);
+            if (mismatched.length > 0) {
+                console.warn(`[App] 发现 ${mismatched.length} 个仓库 owner 不匹配，自动清理`);
+                // 只保留 owner 匹配的仓库
+                const validRepos = repos.filter(r => r.owner === user.login);
+                this.storage.setRepos(validRepos);
+                // 重置仓库体积缓存
+                this._repoSizeFailed = false;
+            }
+        }
         // 恢复上次浏览状态
         const restored = this.restoreLastState();
         if (restored) {
@@ -638,22 +653,38 @@ class App {
         // 如果之前已经失败过，直接返回，避免重复请求
         if (this._repoSizeFailed) return null;
         try {
-            const config = this.storage.getConfig();
-            const repo = config.repo || 'github_drive';
             const owner = this.storage.getUser()?.login;
             if (!owner) return null;
-            const repoInfo = await this.api.getRepository(owner, repo);
+            
+            // 优先访问存储仓库（drive-storage-*），而不是默认的 github_drive
+            const repos = this.storage.getRepos();
+            if (repos.length === 0) return null;
+            
+            // 计算所有存储仓库的总体积
+            let totalSize = 0;
+            let repoCount = 0;
+            for (const repo of repos) {
+                try {
+                    const repoInfo = await this.api.getRepository(repo.owner, repo.repo);
+                    totalSize += repoInfo.size || 0;
+                    repoCount++;
+                } catch (e) {
+                    console.debug('获取仓库体积失败:', repo.repo, e.message);
+                }
+            }
+            
+            if (repoCount === 0) return null;
+            
             return {
-                size: repoInfo.size, // KB
-                sizeMB: (repoInfo.size / 1024).toFixed(1),
-                sizeGB: (repoInfo.size / (1024 * 1024)).toFixed(2),
-                name: repoInfo.name,
-                full_name: repoInfo.full_name
+                size: totalSize, // KB
+                sizeMB: (totalSize / 1024).toFixed(1),
+                sizeGB: (totalSize / (1024 * 1024)).toFixed(2),
+                name: `${repoCount} 个存储仓库`,
+                full_name: `${owner}/drive-storage-*`
             };
         } catch (e) {
-            // 仓库不存在或无权限，标记失败，避免重复请求
             this._repoSizeFailed = true;
-            console.debug('获取仓库体积失败（可能仓库不存在）:', e.message);
+            console.debug('获取仓库体积失败:', e.message);
             return null;
         }
     }
