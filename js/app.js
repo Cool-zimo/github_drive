@@ -45,14 +45,11 @@ class App {
     updateAppVersion() {
         const versionEl = document.getElementById('app-version');
         if (!versionEl) return;
-        const scripts = document.querySelectorAll('script[src*="app.js"]');
-        let version = 'unknown';
-        scripts.forEach(s => {
-            const match = s.src.match(/v=([^&]+)/);
-            if (match) version = match[1];
-        });
-        versionEl.textContent = 'v' + version;
-        versionEl.title = I18n.t('app.versionTitle').replace('{version}', version);
+        // 对外显示正式版本号，内部日期版本号作为 tooltip
+        const formalVersion = (typeof APP_VERSION !== 'undefined') ? APP_VERSION.displayVersion : 'v0.0.0';
+        const dateVersion = (typeof APP_VERSION !== 'undefined') ? APP_VERSION.dateVersion : 'unknown';
+        versionEl.textContent = formalVersion;
+        versionEl.title = I18n.t('app.versionTitle').replace('{version}', dateVersion);
     }
 
     async login(token) {
