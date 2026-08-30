@@ -542,14 +542,35 @@ class Storage {
      */
     getConfig() { return this.getStorageConfig(); }
     getStorageConfig() {
-        return this.get(this.keys.STORAGE_CONFIG, {
+        const defaults = {
             maxRepoSize: 900 * 1024 * 1024,
             autoCreateRepo: true,
             repoNamePrefix: 'drive-storage',
             warnThreshold: 0.8,
             chunkSize: 20 * 1024 * 1024,
-            minChunkSize: 10 * 1024 * 1024
-        });
+            minChunkSize: 10 * 1024 * 1024,
+            configVersion: 2
+        };
+        const saved = this.get(this.keys.STORAGE_CONFIG, null);
+        if (!saved) return defaults;
+        
+        // 配置迁移：旧版本 chunkSize 是 50MB，自动更新为 20MB
+        let needUpdate = false;
+        if (saved.chunkSize === 50 * 1024 * 1024) {
+            saved.chunkSize = 20 * 1024 * 1024;
+            needUpdate = true;
+        }
+        // 确保所有字段都存在
+        for (const key of Object.keys(defaults)) {
+            if (saved[key] === undefined) {
+                saved[key] = defaults[key];
+                needUpdate = true;
+            }
+        }
+        if (needUpdate) {
+            this.set(this.keys.STORAGE_CONFIG, saved);
+        }
+        return saved;
     }
     updateStorageConfig(updates) {
         const config = this.getStorageConfig();
