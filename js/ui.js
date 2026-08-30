@@ -66,6 +66,54 @@ class UI {
 
     init() {
         this.bindEvents();
+        this.initSidebarResizer();
+    }
+    
+    // 侧边栏宽度拖拽调整
+    initSidebarResizer() {
+        const resizer = document.getElementById('sidebar-resizer');
+        if (!resizer) return;
+        
+        // 从 localStorage 恢复宽度
+        const savedWidth = localStorage.getItem('gd_sidebar_width');
+        if (savedWidth) {
+            const w = parseInt(savedWidth);
+            if (w >= 180 && w <= 400) {
+                document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+            }
+        }
+        
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+        
+        resizer.addEventListener('mousedown', (e) => {
+            // 移动端不启用
+            if (window.innerWidth < 768) return;
+            
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 260;
+            resizer.classList.add('dragging');
+            document.body.classList.add('resizing');
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const newWidth = startWidth + (e.clientX - startX);
+            const clampedWidth = Math.max(180, Math.min(400, newWidth));
+            document.documentElement.style.setProperty('--sidebar-width', clampedWidth + 'px');
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (!isResizing) return;
+            isResizing = false;
+            resizer.classList.remove('dragging');
+            document.body.classList.remove('resizing');
+            const currentWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width'));
+            localStorage.setItem('gd_sidebar_width', currentWidth);
+        });
     }
 
     // ==================== 事件绑定 ====================

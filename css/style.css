@@ -283,6 +283,7 @@ body {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    position: relative;
 }
 
 .sidebar-header {
@@ -427,6 +428,30 @@ body {
 }
 
 /* ===== 主内容区 ===== */
+
+
+/* 侧边栏拖拽调整宽度 */
+.sidebar-resizer {
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    z-index: 101;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer.active {
+    background: var(--primary-color);
+}
+.sidebar-resizer.dragging {
+    background: var(--primary-color);
+}
+/* 拖拽时禁止文本选择 */
+body.resizing {
+    user-select: none;
+    cursor: col-resize;
+}
+
 .main-content {
     flex: 1;
     display: flex;
