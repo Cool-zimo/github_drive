@@ -327,8 +327,17 @@ class App {
     }
 
     async downloadFile(file) {
-        try { this.ui.showToast(I18n.t('file.downloading') || '正在下载...', 'info'); await this.fileManager.downloadFile(file.path); }
-        catch (e) { this.ui.showToast('下载失败: ' + e.message, 'error'); }
+        try {
+            this.ui.showDownloadProgress(file.name);
+            await this.fileManager.downloadFile(file.path, (percent, current, total) => {
+                this.ui.updateDownloadProgress(percent, current, total);
+            });
+            this.ui.hideDownloadProgress();
+            this.ui.showToast('下载完成', 'success');
+        } catch (e) {
+            this.ui.hideDownloadProgress();
+            this.ui.showToast('下载失败: ' + e.message, 'error');
+        }
     }
 
     async deleteFile(file, permanent = false) {

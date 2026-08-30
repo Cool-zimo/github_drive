@@ -2246,6 +2246,52 @@ window.I18n = {
         modal.classList.add('closing');
         setTimeout(() => modal.remove(), 300);
     }
+    
+    // 显示下载进度
+    showDownloadProgress(fileName) {
+        const existing = document.getElementById('download-progress-modal');
+        if (existing) existing.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'download-progress-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal" style="max-width:420px;width:90vw;">
+                <div class="modal-header">
+                    <h3>⬇️ 正在下载</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-item">
+                        <div class="upload-item-name">
+                            <span class="file-name">📄 ${fileName}</span>
+                            <span id="download-percent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" id="download-bar" style="width:0%"></div>
+                        </div>
+                    </div>
+                    <p id="download-chunk-info" style="font-size:12px;color:#6b7280;margin-top:8px;text-align:center;">准备下载...</p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    updateDownloadProgress(percent, current, total) {
+        const bar = document.getElementById('download-bar');
+        const percentEl = document.getElementById('download-percent');
+        const chunkInfo = document.getElementById('download-chunk-info');
+        if (bar) bar.style.width = percent + '%';
+        if (percentEl) percentEl.textContent = percent + '%';
+        if (chunkInfo) chunkInfo.textContent = `分片 ${current}/${total}`;
+    }
+    
+    hideDownloadProgress() {
+        const modal = document.getElementById('download-progress-modal');
+        if (!modal) return;
+        modal.classList.add('closing');
+        setTimeout(() => modal.remove(), 300);
+    }
 
     // 异步测试后端连接状态
     async _testBackendConnection(url) {

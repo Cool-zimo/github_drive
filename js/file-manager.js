@@ -230,7 +230,7 @@ class FileManager {
     }
 
     // ==================== 文件下载（自动合并分片） ====================
-    async downloadFile(virtualPath) {
+    async downloadFile(virtualPath, onProgress = null) {
         virtualPath = Storage.normalizePath(virtualPath);
         const fileInfo = this.storage.getFile(virtualPath);
         if (!fileInfo) throw new Error('文件不存在');
@@ -238,11 +238,13 @@ class FileManager {
         console.log(`[FileManager] 下载文件: ${virtualPath}, 分片数: ${fileInfo.chunks.length}`);
 
         const blobs = [];
-        for (let i = 0; i < fileInfo.chunks.length; i++) {
+        const totalChunks = fileInfo.chunks.length;
+        for (let i = 0; i < totalChunks; i++) {
             const chunk = fileInfo.chunks[i];
-            console.log(`[FileManager] 下载分片 ${i + 1}/${fileInfo.chunks.length}: ${chunk.repo}/${chunk.path}`);
+            console.log(`[FileManager] 下载分片 ${i + 1}/${totalChunks}: ${chunk.repo}/${chunk.path}`);
             const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
             blobs.push(new Blob([content]));
+            if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100), i + 1, totalChunks);
         }
 
         const mergedBlob = new Blob(blobs, { type: 'application/octet-stream' });
