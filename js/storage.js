@@ -522,7 +522,7 @@ class Storage {
      * autoCreateRepo: 容量不足时是否自动创建新仓库
      * repoNamePrefix: 自动创建仓库的名称前缀
      * warnThreshold: 容量警告阈值（0-1），默认 0.8
-     * chunkSize: 文件拆分大小（字节），默认 5MB
+     * chunkSize: 文件拆分大小（字节），默认 512KB
      * minChunkSize: 触发拆分的最小文件大小（字节），默认 10MB
      */
     getConfig() { return this.getStorageConfig(); }
@@ -532,8 +532,8 @@ class Storage {
             autoCreateRepo: true,
             repoNamePrefix: 'drive-storage',
             warnThreshold: 0.8,
-            chunkSize: 5 * 1024 * 1024,
-            minChunkSize: 5 * 1024 * 1024,
+            chunkSize: 512 * 1024,
+            minChunkSize: 512 * 1024,
             configVersion: 2
         };
         const saved = this.get(this.keys.STORAGE_CONFIG, null);
@@ -541,8 +541,8 @@ class Storage {
         
         // 配置迁移：旧版本 chunkSize 是 50MB 或 20MB，自动更新为 5MB
         let needUpdate = false;
-        if (saved.chunkSize === 50 * 1024 * 1024 || saved.chunkSize === 20 * 1024 * 1024) {
-            saved.chunkSize = 5 * 1024 * 1024;
+        if (saved.chunkSize === 50 * 1024 * 1024 || saved.chunkSize === 20 * 1024 * 1024 || saved.chunkSize === 5 * 1024 * 1024) {
+            saved.chunkSize = 512 * 1024;
             needUpdate = true;
         }
         // 确保所有字段都存在
