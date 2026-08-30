@@ -77,6 +77,10 @@ class GitHubAPI {
             } catch {
                 errorData = { message: response.statusText };
             }
+            // 401 时打印 token 前几位，方便调试
+            if (response.status === 401) {
+                console.warn('[GitHubAPI] 401 错误，当前 token 前10位:', this.token ? this.token.substring(0, 10) + '...' : '空');
+            }
             console.error(`[GitHubAPI] Request failed: ${response.status} -`, errorData);
             // 检测限流错误
             const isRateLimit = response.status === 403 && 
