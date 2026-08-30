@@ -1198,7 +1198,7 @@ body {
 /* ===== 响应式 ===== */
 /* 汉堡菜单按钮 */
 .menu-toggle {
-    display: none;
+    display: block;
     background: none;
     border: none;
     font-size: 22px;
@@ -1211,6 +1211,39 @@ body {
 }
 .menu-toggle:hover {
     background: var(--bg-hover);
+}
+
+/* 电脑端侧边栏折叠状态 */
+.sidebar.collapsed {
+    width: 60px;
+}
+.sidebar.collapsed .sidebar-title,
+.sidebar.collapsed .nav-section-title,
+.sidebar.collapsed .nav-item span:not(.nav-icon),
+.sidebar.collapsed .user-info > div,
+.sidebar.collapsed .sidebar-footer button span:not(:first-child) {
+    display: none;
+}
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 16px 0;
+}
+.sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 12px 0;
+}
+.sidebar.collapsed .nav-icon {
+    margin: 0;
+}
+.sidebar.collapsed .user-info {
+    justify-content: center;
+    padding: 12px 0;
+}
+.sidebar.collapsed .user-info img {
+    margin: 0;
+}
+.main-content.sidebar-collapsed {
+    margin-left: 60px;
 }
 
 /* 侧边栏遮罩 */
@@ -1229,9 +1262,6 @@ body {
 }
 
 @media (max-width: 768px) {
-    .menu-toggle {
-        display: block;
-    }
     .sidebar {
         position: fixed;
         top: 0;

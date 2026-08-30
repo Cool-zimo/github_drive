@@ -156,17 +156,35 @@ class UI {
         const menuToggle = document.getElementById('menu-toggle');
         const sidebar = document.querySelector('.sidebar');
         const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const mainContent = document.querySelector('.main-content');
         if (menuToggle && sidebar && sidebarOverlay) {
+            const isMobile = () => window.innerWidth <= 768;
             const toggleSidebar = (open) => {
-                const shouldOpen = open !== undefined ? open : !sidebar.classList.contains('open');
-                sidebar.classList.toggle('open', shouldOpen);
-                sidebarOverlay.classList.toggle('active', shouldOpen);
+                if (isMobile()) {
+                    // 移动端：弹出/隐藏侧边栏
+                    const shouldOpen = open !== undefined ? open : !sidebar.classList.contains('open');
+                    sidebar.classList.toggle('open', shouldOpen);
+                    sidebarOverlay.classList.toggle('active', shouldOpen);
+                } else {
+                    // 电脑端：折叠/展开侧边栏
+                    const isCollapsed = sidebar.classList.contains('collapsed');
+                    sidebar.classList.toggle('collapsed', !isCollapsed);
+                    if (mainContent) mainContent.classList.toggle('sidebar-collapsed', !isCollapsed);
+                    // 保存状态
+                    localStorage.setItem('gd_sidebar_collapsed', !isCollapsed);
+                }
             };
             menuToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleSidebar(); });
             sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
             document.querySelectorAll('.sidebar .nav-item').forEach(item => {
-                item.addEventListener('click', () => toggleSidebar(false));
+                item.addEventListener('click', () => { if (isMobile()) toggleSidebar(false); });
             });
+            
+            // 恢复电脑端折叠状态
+            if (!isMobile() && localStorage.getItem('gd_sidebar_collapsed') === 'true') {
+                sidebar.classList.add('collapsed');
+                if (mainContent) mainContent.classList.add('sidebar-collapsed');
+            }
         }
 
         // 右键菜单
