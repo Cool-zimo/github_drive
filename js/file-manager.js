@@ -167,6 +167,11 @@ class FileManager {
         } catch (uploadError) {
             // 上传失败，清理已上传的分片，避免垃圾文件堆积
             console.warn(`[FileManager] 上传失败，正在清理 ${chunks.length} 个已上传分片...`);
+            
+            // 401 错误说明 token 无效，给用户明确提示
+            if (uploadError.status === 401) {
+                uploadError.message = 'Token 无效或已过期，请重新登录（可能是切换账号后 token 不匹配）';
+            }
             for (const chunk of chunks) {
                 try {
                     if (chunk.sha) {
