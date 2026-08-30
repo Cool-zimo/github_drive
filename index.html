@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub Drive - Virtual File System based on GitHub</title>
-    <link rel="stylesheet" href="css/style.css?v=20260831h">
+    <link rel="stylesheet" href="css/style.css?v=20260831i">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📁</text></svg>">
 </head>
 <body>
@@ -16,9 +16,9 @@
             <p class="login-subtitle"><span data-i18n="login.subtitle">Turn your GitHub repo into a private cloud drive</span></p>
 
             <div class="login-form">
-                <label for="token-input">GitHub Personal Access Token</label>
+                <label for="token-input"><span data-i18n="login.tokenLabel">GitHub Personal Access Token</span></label>
                 <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-                <p class="token-hint">需要 <code>repo</code> 和 <code>workflow</code> 权限</p>
+                <p class="token-hint"><span data-i18n="login.tokenHint">需要</span> <code>repo</code> <span data-i18n="login.and">和</span> <code>workflow</code> <span data-i18n="login.permission">权限</span></p>
                 <button id="enter-drive-btn" type="button"><span data-i18n="login.enter">Enter Drive</span></button>
                 <div id="saved-accounts" class="saved-accounts" style="display:none;margin:16px 0;">
                     <div class="saved-accounts-title" style="font-size:12px;color:#6b7280;margin-bottom:8px;text-align:center;"><span data-i18n="login.savedAccounts">已保存的账号</span></div>
@@ -150,14 +150,14 @@
     <input type="file" id="file-input" multiple class="hidden">
     <input type="file" id="folder-input" webkitdirectory directory multiple class="hidden">
 
-    <script src="js/github-api.js?v=20260831h"></script>
-    <script src="js/storage.js?v=20260831h"></script>
-    <script src="js/file-manager.js?v=20260831h"></script>
-    <script src="js/share.js?v=20260831h"></script>
-    <script src="js/config-sync.js?v=20260831h"></script>
-    <script src="js/ui.js?v=20260831h"></script>
-    <script src="js/i18n.js?v=20260831h"></script>
-    <script src="js/app.js?v=20260831h"></script>
+    <script src="js/github-api.js?v=20260831i"></script>
+    <script src="js/storage.js?v=20260831i"></script>
+    <script src="js/file-manager.js?v=20260831i"></script>
+    <script src="js/share.js?v=20260831i"></script>
+    <script src="js/config-sync.js?v=20260831i"></script>
+    <script src="js/ui.js?v=20260831i"></script>
+    <script src="js/i18n.js?v=20260831i"></script>
+    <script src="js/app.js?v=20260831i"></script>
     <!-- 统一<span data-i18n="btn.upload">Upload</span>弹窗 -->
     <div id="upload-modal" class="modal-overlay hidden">
         <div class="modal upload-modal">

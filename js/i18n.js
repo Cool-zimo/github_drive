@@ -18,6 +18,10 @@ const I18n = {
             'sidebar.myFiles': '我的文件',
             // 登录页
             'login.subtitle': '把 GitHub 仓库变成你的私人云盘',
+            'login.tokenLabel': 'GitHub 个人访问令牌',
+            'login.tokenHint': '需要',
+            'login.and': '和',
+            'login.permission': '权限',
             'login.permission': '需要 repo 和 workflow 权限',
             'login.enter': '进入 Drive',
             'login.noToken': '没有 Token？点这里创建 →',
@@ -416,6 +420,10 @@ const I18n = {
             'sidebar.myFiles': 'My Files',
             // Login
             'login.subtitle': 'Turn your GitHub repo into a private cloud drive',
+            'login.tokenLabel': 'GitHub Personal Access Token',
+            'login.tokenHint': 'Requires',
+            'login.and': 'and',
+            'login.permission': 'permissions',
             'login.permission': 'Requires repo and workflow permissions',
             'login.enter': 'Enter Drive',
             'login.noToken': 'No Token? Click here to create →',
