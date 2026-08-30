@@ -649,7 +649,8 @@ class App {
                 full_name: repoInfo.full_name
             };
         } catch (e) {
-            console.error('获取仓库体积失败:', e);
+            // 仓库不存在或无权限，静默处理，不显示红色错误
+            console.debug('获取仓库体积失败（可能仓库不存在）:', e.message);
             return null;
         }
     }
