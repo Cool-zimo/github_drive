@@ -80,9 +80,11 @@ const APP_VERSION = {{
 
 def update_index_html_version(old_version, new_version):
     """更新 index.html 里所有的版本号参数"""
+    import re
     with open(INDEX_HTML_FILE, 'r', encoding='utf-8') as f:
         content = f.read()
-    content = content.replace(f'?v={old_version}', f'?v={new_version}')
+    # 替换所有 v=YYYYMMDDx 格式的版本号，不只是 old_version
+    content = re.sub(r'v=\d{8}[a-z]', f'v={new_version}', content)
     with open(INDEX_HTML_FILE, 'w', encoding='utf-8') as f:
         f.write(content)
 
