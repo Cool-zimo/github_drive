@@ -375,14 +375,28 @@ class FileManager {
     // ==================== 容量同步 ====================
     async syncAllRepoUsage() {
         const repos = this.storage.getRepos();
+        const invalidRepos = [];
         for (const repo of repos) {
             try {
                 const repoInfo = await this.api.getRepository(repo.owner, repo.repo);
                 const sizeKB = repoInfo.size || 0;
                 this.storage.setRepoUsage(repo.owner, repo.repo, sizeKB * 1024);
             } catch (e) {
-                console.warn(`[FileManager] 同步仓库容量失败: ${repo.name}`, e.message);
+                // 404 说明仓库不存在，自动移除
+                if (e.status === 404) {
+                    console.warn(`[FileManager] 仓库不存在，自动移除: ${repo.owner}/${repo.repo}`);
+                    invalidRepos.push(repo);
+                } else {
+                    console.warn(`[FileManager] 同步仓库容量失败: ${repo.name}`, e.message);
+                }
             }
+        }
+        // 移除无效仓库
+        for (const repo of invalidRepos) {
+            this.storage.removeRepo(repo.owner, repo.repo);
+        }
+        if (invalidRepos.length > 0) {
+            console.log(`[FileManager] 已自动移除 ${invalidRepos.length} 个无效仓库`);
         }
         console.log('[FileManager] 所有仓库容量同步完成');
     }
