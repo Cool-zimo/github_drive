@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Drive - Virtual File System based on GitHub</title>
+    <link rel="stylesheet" href="css/style.css?v=20260831d">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📁</text></svg>">
+</head>
+<body>
+    <!-- 登录页 -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-card">
+            <div class="login-logo">📁</div>
+            <h1>GitHub Drive</h1>
+            <p class="login-subtitle"><span data-i18n="login.subtitle">Turn your GitHub repo into a private cloud drive</span></p>
+
+            <div class="login-form">
+                <label for="token-input">GitHub Personal Access Token</label>
+                <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+                <p class="token-hint">需要 <code>repo</code> 和 <code>workflow</code> 权限</p>
+                <button id="enter-drive-btn" type="button"><span data-i18n="login.enter">Enter Drive</span></button>
+                <div id="saved-accounts" class="saved-accounts" style="display:none;margin:16px 0;">
+                    <div class="saved-accounts-title" style="font-size:12px;color:#6b7280;margin-bottom:8px;text-align:center;"><span data-i18n="login.savedAccounts">已保存的账号</span></div>
+                    <div id="accounts-list" class="accounts-list"></div>
+                    <div class="login-divider" style="margin:16px 0;"><span data-i18n="login.or">OR</span></div>
+                </div>
+                <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=GitHub+Drive" target="_blank" class="token-link"><span data-i18n="login.noToken">No Token? Click here to create →</span></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用 -->
+    <div id="app" class="app hidden">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-logo">📁</span>
+                <span class="sidebar-title">GitHub Drive</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title"><span data-i18n="sidebar.myFiles">My Files</span></div>
+                    <a href="#" class="nav-item active" data-view="all-files">
+                        <span class="nav-icon">🗂️</span>
+                        <span data-i18n="nav.allFiles">全部文件</span>
+                    </a>
+                    <a href="#" class="nav-item" data-view="recent">
+                        <span class="nav-icon">🕐</span>
+                        <span data-i18n="nav.recent">最近使用</span>
+                    </a>
+                    <a href="#" class="nav-item" data-view="starred">
+                        <span class="nav-icon">⭐</span>
+                        <span data-i18n="nav.starred">收藏</span>
+                    </a>
+                    <a href="#" class="nav-item" onclick="app.navigateTo('/drive_home/.trash');return false;">
+                        <span class="nav-icon">🗑️</span>
+                        <span data-i18n="nav.trash">Trash</span>
+                    </a>
+                    <a href="#" class="nav-item" data-view="shared">
+                        <span class="nav-icon">🔗</span>
+                        <span data-i18n="nav.shared">我的分享</span>
+                    </a>
+                    <a href="#" class="nav-item" data-view="explore">
+                        <span class="nav-icon">🌐</span>
+                        <span data-i18n="nav.explore">发现分享</span>
+                    </a>
+                    <a href="#" class="nav-item" data-view="plugins">
+                        <span class="nav-icon">🧩</span>
+                        <span data-i18n="nav.plugins">插件广场</span>
+                    </a>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info" id="user-info" onclick="ui.showAccountSwitcher()" style="cursor:pointer;" title="点击切换账号"></div>
+                <button onclick="ui.showSettings()" style="width:100%;padding:10px 16px;border:none;background:none;cursor:pointer;color:inherit;font-size:13px;text-align:left;display:flex;align-items:center;gap:8px;border-top:1px solid #e5e7eb;">
+                    <span>⚙️</span><span data-i18n="nav.settings">Settings</span>
+                </button>
+                <!-- 隐藏元素，保留ID供JS引用 -->
+                <span id="repo-size-display" style="display:none;">📦 --</span>
+                <span class="app-version" id="app-version" style="display:none;">v-</span>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部工具栏 -->
+            <header class="toolbar">
+                <button class="menu-toggle" id="menu-toggle" aria-label="Menu">☰</button>
+                <div class="breadcrumb" id="breadcrumb"></div>
+                <div class="toolbar-actions">
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="Search files...">
+                    </div>
+                    <button class="btn-secondary" id="new-folder-btn" title="New Folder">
+                        <span>📁</span> <span class="btn-text"><span data-i18n="btn.newFolder">New Folder</span></span>
+                    </button>
+                    <button class="btn-secondary" id="upload-btn" title="Upload files/folders">
+                        <span>⬆️</span> <span class="btn-text"><span data-i18n="btn.upload">Upload</span></span>
+                    </button>
+                    <button class="btn-secondary" id="view-toggle-btn" title="Toggle view (grid/list)">
+                        <span id="view-toggle-icon">▦</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 文件列表 -->
+            <div class="file-area">
+                <div id="drop-overlay" class="drop-overlay hidden">
+                    <div class="drop-content">
+                        <div class="drop-icon">📥</div>
+                        <p>松开鼠标<span data-i18n="btn.upload">Upload</span>文件</p>
+                    </div>
+                </div>
+                <div id="file-list" class="file-list"></div>
+                <div id="empty-state" class="empty-state hidden">
+                    <div class="empty-icon">📂</div>
+                    <p><span data-i18n="empty.noFiles">No files here yet</span></p>
+                    <p class="empty-hint"><span data-i18n="empty.dragHint">Drag files here, or click "Upload" button above</span></p>
+                </div>
+                <div id="loading-state" class="loading-state hidden">
+                    <div class="spinner"></div>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 右键菜单 -->
+        <div id="context-menu" class="context-menu hidden">
+            <div class="context-menu-item" data-action="open">📂 <span data-i18n="menu.open">Open</span></div>
+            <div class="context-menu-item" data-action="download">⬇️ <span data-i18n="menu.download">Download</span></div>
+            <div class="context-menu-item" data-action="share">🔗 <span data-i18n="menu.share">Share</span></div>
+            <div class="context-menu-item" data-action="rename">✏️ <span data-i18n="menu.rename">Rename</span></div>
+            <div class="context-menu-item" data-action="move">📋 <span data-i18n="menu.move">Move to...</span></div>
+            <div class="context-menu-item" data-action="copy">📄 <span data-i18n="menu.copy">Copy</span></div>
+            <div class="context-menu-item" data-action="star">⭐ <span data-i18n="menu.star">Star</span></div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item danger" data-action="delete">🗑️ <span data-i18n="menu.delete">Delete</span></div>
+        </div>
+    </div>
+
+    <!-- 模态框容器 -->
+    <div id="modal-container"></div>
+
+    <!-- Toast 通知 -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- 隐藏的文件输入 -->
+    <input type="file" id="file-input" multiple class="hidden">
+    <input type="file" id="folder-input" webkitdirectory directory multiple class="hidden">
+
+    <script src="js/github-api.js?v=20260831d"></script>
+    <script src="js/storage.js?v=20260831d"></script>
+    <script src="js/file-manager.js?v=20260831d"></script>
+    <script src="js/share.js?v=20260831d"></script>
+    <script src="js/config-sync.js?v=20260831d"></script>
+    <script src="js/ui.js?v=20260831d"></script>
+    <script src="js/i18n.js?v=20260831d"></script>
+    <script src="js/app.js?v=20260831d"></script>
+    <!-- 统一<span data-i18n="btn.upload">Upload</span>弹窗 -->
+    <div id="upload-modal" class="modal-overlay hidden">
+        <div class="modal upload-modal">
+            <div class="modal-header">
+                <h3>📤 <span data-i18n="btn.upload">Upload</span>文件</h3>
+                <button class="modal-close" onclick="ui.closeUploadModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 拖拽区域 -->
+                <div id="upload-drop-zone" class="upload-drop-zone">
+                    <div class="upload-drop-icon">📥</div>
+                    <p class="upload-drop-text"><span data-i18n="upload.dropHint">Drag files or folders here</span></p>
+                    <p class="upload-drop-hint">支持同时<span data-i18n="btn.upload">Upload</span>多个文件和文件夹</p>
+                </div>
+                <!-- 选择按钮 -->
+                <div class="upload-actions">
+                    <button class="btn-primary" onclick="document.getElementById('upload-file-input').click()">
+                        📄 <span data-i18n="upload.selectFiles">Select Files</span>
+                    </button>
+                    <button class="btn-secondary" onclick="document.getElementById('upload-folder-input').click()">
+                        📂 <span data-i18n="upload.selectFiles">Select Files</span>夹
+                    </button>
+                    <input type="file" id="upload-file-input" multiple style="display:none;">
+                    <input type="file" id="upload-folder-input" webkitdirectory multiple style="display:none;">
+                </div>
+                <!-- 已<span data-i18n="upload.selectFiles">Select Files</span>列表 -->
+                <div class="upload-file-list-header">
+                    <span><span data-i18n="upload.selected">Selected</span> <span id="upload-file-count">0</span> <span data-i18n="upload.items">items</span></span>
+                    <button class="icon-btn" onclick="ui.clearUploadFiles()" style="padding:2px 8px;"><span data-i18n="upload.clear">Clear</span></button>
+                </div>
+                <div id="upload-file-list" class="upload-file-list">
+                    <div class="upload-file-empty">还没有<span data-i18n="upload.selectFiles">Select Files</span></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="ui.closeUploadModal()"><span data-i18n="btn.cancel">Cancel</span></button>
+                <button class="btn-primary" id="upload-confirm-btn" onclick="ui.confirmUpload()" disabled>开始<span data-i18n="btn.upload">Upload</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 多选操作栏（移动端） -->
+    <div id="multi-select-bar" class="multi-select-bar">
+        <span id="multi-select-count" class="ms-count">0 项已选</span>
+        <div class="ms-actions">
+            <button class="ms-btn" onclick="ui.multiSelectAction('selectAll')">全选</button>
+            <button class="ms-btn" onclick="ui.multiSelectAction('move')">📂 移动</button>
+            <button class="ms-btn" onclick="ui.multiSelectAction('download')">⬇️ <span data-i18n="menu.download">Download</span></button>
+            <button class="ms-btn" onclick="ui.multiSelectAction('delete')">🗑️ <span data-i18n="menu.delete">Delete</span></button>
+            <button class="ms-btn ms-cancel" onclick="ui.exitMultiSelectMode()"><span data-i18n="btn.cancel">Cancel</span></button>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,408 @@
+/**
+ * 文件管理器 v2
+ * 核心抽象：用户只看到 /drive_home 下的统一文件系统
+ * 实际文件可能拆分后散落在多个 GitHub 仓库中
+ */
+class FileManager {
+    constructor(api, storage) {
+        this.api = api;
+        this.storage = storage;
+        this.currentPath = '/drive_home';
+    }
+
+    // ==================== 目录导航 ====================
+    setCurrentPath(path) {
+        this.currentPath = Storage.normalizePath(path);
+    }
+
+    // 兼容旧调用的别名方法
+    getBreadcrumb(path) { return this.getBreadcrumbs(path); }
+    setCurrentRepo(repo) { /* 统一目录视图不需要当前仓库概念 */ }
+    get currentRepo() { return null; }
+
+    getCurrentPath() { return this.currentPath; }
+
+    async listFiles(path = this.currentPath) {
+        path = Storage.normalizePath(path);
+        return this.storage.listDirectory(path);
+    }
+
+    getBreadcrumbs(path = this.currentPath) {
+        path = Storage.normalizePath(path);
+        const parts = path.substring('/drive_home'.length).split('/').filter(Boolean);
+        const crumbs = [{ name: 'Drive Home', path: '/drive_home' }];
+        let current = '/drive_home';
+        parts.forEach(part => {
+            current += '/' + part;
+            crumbs.push({ name: part, path: current });
+        });
+        return crumbs;
+    }
+
+    // ==================== 智能仓库分配 ====================
+    async autoSelectRepo(neededSize) {
+        const config = this.storage.getStorageConfig();
+        const repos = this.storage.getRepos();
+
+        const defaultRepo = this.storage.getDefaultRepo();
+        if (defaultRepo && this.storage.canRepoFit(defaultRepo.owner, defaultRepo.repo, neededSize)) {
+            return defaultRepo;
+        }
+
+        const otherRepos = repos
+            .filter(r => !r.isDefault)
+            .sort((a, b) => this.storage.getRepoRemaining(b.owner, b.repo) - this.storage.getRepoRemaining(a.owner, a.repo));
+        for (const repo of otherRepos) {
+            if (this.storage.canRepoFit(repo.owner, repo.repo, neededSize)) {
+                return repo;
+            }
+        }
+
+        if (config.autoCreateRepo) {
+            return await this.autoCreateStorageRepo();
+        }
+
+        throw new Error('所有仓库容量不足，且未开启自动创建仓库功能');
+    }
+
+    async autoCreateStorageRepo() {
+        const config = this.storage.getStorageConfig();
+        const date = new Date().toISOString().split('T')[0];
+        const random = Math.random().toString(16).substring(2, 6);
+        const repoName = `${config.repoNamePrefix}-${date}-${random}`;
+
+        console.log(`[FileManager] 自动创建存储仓库: ${repoName}`);
+        const repo = await this.api.createRepository(repoName, true, 'GitHub Drive 自动创建的存储仓库');
+        const repoInfo = {
+            owner: repo.owner.login,
+            repo: repo.name,
+            name: repo.name,
+            branch: 'main',
+            isDefault: this.storage.getRepos().length === 0
+        };
+        this.storage.addRepo(repoInfo);
+        return repoInfo;
+    }
+
+    // ==================== 文件上传（支持自动拆分） ====================
+    async uploadFile(file, targetPath = this.currentPath, onProgress = null) {
+        const config = this.storage.getStorageConfig();
+        const virtualPath = Storage.normalizePath(targetPath) + '/' + file.name;
+        const totalSize = file.size;
+        const chunks = [];
+
+        console.log(`[FileManager] 上传文件: ${file.name}, 大小: ${Storage.formatBytes(totalSize)}`);
+
+        const needSplit = totalSize > config.minChunkSize;
+        const chunkSize = needSplit ? config.chunkSize : totalSize;
+        const totalChunks = Math.ceil(totalSize / chunkSize);
+
+        // 单分片文件：启动模拟进度，避免 0→100% 跳变
+        let simulateTimer = null;
+        let simulatedPercent = 0;
+        if (totalChunks === 1 && onProgress) {
+            simulateTimer = setInterval(() => {
+                simulatedPercent = Math.min(simulatedPercent + Math.random() * 6 + 3, 87);
+                onProgress(Math.round(simulatedPercent));
+            }, 180);
+        }
+
+        try {
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, totalSize);
+            const chunkBlob = file.slice(start, end);
+            const chunkSizeActual = end - start;
+
+            const repo = await this.autoSelectRepo(chunkSizeActual);
+            const chunkFileName = totalChunks > 1 ? `${file.name}.${i + 1}` : file.name;
+            const chunkPath = `${Date.now().toString(36)}/${chunkFileName}`;
+
+            console.log(`[FileManager] 分片 ${i + 1}/${totalChunks}: ${Storage.formatBytes(chunkSizeActual)} → ${repo.name}/${chunkPath}`);
+
+            const arrayBuffer = await chunkBlob.arrayBuffer();
+            if (chunkSizeActual > 1024 * 1024) {
+                await this.api.uploadLargeFile(repo.owner, repo.repo, chunkPath, arrayBuffer, `上传分片: ${chunkFileName}`, repo.branch);
+            } else {
+                const base64 = this.arrayBufferToBase64(arrayBuffer);
+                await this.api.createOrUpdateFileBinary(repo.owner, repo.repo, chunkPath, base64, `上传分片: ${chunkFileName}`, repo.branch);
+            }
+
+            let sha = '';
+            try {
+                const fileInfo = await this.api.getFileContents(repo.owner, repo.repo, chunkPath, repo.branch);
+                sha = fileInfo.sha || '';
+            } catch (e) { /* 忽略 */ }
+
+            chunks.push({
+                owner: repo.owner,
+                repo: repo.repo,
+                path: chunkPath,
+                size: chunkSizeActual,
+                sha: sha,
+                branch: repo.branch
+            });
+
+            this.storage.addToRepoUsage(repo.owner, repo.repo, chunkSizeActual);
+
+            if (simulateTimer) { clearInterval(simulateTimer); simulateTimer = null; }
+            if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+        }
+        } catch (uploadError) {
+            // 上传失败，清理已上传的分片，避免垃圾文件堆积
+            console.warn(`[FileManager] 上传失败，正在清理 ${chunks.length} 个已上传分片...`);
+            for (const chunk of chunks) {
+                try {
+                    if (chunk.sha) {
+                        await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path, `清理上传失败的分片: ${chunk.path}`, chunk.branch, chunk.sha);
+                        this.storage.subtractFromRepoUsage?.(chunk.owner, chunk.repo, chunk.size);
+                    }
+                } catch (cleanupError) {
+                    console.warn(`[FileManager] 清理分片失败: ${chunk.path}`, cleanupError.message);
+                }
+            }
+            console.log(`[FileManager] 已清理 ${chunks.length} 个分片`);
+            throw uploadError;
+        }
+
+        const fileInfo = this.storage.putFile(virtualPath, {
+            name: file.name,
+            size: totalSize,
+            chunks: chunks
+        });
+
+        console.log(`[FileManager] 上传完成: ${virtualPath}, 共 ${chunks.length} 个分片`);
+        return { virtualPath, fileInfo, chunks, split: totalChunks > 1 };
+    }
+
+    async uploadFiles(files, targetPath = this.currentPath, onProgress = null) {
+        const results = [];
+        for (let i = 0; i < files.length; i++) {
+            const result = await this.uploadFile(files[i], targetPath, (percent) => {
+                if (onProgress) onProgress(i, percent, files.length);
+            });
+            results.push(result);
+        }
+        return { count: files.length, results };
+    }
+
+    // ==================== 文件下载（自动合并分片） ====================
+    async downloadFile(virtualPath) {
+        virtualPath = Storage.normalizePath(virtualPath);
+        const fileInfo = this.storage.getFile(virtualPath);
+        if (!fileInfo) throw new Error('文件不存在');
+
+        console.log(`[FileManager] 下载文件: ${virtualPath}, 分片数: ${fileInfo.chunks.length}`);
+
+        const blobs = [];
+        for (let i = 0; i < fileInfo.chunks.length; i++) {
+            const chunk = fileInfo.chunks[i];
+            console.log(`[FileManager] 下载分片 ${i + 1}/${fileInfo.chunks.length}: ${chunk.repo}/${chunk.path}`);
+            const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
+            blobs.push(new Blob([content]));
+        }
+
+        const mergedBlob = new Blob(blobs, { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(mergedBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileInfo.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        this.storage.addToRecent(virtualPath);
+        console.log(`[FileManager] 下载完成: ${fileInfo.name}`);
+    }
+
+    async getFileContent(virtualPath) {
+        virtualPath = Storage.normalizePath(virtualPath);
+        const fileInfo = this.storage.getFile(virtualPath);
+        if (!fileInfo) throw new Error('文件不存在');
+
+        const parts = [];
+        for (const chunk of fileInfo.chunks) {
+            const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
+            parts.push(content);
+        }
+        // 合并所有分片的字节，再按 UTF-8 解码为文本
+        const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
+        if (totalLen === 0) return '';
+        const merged = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const p of parts) {
+            merged.set(p, offset);
+            offset += p.length;
+        }
+        return new TextDecoder('utf-8').decode(merged);
+    }
+
+    /**
+     * 获取文件二进制内容（Blob），用于预览和下载
+     */
+    async getFileBlob(virtualPath) {
+        virtualPath = Storage.normalizePath(virtualPath);
+        const fileInfo = this.storage.getFile(virtualPath);
+        if (!fileInfo) throw new Error('文件不存在');
+
+        const parts = [];
+        for (const chunk of fileInfo.chunks) {
+            const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
+            parts.push(content);
+        }
+        const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
+        if (totalLen === 0) return new Blob();
+        const merged = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const p of parts) {
+            merged.set(p, offset);
+            offset += p.length;
+        }
+        return new Blob([merged], { type: this.guessMimeType(fileInfo.name) });
+    }
+
+    /**
+     * 根据文件名猜测 MIME 类型
+     */
+    guessMimeType(name) {
+        const ext = name.split('.').pop().toLowerCase();
+        const map = {
+            pdf: 'application/pdf',
+            txt: 'text/plain', md: 'text/markdown', html: 'text/html', htm: 'text/html',
+            css: 'text/css', js: 'application/javascript', json: 'application/json',
+            xml: 'application/xml', csv: 'text/csv',
+            png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+            svg: 'image/svg+xml', webp: 'image/webp', bmp: 'image/bmp',
+            mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+            mp4: 'video/mp4', webm: 'video/webm',
+            zip: 'application/zip', rar: 'application/vnd.rar',
+            '7z': 'application/x-7z-compressed', tar: 'application/x-tar', gz: 'application/gzip',
+            doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        };
+        return map[ext] || 'application/octet-stream';
+    }
+
+    /**
+     * ArrayBuffer 转 base64（用于二进制文件上传）
+     */
+    arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+    }
+
+    // ==================== 文件删除 ====================
+    async deleteFile(virtualPath) {
+        virtualPath = Storage.normalizePath(virtualPath);
+        const fileInfo = this.storage.getFile(virtualPath);
+        if (!fileInfo) throw new Error('文件不存在');
+
+        console.log(`[FileManager] 删除文件: ${virtualPath}, 分片数: ${fileInfo.chunks.length}`);
+
+        for (let i = 0; i < fileInfo.chunks.length; i++) {
+            const chunk = fileInfo.chunks[i];
+            try {
+                let sha = chunk.sha;
+                try {
+                    const fi = await this.api.getFileContents(chunk.owner, chunk.repo, chunk.path, chunk.branch);
+                    sha = fi.sha;
+                } catch (e) { /* 忽略 */ }
+
+                await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path, `删除分片: ${chunk.path}`, chunk.branch, sha);
+                console.log(`[FileManager] 已删除分片 ${i + 1}/${fileInfo.chunks.length}: ${chunk.repo}/${chunk.path}`);
+            } catch (e) {
+                console.warn(`[FileManager] 删除分片失败: ${chunk.path}`, e.message);
+            }
+        }
+
+        this.storage.deleteFile(virtualPath);
+        console.log(`[FileManager] 文件已从 VFS 删除: ${virtualPath}`);
+    }
+
+    // ==================== 文件夹操作 ====================
+    async createFolder(folderName, targetPath = this.currentPath) {
+        const virtualPath = Storage.normalizePath(targetPath) + '/' + folderName;
+        if (this.storage.exists(virtualPath)) {
+            throw new Error('文件夹已存在');
+        }
+        this.storage.putFolder(virtualPath);
+        console.log(`[FileManager] 创建文件夹: ${virtualPath}`);
+        return { virtualPath, name: folderName };
+    }
+
+    async deleteFolder(virtualPath) {
+        virtualPath = Storage.normalizePath(virtualPath);
+        if (virtualPath === '/drive_home') throw new Error('不能删除根目录');
+
+        const items = this.storage.listDirectory(virtualPath);
+        console.log(`[FileManager] 删除文件夹: ${virtualPath}, 包含 ${items.length} 个项目`);
+
+        for (const item of items) {
+            if (item.isFile) {
+                await this.deleteFile(item.path);
+            } else if (item.isFolder) {
+                await this.deleteFolder(item.path);
+            }
+        }
+
+        this.storage.deleteFolder(virtualPath);
+    }
+
+    async renameItem(virtualPath, newName) {
+        virtualPath = Storage.normalizePath(virtualPath);
+        const parentPath = Storage.getParentPath(virtualPath);
+        const newPath = parentPath + '/' + newName;
+
+        if (this.storage.exists(newPath)) throw new Error('目标名称已存在');
+
+        this.storage.moveItem(virtualPath, newPath);
+        console.log(`[FileManager] 重命名: ${virtualPath} → ${newPath}`);
+        return { oldPath: virtualPath, newPath, name: newName };
+    }
+
+    // ==================== 搜索 ====================
+    searchFiles(query) {
+        return this.storage.searchFiles(query);
+    }
+
+    // ==================== 容量同步 ====================
+    async syncAllRepoUsage() {
+        const repos = this.storage.getRepos();
+        for (const repo of repos) {
+            try {
+                const repoInfo = await this.api.getRepository(repo.owner, repo.repo);
+                const sizeKB = repoInfo.size || 0;
+                this.storage.setRepoUsage(repo.owner, repo.repo, sizeKB * 1024);
+            } catch (e) {
+                console.warn(`[FileManager] 同步仓库容量失败: ${repo.name}`, e.message);
+            }
+        }
+        console.log('[FileManager] 所有仓库容量同步完成');
+    }
+
+    // ==================== 工具方法 ====================
+    static formatSize(bytes) { return Storage.formatBytes(bytes); }
+
+    static getFileIcon(name, type) {
+        if (type === 'dir') return '📁';
+        const ext = name.split('.').pop().toLowerCase();
+        const icons = {
+            jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', bmp: '🖼️', ico: '🖼️',
+            mp4: '🎬', avi: '🎬', mov: '🎬', wmv: '🎬', flv: '🎬', mkv: '🎬', webm: '🎬',
+            mp3: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', ogg: '🎵', wma: '🎵', m4a: '🎵',
+            pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
+            txt: '📄', md: '📝', json: '📋', xml: '📋', yaml: '📋', yml: '📋',
+            js: '📜', ts: '📜', py: '📜', java: '📜', c: '📜', cpp: '📜', go: '📜', rs: '📜',
+            html: '🌐', css: '🎨', zip: '🗜️', rar: '🗜️', '7z': '🗜️', tar: '🗜️', gz: '🗜️',
+            exe: '⚙️', dmg: '💿', iso: '💿', apk: '📱', ipa: '📱'
+        };
+        return icons[ext] || '📄';
+    }
+}

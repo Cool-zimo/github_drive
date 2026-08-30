@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Drive - API 调试工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f6f8fa; color: #24292f; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 24px; margin-bottom: 20px; color: #0969da; }
+        .panel { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+        .panel h2 { font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de; }
+        .form-row { display: flex; gap: 12px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+        .form-row label { min-width: 100px; font-weight: 600; font-size: 14px; }
+        .form-row input, .form-row select { flex: 1; min-width: 200px; padding: 6px 10px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; }
+        .form-row input:focus, .form-row select:focus { outline: none; border-color: #0969da; box-shadow: 0 0 0 3px rgba(9,105,218,0.1); }
+        button { padding: 8px 16px; background: #2da44e; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600; }
+        button:hover { background: #2c974b; }
+        button.secondary { background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }
+        button.secondary:hover { background: #f3f4f6; }
+        button.danger { background: #cf222e; }
+        button.danger:hover { background: #a40e26; }
+        .result { background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 13px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 500px; overflow-y: auto; }
+        .result .success { color: #7ee787; }
+        .result .error { color: #ff7b72; }
+        .result .info { color: #79c0ff; }
+        .result .warn { color: #d29922; }
+        .url-bar { background: #f6f8fa; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 13px; margin-bottom: 10px; word-break: break-all; border: 1px solid #d0d7de; }
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab { padding: 8px 16px; background: #fff; border: 1px solid #d0d7de; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .tab.active { background: #0969da; color: #fff; border-color: #0969da; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .quick-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+        .quick-links a { padding: 6px 12px; background: #ddf4ff; color: #0969da; border-radius: 20px; text-decoration: none; font-size: 13px; }
+        .quick-links a:hover { background: #b6e3ff; }
+        .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #0969da; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: middle; margin-left: 8px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 GitHub Drive - API 调试工具</h1>
+
+        <div class="quick-links">
+            <a href="index.html">← 返回 Drive</a>
+            <a href="?action=me">👤 获取用户信息</a>
+            <a href="?action=list_repos">📋 列出仓库</a>
+            <a href="?action=list_config">⚙️ 查看配置仓库</a>
+        </div>
+
+        <div class="panel">
+            <h2>通用参数</h2>
+            <div class="form-row">
+                <label>GitHub Token</label>
+                <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx" style="flex:2">
+            </div>
+            <div class="form-row">
+                <label>Owner</label>
+                <input type="text" id="owner" placeholder="Cool-zimo" style="flex:1">
+                <button class="secondary" onclick="autoFillOwner()">自动获取</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('file')">📁 文件操作</div>
+            <div class="tab" onclick="switchTab('repo')">🏭 仓库操作</div>
+            <div class="tab" onclick="switchTab('config')">⚙️ 配置同步</div>
+            <div class="tab" onclick="switchTab('share')">🔗 分享功能</div>
+            <div class="tab" onclick="switchTab('raw')">🔧 原始 API</div>
+        </div>
+
+        <!-- 文件操作 -->
+        <div id="tab-file" class="tab-content active">
+            <div class="panel">
+                <h2>列出文件</h2>
+                <div class="form-row">
+                    <label>仓库名</label>
+                    <input type="text" id="list-repo" placeholder="drive-storage-xxx">
+                    <label>路径</label>
+                    <input type="text" id="list-path" placeholder="(留空为根目录)">
+                </div>
+                <button onclick="listFiles()">列出文件</button>
+            </div>
+
+            <div class="panel">
+                <h2>获取文件内容/SHA</h2>
+                <div class="form-row">
+                    <label>仓库名</label>
+                    <input type="text" id="get-repo" placeholder="drive-storage-xxx">
+                    <label>文件路径</label>
+                    <input type="text" id="get-path" placeholder="README.md">
+                </div>
+                <button onclick="getFile()">获取文件</button>
+            </div>
+
+            <div class="panel">
+                <h2>删除文件</h2>
+                <div class="form-row">
+                    <label>仓库名</label>
+                    <input type="text" id="del-repo" placeholder="drive-storage-xxx">
+                    <label>文件路径</label>
+                    <input type="text" id="del-path" placeholder="README.md">
+                </div>
+                <div class="form-row">
+                    <label>SHA (留空自动获取)</label>
+                    <input type="text" id="del-sha" placeholder="自动获取最新 SHA">
+                </div>
+                <button class="danger" onclick="deleteFile()">删除文件</button>
+            </div>
+
+            <div class="panel">
+                <h2>上传文件</h2>
+                <div class="form-row">
+                    <label>仓库名</label>
+                    <input type="text" id="up-repo" placeholder="drive-storage-xxx">
+                    <label>文件路径</label>
+                    <input type="text" id="up-path" placeholder="test.txt">
+                </div>
+                <div class="form-row">
+                    <label>内容</label>
+                    <input type="text" id="up-content" placeholder="Hello World" style="flex:2">
+                </div>
+                <button onclick="uploadFile()">上传文件</button>
+            </div>
+        </div>
+
+        <!-- 仓库操作 -->
+        <div id="tab-repo" class="tab-content">
+            <div class="panel">
+                <h2>列出我的仓库</h2>
+                <button onclick="listRepos()">列出仓库</button>
+            </div>
+
+            <div class="panel">
+                <h2>创建仓库</h2>
+                <div class="form-row">
+                    <label>仓库名</label>
+                    <input type="text" id="create-repo" placeholder="drive-storage-test">
+                    <label>私有</label>
+                    <select id="create-private"><option value="true">是</option><option value="false">否</option></select>
+                </div>
+                <button onclick="createRepo()">创建仓库</button>
+            </div>
+
+            <div class="panel">
+                <h2>获取仓库信息</h2>
+                <div class="form-row">
+                    <label>仓库名</label>
+                    <input type="text" id="info-repo" placeholder="github-drive-config">
+                </div>
+                <button onclick="getRepoInfo()">获取信息</button>
+            </div>
+        </div>
+
+        <!-- 配置同步 -->
+        <div id="tab-config" class="tab-content">
+            <div class="panel">
+                <h2>读取配置文件</h2>
+                <div class="form-row">
+                    <label>配置仓库</label>
+                    <input type="text" id="cfg-repo" value="github-drive-config">
+                </div>
+                <button onclick="readConfig()">读取配置</button>
+            </div>
+
+            <div class="panel">
+                <h2>写入配置文件（Contents API）</h2>
+                <div class="form-row">
+                    <label>配置仓库</label>
+                    <input type="text" id="cfg-write-repo" value="github-drive-config">
+                    <label>SHA (留空自动获取)</label>
+                    <input type="text" id="cfg-write-sha" placeholder="自动获取">
+                </div>
+                <div class="form-row">
+                    <label>配置内容 (JSON)</label>
+                    <input type="text" id="cfg-write-content" value='{"test":true,"time":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' style="flex:2">
+                </div>
+                <button onclick="writeConfigContents()">写入配置 (Contents API)</button>
+            </div>
+
+            <div class="panel">
+                <h2>写入配置文件（Git Data API）</h2>
+                <div class="form-row">
+                    <label>配置仓库</label>
+                    <input type="text" id="cfg-git-repo" value="github-drive-config">
+                </div>
+                <div class="form-row">
+                    <label>配置内容 (JSON)</label>
+                    <input type="text" id="cfg-git-content" value='{"test":"git-data-api","time":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' style="flex:2">
+                </div>
+                <button onclick="writeConfigGitData()">写入配置 (Git Data API)</button>
+            </div>
+        </div>
+
+        <!-- 分享功能 -->
+        <div id="tab-share" class="tab-content">
+            <div class="panel">
+                <h2>创建分享</h2>
+                <div class="form-row">
+                    <label>源仓库</label>
+                    <input type="text" id="share-src-repo" placeholder="drive-storage-xxx">
+                    <label>源文件路径</label>
+                    <input type="text" id="share-src-path" placeholder="file.txt">
+                </div>
+                <div class="form-row">
+                    <label>分享仓库名</label>
+                    <input type="text" id="share-dst-repo" placeholder="share-xxxx">
+                </div>
+                <button onclick="createShare()">创建分享</button>
+            </div>
+        </div>
+
+        <!-- 原始 API -->
+        <div id="tab-raw" class="tab-content">
+            <div class="panel">
+                <h2>原始 GitHub API 调用</h2>
+                <div class="form-row">
+                    <label>方法</label>
+                    <select id="raw-method">
+                        <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+                    </select>
+                    <label>路径</label>
+                    <input type="text" id="raw-path" placeholder="/repos/Cool-zimo/github_drive/contents/README.md" style="flex:2">
+                </div>
+                <div class="form-row">
+                    <label>请求体 (JSON)</label>
+                    <input type="text" id="raw-body" placeholder='{"message":"test"}' style="flex:2">
+                </div>
+                <button onclick="rawApiCall()">发送请求</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>结果输出 <span id="loading-indicator" style="display:none"><span class="loading"></span></span></h2>
+            <div id="result" class="result">等待操作...</div>
+        </div>
+    </div>
+
+<script>
+const API_BASE = 'https://api.github.com';
+
+function getToken() { return document.getElementById('token').value.trim(); }
+function getOwner() { return document.getElementById('owner').value.trim(); }
+
+function log(msg, type='info') {
+    const el = document.getElementById('result');
+    const time = new Date().toLocaleTimeString();
+    const prefix = { success:'✅ ', error:'❌ ', info:'ℹ️ ', warn:'⚠️ ' }[type] || '';
+    el.innerHTML += `<span class="${type}">[${time}] ${prefix}${msg}</span>\n`;
+    el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() { document.getElementById('result').innerHTML = ''; }
+
+function showLoading(show) {
+    document.getElementById('loading-indicator').style.display = show ? 'inline' : 'none';
+}
+
+async function apiCall(method, path, body=null) {
+    const token = getToken();
+    if (!token) { log('请先填写 Token', 'error'); return null; }
+    const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+    log(`请求: ${method} ${url}`, 'info');
+    if (body) log(`请求体: ${JSON.stringify(body, null, 2)}`, 'info');
+
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+    };
+    const opts = { method, headers };
+    if (body) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+
+    try {
+        const res = await fetch(url, opts);
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = text; }
+        log(`响应状态: ${res.status} ${res.statusText}`, res.ok ? 'success' : 'error');
+        log(`响应内容: ${typeof data === 'object' ? JSON.stringify(data, null, 2) : data}`, res.ok ? 'success' : 'error');
+        return { ok: res.ok, status: res.status, data };
+    } catch (e) {
+        log(`请求失败: ${e.message}`, 'error');
+        return null;
+    }
+}
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+}
+
+async function autoFillOwner() {
+    const r = await apiCall('GET', '/user');
+    if (r && r.ok) { document.getElementById('owner').value = r.data.login; log(`已自动填充 Owner: ${r.data.login}`, 'success'); }
+}
+
+// ===== 文件操作 =====
+async function listFiles() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('list-repo').value.trim();
+    const path = document.getElementById('list-path').value.trim();
+    const owner = getOwner();
+    if (!repo) { log('请填写仓库名', 'error'); showLoading(false); return; }
+    const apiPath = `/repos/${owner}/${repo}/contents/${path}`;
+    await apiCall('GET', apiPath);
+    showLoading(false);
+}
+
+async function getFile() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('get-repo').value.trim();
+    const path = document.getElementById('get-path').value.trim();
+    const owner = getOwner();
+    if (!repo || !path) { log('请填写仓库名和文件路径', 'error'); showLoading(false); return; }
+    const r = await apiCall('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`);
+    if (r && r.ok && r.data.sha) {
+        log(`文件 SHA: ${r.data.sha}`, 'success');
+        log(`文件大小: ${r.data.size} bytes`, 'success');
+    }
+    showLoading(false);
+}
+
+async function deleteFile() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('del-repo').value.trim();
+    const path = document.getElementById('del-path').value.trim();
+    let sha = document.getElementById('del-sha').value.trim();
+    const owner = getOwner();
+    if (!repo || !path) { log('请填写仓库名和文件路径', 'error'); showLoading(false); return; }
+
+    if (!sha) {
+        log('正在自动获取最新 SHA...', 'info');
+        const r = await apiCall('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`);
+        if (r && r.ok && r.data.sha) { sha = r.data.sha; log(`获取到 SHA: ${sha}`, 'success'); }
+        else { log('获取 SHA 失败，文件可能不存在', 'error'); showLoading(false); return; }
+    }
+
+    await apiCall('DELETE', `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
+        message: `删除文件: ${path}`, sha, branch: 'main'
+    });
+    showLoading(false);
+}
+
+async function uploadFile() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('up-repo').value.trim();
+    const path = document.getElementById('up-path').value.trim();
+    const content = document.getElementById('up-content').value;
+    const owner = getOwner();
+    if (!repo || !path) { log('请填写仓库名和文件路径', 'error'); showLoading(false); return; }
+    const encoded = btoa(unescape(encodeURIComponent(content)));
+    await apiCall('PUT', `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
+        message: `上传文件: ${path}`, content: encoded, branch: 'main'
+    });
+    showLoading(false);
+}
+
+// ===== 仓库操作 =====
+async function listRepos() {
+    clearLog(); showLoading(true);
+    await apiCall('GET', '/user/repos?per_page=100&sort=updated');
+    showLoading(false);
+}
+
+async function createRepo() {
+    clearLog(); showLoading(true);
+    const name = document.getElementById('create-repo').value.trim();
+    const priv = document.getElementById('create-private').value === 'true';
+    if (!name) { log('请填写仓库名', 'error'); showLoading(false); return; }
+    await apiCall('POST', '/user/repos', { name, private: priv, auto_init: true });
+    showLoading(false);
+}
+
+async function getRepoInfo() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('info-repo').value.trim();
+    const owner = getOwner();
+    if (!repo) { log('请填写仓库名', 'error'); showLoading(false); return; }
+    await apiCall('GET', `/repos/${owner}/${repo}`);
+    showLoading(false);
+}
+
+// ===== 配置同步 =====
+async function readConfig() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('cfg-repo').value.trim();
+    const owner = getOwner();
+    const r = await apiCall('GET', `/repos/${owner}/${repo}/contents/config.json`);
+    if (r && r.ok && r.data.content) {
+        const content = decodeURIComponent(escape(atob(r.data.content)));
+        log(`配置内容:\n${content}`, 'success');
+    }
+    showLoading(false);
+}
+
+async function writeConfigContents() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('cfg-write-repo').value.trim();
+    let sha = document.getElementById('cfg-write-sha').value.trim();
+    const content = document.getElementById('cfg-write-content').value;
+    const owner = getOwner();
+
+    if (!sha) {
+        log('正在自动获取最新 SHA...', 'info');
+        const r = await apiCall('GET', `/repos/${owner}/${repo}/contents/config.json`);
+        if (r && r.ok && r.data.sha) { sha = r.data.sha; log(`获取到 SHA: ${sha}`, 'success'); }
+        else { log('获取 SHA 失败，将创建新文件', 'warn'); }
+    }
+
+    const encoded = btoa(unescape(encodeURIComponent(content)));
+    const body = { message: '更新配置', content: encoded, branch: 'main' };
+    if (sha) body.sha = sha;
+    await apiCall('PUT', `/repos/${owner}/${repo}/contents/config.json`, body);
+    showLoading(false);
+}
+
+async function writeConfigGitData() {
+    clearLog(); showLoading(true);
+    const repo = document.getElementById('cfg-git-repo').value.trim();
+    const content = document.getElementById('cfg-git-content').value;
+    const owner = getOwner();
+
+    log('=== Git Data API 流程 ===', 'info');
+
+    // 1. 获取最新 commit
+    const refR = await apiCall('GET', `/repos/${owner}/${repo}/git/ref/heads/main`);
+    if (!refR || !refR.ok) { log('获取分支引用失败', 'error'); showLoading(false); return; }
+    const latestCommitSha = refR.data.object.sha;
+    log(`最新 commit: ${latestCommitSha}`, 'success');
+
+    // 2. 获取 commit 的 tree
+    const commitR = await apiCall('GET', `/repos/${owner}/${repo}/git/commits/${latestCommitSha}`);
+    if (!commitR || !commitR.ok) { log('获取 commit 失败', 'error'); showLoading(false); return; }
+    const baseTreeSha = commitR.data.tree.sha;
+    log(`基础 tree: ${baseTreeSha}`, 'success');
+
+    // 3. 创建新 tree
+    const treeR = await apiCall('POST', `/repos/${owner}/${repo}/git/trees`, {
+        base_tree: baseTreeSha,
+        tree: [{ path: 'config.json', mode: '100644', type: 'blob', content }]
+    });
+    if (!treeR || !treeR.ok) { log('创建 tree 失败', 'error'); showLoading(false); return; }
+    const newTreeSha = treeR.data.sha;
+    log(`新 tree: ${newTreeSha}`, 'success');
+
+    // 4. 创建新 commit
+    const newCommitR = await apiCall('POST', `/repos/${owner}/${repo}/git/commits`, {
+        message: '更新配置 (Git Data API)',
+        tree: newTreeSha,
+        parents: [latestCommitSha]
+    });
+    if (!newCommitR || !newCommitR.ok) { log('创建 commit 失败', 'error'); showLoading(false); return; }
+    const newCommitSha = newCommitR.data.sha;
+    log(`新 commit: ${newCommitSha}`, 'success');
+
+    // 5. 更新分支引用
+    await apiCall('PATCH', `/repos/${owner}/${repo}/git/refs/heads/main`, {
+        sha: newCommitSha, force: false
+    });
+    showLoading(false);
+}
+
+// ===== 分享功能 =====
+async function createShare() {
+    clearLog(); showLoading(true);
+    const srcRepo = document.getElementById('share-src-repo').value.trim();
+    const srcPath = document.getElementById('share-src-path').value.trim();
+    const dstRepo = document.getElementById('share-dst-repo').value.trim();
+    const owner = getOwner();
+    if (!srcRepo || !srcPath || !dstRepo) { log('请填写所有字段', 'error'); showLoading(false); return; }
+
+    // 1. 获取源文件内容
+    log('1. 获取源文件内容...', 'info');
+    const srcR = await apiCall('GET', `/repos/${owner}/${srcRepo}/contents/${encodeURIComponent(srcPath)}`);
+    if (!srcR || !srcR.ok) { log('获取源文件失败', 'error'); showLoading(false); return; }
+    const fileContent = decodeURIComponent(escape(atob(srcR.data.content)));
+    log(`获取到文件内容 (${srcR.data.size} bytes)`, 'success');
+
+    // 2. 创建公开仓库
+    log('2. 创建公开分享仓库...', 'info');
+    const createR = await apiCall('POST', '/user/repos', {
+        name: dstRepo, private: false, auto_init: false, description: 'GitHub Drive 分享'
+    });
+    if (!createR || !createR.ok) { log('创建仓库失败', 'error'); showLoading(false); return; }
+    log(`仓库创建成功: ${createR.data.html_url}`, 'success');
+
+    // 3. 上传文件
+    log('3. 上传文件到分享仓库...', 'info');
+    const encoded = btoa(unescape(encodeURIComponent(fileContent)));
+    const fileName = srcPath.split('/').pop();
+    await apiCall('PUT', `/repos/${owner}/${dstRepo}/contents/${encodeURIComponent(fileName)}`, {
+        message: `分享文件: ${fileName}`, content: encoded, branch: 'main'
+    });
+
+    // 4. 创建 GitHub Pages 下载页
+    log('4. 创建 GitHub Pages 下载页...', 'info');
+    const pageHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>下载 ${fileName}</title></head><body style="font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#f6f8fa"><h1>📥 ${fileName}</h1><p>文件大小: ${srcR.data.size} bytes</p><a href="./${encodeURIComponent(fileName)}" download style="display:inline-block;padding:12px 24px;background:#2da44e;color:#fff;text-decoration:none;border-radius:6px;font-size:18px;margin-top:20px">下载文件</a><p style="margin-top:40px;color:#666">由 <a href="https://cool-zimo.github.io/github_drive/">GitHub Drive</a> 分享</p></body></html>`;
+    const pageEncoded = btoa(unescape(encodeURIComponent(pageHtml)));
+    await apiCall('PUT', `/repos/${owner}/${dstRepo}/contents/index.html`, {
+        message: '创建下载页', content: pageEncoded, branch: 'main'
+    });
+
+    // 5. 启用 GitHub Pages
+    log('5. 启用 GitHub Pages...', 'info');
+    await apiCall('POST', `/repos/${owner}/${dstRepo}/pages`, {
+        source: { branch: 'main', path: '/' }
+    });
+
+    log(`分享创建成功！下载页: https://${owner}.github.io/${dstRepo}/`, 'success');
+    showLoading(false);
+}
+
+// ===== 原始 API =====
+async function rawApiCall() {
+    clearLog(); showLoading(true);
+    const method = document.getElementById('raw-method').value;
+    const path = document.getElementById('raw-path').value.trim();
+    const bodyStr = document.getElementById('raw-body').value.trim();
+    let body = null;
+    if (bodyStr) { try { body = JSON.parse(bodyStr); } catch { log('请求体不是有效 JSON', 'error'); showLoading(false); return; } }
+    await apiCall(method, path, body);
+    showLoading(false);
+}
+
+// ===== URL 参数自动执行 =====
+window.addEventListener('load', () => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const action = params.get('action');
+    const owner = params.get('owner');
+    if (token) document.getElementById('token').value = token;
+    if (owner) document.getElementById('owner').value = owner;
+
+    if (action === 'me') { autoFillOwner(); }
+    else if (action === 'list_repos') { listRepos(); }
+    else if (action === 'list_config') {
+        document.getElementById('cfg-repo').value = 'github-drive-config';
+        readConfig();
+    }
+    else if (action === 'share') {
+        const repo = params.get('repo');
+        const path = params.get('file_path') || params.get('path');
+        if (repo) document.getElementById('share-src-repo').value = repo;
+        if (path) document.getElementById('share-src-path').value = path;
+        switchTab('share');
+    }
+    else if (action === 'delete') {
+        const repo = params.get('repo');
+        const path = params.get('file_path') || params.get('path');
+        if (repo) document.getElementById('del-repo').value = repo;
+        if (path) document.getElementById('del-path').value = path;
+        switchTab('file');
+    }
+});
+</script>
+</body>
+</html>
