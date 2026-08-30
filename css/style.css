@@ -451,7 +451,18 @@ body {
     align-items: center;
     gap: 4px;
     font-size: 14px;
+    flex: 0 1 auto;
+    min-width: 80px;
+    max-width: 45%;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
 }
+.breadcrumb::-webkit-scrollbar { height: 3px; }
+.breadcrumb::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+.breadcrumb::-webkit-scrollbar-track { background: transparent; }
 
 .breadcrumb-item {
     padding: 4px 8px;
@@ -478,6 +489,9 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
+    justify-content: flex-end;
 }
 
 /* 工具栏统一高度 */
@@ -517,6 +531,9 @@ body {
 
 .search-box {
     position: relative;
+    flex: 1;
+    min-width: 100px;
+    max-width: 300px;
 }
 
 .search-box input {
@@ -1428,15 +1445,7 @@ body {
     border-radius: 4px;
 }
 
-/* 面包屑横向滚动（覆盖原样式） */
-.breadcrumb {
-    overflow-x: auto !important;
-    white-space: nowrap !important;
-    flex-wrap: nowrap !important;
-    scrollbar-width: thin;
-}
-.breadcrumb::-webkit-scrollbar { height: 4px; }
-.breadcrumb::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+/* 面包屑样式已在基础样式中定义 */
 
 /* ===== 发现分享 ===== */
 .explore-list {
