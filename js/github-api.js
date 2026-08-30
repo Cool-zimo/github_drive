@@ -39,22 +39,34 @@ class GitHubAPI {
         }
         const response = await fetch(url, fetchOptions);
 
-        // 读取限流信息
+        // 读取限流信息（区分核心API和搜索API，搜索API限流独立，不警告）
         const remaining = response.headers.get('X-RateLimit-Remaining');
         const limit = response.headers.get('X-RateLimit-Limit');
         const reset = response.headers.get('X-RateLimit-Reset');
+        const resource = response.headers.get('X-RateLimit-Resource') || 'core';
         if (remaining !== null) {
-            this.rateLimit.remaining = parseInt(remaining);
-            this.rateLimit.limit = limit ? parseInt(limit) : 5000;
-            this.rateLimit.reset = reset ? parseInt(reset) : null;
-            // 限流警告：剩余 < 500 时警告，剩余 < 100 时严重警告
-            const now = Date.now();
-            if (this.rateLimit.remaining < 100 && now - this.rateLimit.lastWarned > 60000) {
-                this.rateLimit.lastWarned = now;
-                if (this.onRateLimitWarning) this.onRateLimitWarning('critical', this.rateLimit);
-            } else if (this.rateLimit.remaining < 500 && now - this.rateLimit.lastWarned > 120000) {
-                this.rateLimit.lastWarned = now;
-                if (this.onRateLimitWarning) this.onRateLimitWarning('warning', this.rateLimit);
+            const remainingInt = parseInt(remaining);
+            const limitInt = limit ? parseInt(limit) : 5000;
+            const resetInt = reset ? parseInt(reset) : null;
+            
+            // 只对核心 API（core）记录限流信息，搜索 API 有独立的限流，不混入
+            if (resource === 'core') {
+                this.rateLimit.remaining = remainingInt;
+                this.rateLimit.limit = limitInt;
+                this.rateLimit.reset = resetInt;
+                
+                // 限流警告：按比例计算，剩余 < 10% 警告，< 2% 严重警告
+                const now = Date.now();
+                const warnThreshold = Math.floor(limitInt * 0.1);  // 10%
+                const criticalThreshold = Math.floor(limitInt * 0.02);  // 2%
+                
+                if (remainingInt < criticalThreshold && now - this.rateLimit.lastWarned > 60000) {
+                    this.rateLimit.lastWarned = now;
+                    if (this.onRateLimitWarning) this.onRateLimitWarning('critical', this.rateLimit);
+                } else if (remainingInt < warnThreshold && now - this.rateLimit.lastWarned > 120000) {
+                    this.rateLimit.lastWarned = now;
+                    if (this.onRateLimitWarning) this.onRateLimitWarning('warning', this.rateLimit);
+                }
             }
         }
 
