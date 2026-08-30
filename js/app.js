@@ -47,7 +47,7 @@ class App {
         if (!versionEl) return;
         // 对外显示正式版本号，内部日期版本号作为 tooltip
         const formalVersion = (typeof APP_VERSION !== 'undefined') ? APP_VERSION.displayVersion : 'v0.0.0';
-        const dateVersion = (typeof APP_VERSION !== 'undefined') ? APP_VERSION.dateVersion : 'unknown';
+        const dateVersion = (typeof APP_VERSION !== 'undefined') ? APP_VERSION.internalVersion : 'unknown';
         versionEl.textContent = formalVersion;
         versionEl.title = I18n.t('app.versionTitle').replace('{version}', dateVersion);
     }
