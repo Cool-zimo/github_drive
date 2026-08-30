@@ -2203,6 +2203,7 @@ window.I18n = {
         document.body.appendChild(modal);
         this._uploadTotalFiles = fileList.length;
         this._uploadCompletedFiles = 0;
+        this._uploadPercents = {};
     }
 
     updateUploadProgress(index, percent) {
@@ -2210,6 +2211,18 @@ window.I18n = {
         const percentEl = document.getElementById(`upload-percent-${index}`);
         if (bar) bar.style.width = percent + '%';
         if (percentEl) percentEl.textContent = percent + '%';
+        
+        // 实时更新总进度：所有文件进度的平均值
+        if (!this._uploadPercents) this._uploadPercents = {};
+        this._uploadPercents[index] = percent;
+        const total = this._uploadTotalFiles || 1;
+        let sum = 0;
+        for (let i = 0; i < total; i++) {
+            sum += this._uploadPercents[i] || 0;
+        }
+        const overall = Math.round(sum / total);
+        const overallEl = document.getElementById('upload-overall-progress');
+        if (overallEl) overallEl.textContent = `总进度：${overall}%`;
     }
 
     setUploadSuccess(index) {
