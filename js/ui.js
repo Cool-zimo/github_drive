@@ -1885,6 +1885,7 @@ class UI {
                     <p style="font-size:13px;">访问插件仓库提交你的插件</p>
                 </div>
             `;
+            I18n.apply();
             return;
         }
 
@@ -1956,6 +1957,7 @@ class UI {
             </div>
             ${cardsHtml}
         `;
+        I18n.apply();
     }
 
     showPluginRunner(plugin) {
