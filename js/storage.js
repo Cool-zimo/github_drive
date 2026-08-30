@@ -54,14 +54,11 @@ class Storage {
         return key;
     }
     
-    // 迁移旧数据到账号隔离的 key（只迁移一次）
+    // 迁移旧数据到账号隔离的 key
     _migrateToAccountScoped() {
-        try {
-            const migrated = localStorage.getItem(this.prefix + '_migrated_account_scoped');
-            if (migrated && JSON.parse(migrated)) return;
-        } catch { return; }
-        
         const accountId = this._getAccountId() || 'default';
+        
+        // 1. 从旧的无前缀 key 迁移（首次升级）
         this.accountScopedKeys.forEach(key => {
             const oldKey = this.prefix + key;
             const newKey = this.prefix + 'account_' + accountId + '_' + key;
@@ -72,18 +69,30 @@ class Storage {
             }
         });
         
-        localStorage.setItem(this.prefix + '_migrated_account_scoped', JSON.stringify(true));
+        // 2. 如果当前账号没数据，从 default 账号迁移（之前迁移错了的情况）
+        const defaultKey = this.prefix + 'account_default_' + this.keys.VFS;
+        const currentKey = this.prefix + 'account_' + accountId + '_' + this.keys.VFS;
+        const hasData = localStorage.getItem(currentKey) !== null;
+        const defaultHasData = localStorage.getItem(defaultKey) !== null;
+        
+        if (accountId !== 'default' && !hasData && defaultHasData) {
+            // 把 default 账号的所有数据复制到当前账号
+            this.accountScopedKeys.forEach(key => {
+                const defKey = this.prefix + 'account_default_' + key;
+                const curKey = this.prefix + 'account_' + accountId + '_' + key;
+                const defValue = localStorage.getItem(defKey);
+                const curValue = localStorage.getItem(curKey);
+                if (defValue !== null && curValue === null) {
+                    localStorage.setItem(curKey, defValue);
+                }
+            });
+        }
     }
 
     get(key, defaultValue = null) {
-        // 首次访问账号相关数据时执行迁移
+        // 访问账号相关数据时执行迁移检查（幂等，不会重复迁移）
         if (this.accountScopedKeys.includes(key)) {
-            try {
-                const migrated = localStorage.getItem(this.prefix + '_migrated_account_scoped');
-                if (!migrated || !JSON.parse(migrated)) {
-                    this._migrateToAccountScoped();
-                }
-            } catch { /* 忽略 */ }
+            try { this._migrateToAccountScoped(); } catch { /* 忽略 */ }
         }
         try { const value = localStorage.getItem(this.prefix + this._accountKey(key)); return value ? JSON.parse(value) : defaultValue; } catch { return defaultValue; }
     }
@@ -531,6 +540,7 @@ class Storage {
      * chunkSize: 文件拆分大小（字节），默认 50MB
      * minChunkSize: 触发拆分的最小文件大小（字节），默认 10MB
      */
+    getConfig() { return this.getStorageConfig(); }
     getStorageConfig() {
         return this.get(this.keys.STORAGE_CONFIG, {
             maxRepoSize: 900 * 1024 * 1024,
