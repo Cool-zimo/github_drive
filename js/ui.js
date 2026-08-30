@@ -255,19 +255,48 @@ class UI {
         // 清除仓库选中状态
         document.querySelectorAll('.repo-item').forEach(item => item.classList.remove('active'));
 
+        const breadcrumb = document.getElementById('breadcrumb');
+        const toolbarActions = document.querySelector('.toolbar-actions');
+        const fileList = document.getElementById('file-list');
+        const emptyState = document.getElementById('empty-state');
+        const loadingState = document.getElementById('loading-state');
+
         if (view === 'all-files') {
+            // 恢复文件浏览器界面
+            if (breadcrumb) breadcrumb.style.display = '';
+            if (toolbarActions) toolbarActions.style.display = '';
+            if (fileList) fileList.style.display = '';
+            // 恢复之前的路径（不保持回收站路径）
+            const savedState = this.app.storage.get('last_state', null);
+            const savedPath = savedState?.path || '/drive_home';
+            if (savedPath && !savedPath.includes('.trash')) {
+                this.app.fileManager.setCurrentPath(savedPath);
+            } else {
+                this.app.fileManager.setCurrentPath('/drive_home');
+            }
             this.app.fileManager.setCurrentRepo(null);
             this.app.loadFiles();
-        } else if (view === 'recent') {
-            this.app.showRecentFiles();
-        } else if (view === 'starred') {
-            this.app.showStarredFiles();
-        } else if (view === 'shared') {
-            this.app.showShares();
-        } else if (view === 'explore') {
-            this.app.showExploreShares();
-        } else if (view === 'plugins') {
-            this.app.showPluginMarket();
+        } else {
+            // 非文件视图：隐藏面包屑、工具栏和文件区域
+            if (breadcrumb) breadcrumb.style.display = 'none';
+            if (toolbarActions) toolbarActions.style.display = 'none';
+            if (fileList) fileList.style.display = 'none';
+            if (emptyState) emptyState.classList.add('hidden');
+            if (loadingState) loadingState.classList.add('hidden');
+            
+            if (view === 'recent') {
+                this.app.showRecentFiles();
+            } else if (view === 'starred') {
+                this.app.showStarredFiles();
+            } else if (view === 'trash') {
+                this.app.showTrashFiles();
+            } else if (view === 'shared') {
+                this.app.showShares();
+            } else if (view === 'explore') {
+                this.app.showExploreShares();
+            } else if (view === 'plugins') {
+                this.app.showPluginMarket();
+            }
         }
     }
 

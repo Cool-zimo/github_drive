@@ -211,21 +211,24 @@ class App {
     // 保存上次浏览状态（路径+视图）
     saveLastState() {
         try {
+            const currentPath = this.fileManager.currentPath || '/drive_home';
+            // 不保存回收站路径
+            if (currentPath.includes('.trash')) return;
             const state = {
-                path: this.fileManager.currentPath || '/drive_home',
+                path: currentPath,
                 view: this._currentView || 'all-files',
                 time: Date.now()
             };
-            localStorage.setItem('gd_last_state', JSON.stringify(state));
+            this.storage.set('last_state', state);
         } catch (e) { /* 忽略 */ }
     }
     
     // 恢复上次浏览状态
     restoreLastState() {
         try {
-            const saved = localStorage.getItem('gd_last_state');
+            const saved = this.storage.get('last_state', null);
             if (!saved) return false;
-            const state = JSON.parse(saved);
+            const state = saved;
             const view = state.view || 'all-files';
             this._currentView = view;
             if (view === 'all-files') {
@@ -535,6 +538,18 @@ class App {
     }
 
     // 最近使用
+    // 显示回收站文件
+    async showTrashFiles() {
+        try {
+            const trashPath = '/drive_home/.trash';
+            const files = this.storage.listDirectory(trashPath);
+            // 回收站视图：显示恢复和永久删除按钮
+            this.ui.renderFileList(files, { isTrash: true });
+        } catch (e) {
+            this.ui.showToast('加载回收站失败: ' + e.message, 'error');
+        }
+    }
+    
     async showRecentFiles() {
         const paths = this.storage.getRecent();
         const vfs = this.storage.getVFS();
