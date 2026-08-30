@@ -94,6 +94,8 @@ class App {
             this.storage.setToken(token);
             this.storage.setUser(user);
             this.storage.addAccount(token, user);
+            // 确保当前账号 ID 已设置（addAccount 里已设置，这里双重保险）
+            this.storage.set(this.storage.keys.CURRENT_ACCOUNT, this.storage._getAccountId());
             await this.initializeWithToken(token);
             this.ui?.showToast(I18n.t('login.success'), 'success');
         } catch (e) {
@@ -167,6 +169,8 @@ class App {
     
     // 切换账号
     async switchAccount(accountId) {
+        // 先保存当前账号的最后浏览状态
+        try { this.saveLastState(); } catch(e) {}
         const account = this.storage.setCurrentAccount(accountId);
         if (account) {
             location.reload();

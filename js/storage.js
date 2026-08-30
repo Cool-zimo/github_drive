@@ -28,21 +28,33 @@ class Storage {
     }
 
     get(key, defaultValue = null) {
-        try { const value = localStorage.getItem(this.prefix + key); return value ? JSON.parse(value) : defaultValue; } catch { return defaultValue; }
+        // 首次访问账号相关数据时执行迁移
+        if (this.accountScopedKeys.includes(key) && !this.get('_migrated_account_scoped', false)) {
+            this._migrateToAccountScoped();
+        }
+        try { const value = localStorage.getItem(this.prefix + this._accountKey(key)); return value ? JSON.parse(value) : defaultValue; } catch { return defaultValue; }
     }
     set(key, value) {
-        localStorage.setItem(this.prefix + key, JSON.stringify(value));
+        localStorage.setItem(this.prefix + this._accountKey(key), JSON.stringify(value));
         if (this.onConfigChange && key !== this.keys.TOKEN && key !== this.keys.USER) {
             this.onConfigChange();
         }
     }
     remove(key) {
-        localStorage.removeItem(this.prefix + key);
+        localStorage.removeItem(this.prefix + this._accountKey(key));
         if (this.onConfigChange && key !== this.keys.TOKEN && key !== this.keys.USER) {
             this.onConfigChange();
         }
     }
-    clearAll() { Object.values(this.keys).forEach(key => this.remove(key)); }
+    clearAll() { 
+        // 清理当前账号的数据
+        Object.values(this.keys).forEach(key => this.remove(key));
+        // 清理所有账号的隔离数据
+        const accountId = this._getAccountId();
+        this.accountScopedKeys.forEach(key => {
+            localStorage.removeItem(this.prefix + 'account_' + accountId + '_' + key);
+        });
+    }
 
     // ==================== Token ====================
     getToken() { return this.get(this.keys.TOKEN, ''); }
@@ -527,7 +539,7 @@ class Storage {
     exportData() {
         const data = {};
         Object.values(this.keys).forEach(key => {
-            if (key !== this.keys.TOKEN && key !== this.keys.USER) {
+            if (key !== this.keys.TOKEN && key !== this.keys.USER && key !== this.keys.ACCOUNTS && key !== this.keys.CURRENT_ACCOUNT) {
                 data[key] = this.get(key);
             }
         });
