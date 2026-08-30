@@ -97,15 +97,26 @@ class FileManager {
         const chunkSize = needSplit ? config.chunkSize : totalSize;
         const totalChunks = Math.ceil(totalSize / chunkSize);
 
-        // 单分片文件：启动模拟进度，避免 0→100% 跳变
+        // 模拟进度，避免 0→100% 跳变
         let simulateTimer = null;
         let simulatedPercent = 0;
-        if (totalChunks === 1 && onProgress) {
+        
+        const startSimulate = (fromPercent, toPercent) => {
+            if (!onProgress) return;
+            if (simulateTimer) clearInterval(simulateTimer);
+            simulatedPercent = fromPercent;
             simulateTimer = setInterval(() => {
-                simulatedPercent = Math.min(simulatedPercent + Math.random() * 6 + 3, 87);
+                // 模拟进度增长，越接近目标越慢
+                const remaining = toPercent - simulatedPercent;
+                const step = Math.max(0.3, remaining * 0.08) + Math.random() * 0.5;
+                simulatedPercent = Math.min(simulatedPercent + step, toPercent - 0.5);
                 onProgress(Math.round(simulatedPercent));
-            }, 180);
-        }
+            }, 150);
+        };
+        
+        const stopSimulate = () => {
+            if (simulateTimer) { clearInterval(simulateTimer); simulateTimer = null; }
+        };
 
         try {
         for (let i = 0; i < totalChunks; i++) {
@@ -119,6 +130,11 @@ class FileManager {
             const chunkPath = `${Date.now().toString(36)}/${chunkFileName}`;
 
             console.log(`[FileManager] 分片 ${i + 1}/${totalChunks}: ${Storage.formatBytes(chunkSizeActual)} → ${repo.name}/${chunkPath}`);
+
+            // 启动当前分片的模拟进度
+            const fromP = (i / totalChunks) * 100;
+            const toP = ((i + 1) / totalChunks) * 100;
+            startSimulate(fromP, toP);
 
             const arrayBuffer = await chunkBlob.arrayBuffer();
             if (chunkSizeActual > 1024 * 1024) {
@@ -145,8 +161,8 @@ class FileManager {
 
             this.storage.addToRepoUsage(repo.owner, repo.repo, chunkSizeActual);
 
-            if (simulateTimer) { clearInterval(simulateTimer); simulateTimer = null; }
-            if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+            stopSimulate();
+            if (onProgress) onProgress(Math.round(toP));
         }
         } catch (uploadError) {
             // 上传失败，清理已上传的分片，避免垃圾文件堆积
