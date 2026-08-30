@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-发布脚本 - 自动计算版本号并更新所有文件
-用法: python release.py [提交信息]
+发布脚本 - 手动指定版本类型，自动计算版本号
+用法:
+  python release.py patch "提交信息"   # 补丁版本 z+1
+  python release.py minor "提交信息"   # 小版本 y+1, z归零
+  python release.py major "提交信息"   # 大版本 x+1, y,z归零
 """
 import json
 import re
 import sys
-import os
 from datetime import datetime
 
 VERSION_MAP_FILE = "assets/version-map.json"
@@ -29,48 +31,38 @@ def get_latest_version():
     return latest, versions[latest]
 
 def get_next_date_version(current_date_version):
-    """计算下一个日期版本号"""
+    """计算下一个内部日期版本号（用于缓存刷新）"""
     match = re.match(r'(\d{8})([a-z])', current_date_version)
     date_str, letter = match.groups()
     
     today = datetime.now().strftime('%Y%m%d')
     
-    # 如果当前日期晚于或等于上一个版本的日期，用当前日期
     if today >= date_str:
         if date_str == today:
-            # 同一天，字母后缀递增
             next_letter = chr(ord(letter) + 1)
             return today + next_letter
         else:
-            # 新的一天，从 a 开始
             return today + 'a'
     else:
-        # 如果当前日期早于上一个版本的日期（系统时间问题），继续用上一个版本的日期
+        # 系统时间早于上一个版本，继续用上一个日期递增字母
         next_letter = chr(ord(letter) + 1)
         return date_str + next_letter
 
-def calculate_formal_version(last_date_version, last_formal_version, new_date_version):
-    """计算正式版本号"""
-    last_date = last_date_version[:8]
-    new_date = new_date_version[:8]
-    
+def bump_version(last_formal_version, bump_type):
+    """根据类型递增版本号，上级变化时下级归零"""
     x, y, z = map(int, last_formal_version.split('.'))
     
-    last_dt = datetime.strptime(last_date, '%Y%m%d')
-    new_dt = datetime.strptime(new_date, '%Y%m%d')
-    
-    # 年份或月份变化 -> x + 1
-    if last_dt.year != new_dt.year or last_dt.month != new_dt.month:
+    if bump_type == 'major':
         x += 1
         y = 0
         z = 0
-    # 日期变化 -> y + 1
-    elif last_dt.day != new_dt.day:
+    elif bump_type == 'minor':
         y += 1
         z = 0
-    # 同一天 -> z + 1
-    else:
+    elif bump_type == 'patch':
         z += 1
+    else:
+        raise ValueError(f"未知的版本类型: {bump_type}，应为 major/minor/patch")
     
     return f"{x}.{y}.{z}"
 
@@ -90,26 +82,39 @@ def update_index_html_version(old_version, new_version):
     """更新 index.html 里所有的版本号参数"""
     with open(INDEX_HTML_FILE, 'r', encoding='utf-8') as f:
         content = f.read()
-    
-    # 替换所有 ?v=xxx 的版本号
     content = content.replace(f'?v={old_version}', f'?v={new_version}')
-    
     with open(INDEX_HTML_FILE, 'w', encoding='utf-8') as f:
         f.write(content)
 
 def main():
-    commit_msg = sys.argv[1] if len(sys.argv) > 1 else "update"
+    if len(sys.argv) < 3:
+        print("用法:")
+        print("  python release.py patch \"提交信息\"   # 补丁版本 z+1")
+        print("  python release.py minor \"提交信息\"   # 小版本 y+1, z归零")
+        print("  python release.py major \"提交信息\"   # 大版本 x+1, y,z归零")
+        print()
+        print("示例:")
+        print("  python release.py patch \"修复登录bug\"")
+        print("  python release.py minor \"添加插件广场\"")
+        print("  python release.py major \"2.0大版本重构\"")
+        sys.exit(1)
+    
+    bump_type = sys.argv[1].lower()
+    commit_msg = sys.argv[2]
+    
+    if bump_type not in ('major', 'minor', 'patch'):
+        print(f"错误: 版本类型必须是 major/minor/patch，当前是 {bump_type}")
+        sys.exit(1)
     
     # 获取最新版本
     last_date_version, last_formal_version = get_latest_version()
-    print(f"当前版本: {last_date_version} -> v{last_formal_version}")
+    print(f"当前版本: v{last_formal_version} (内部: {last_date_version})")
+    print(f"更新类型: {bump_type}")
     
-    # 计算下一个版本
+    # 计算新版本
     new_date_version = get_next_date_version(last_date_version)
-    new_formal_version = calculate_formal_version(
-        last_date_version, last_formal_version, new_date_version
-    )
-    print(f"新版本: {new_date_version} -> v{new_formal_version}")
+    new_formal_version = bump_version(last_formal_version, bump_type)
+    print(f"新版本: v{new_formal_version} (内部: {new_date_version})")
     
     # 更新版本映射表
     data = load_version_map()
@@ -122,7 +127,8 @@ def main():
     # 更新 index.html 版本号
     update_index_html_version(last_date_version, new_date_version)
     
-    print(f"\n✅ 版本已更新: v{new_formal_version} (内部: {new_date_version})")
+    type_names = {'major': '大版本', 'minor': '小版本', 'patch': '补丁'}
+    print(f"\n✅ {type_names[bump_type]}更新完成: v{last_formal_version} → v{new_formal_version}")
     print(f"提交信息: {commit_msg}")
     print("\n下一步:")
     print(f"  git add -A")
