@@ -30,22 +30,39 @@ def get_latest_version():
     latest = sorted_keys[-1]
     return latest, versions[latest]
 
+def increment_letter(letter_str):
+    """递增字母后缀，支持单字母和双字母（a-z, aa-zz）"""
+    if len(letter_str) == 1:
+        if letter_str < 'z':
+            return chr(ord(letter_str) + 1)
+        else:
+            return 'aa'  # z -> aa
+    else:
+        # 双字母
+        first, second = letter_str[0], letter_str[1]
+        if second < 'z':
+            return first + chr(ord(second) + 1)
+        elif first < 'z':
+            return chr(ord(first) + 1) + 'a'
+        else:
+            return 'aaa'  # zz -> aaa（极端情况）
+
 def get_next_date_version(current_date_version):
     """计算下一个内部日期版本号（用于缓存刷新）"""
-    match = re.match(r'(\d{8})([a-z])', current_date_version)
+    match = re.match(r'(\d{8})([a-z]+)', current_date_version)
     date_str, letter = match.groups()
     
     today = datetime.now().strftime('%Y%m%d')
     
     if today >= date_str:
         if date_str == today:
-            next_letter = chr(ord(letter) + 1)
+            next_letter = increment_letter(letter)
             return today + next_letter
         else:
             return today + 'a'
     else:
         # 系统时间早于上一个版本，继续用上一个日期递增字母
-        next_letter = chr(ord(letter) + 1)
+        next_letter = increment_letter(letter)
         return date_str + next_letter
 
 def bump_version(last_formal_version, bump_type):
