@@ -547,7 +547,7 @@ class Storage {
             autoCreateRepo: true,
             repoNamePrefix: 'drive-storage',
             warnThreshold: 0.8,
-            chunkSize: 50 * 1024 * 1024,
+            chunkSize: 20 * 1024 * 1024,
             minChunkSize: 10 * 1024 * 1024
         });
     }
