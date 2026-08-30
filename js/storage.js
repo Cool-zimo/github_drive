@@ -25,12 +25,65 @@ class Storage {
             ACCOUNTS: 'accounts',
             CURRENT_ACCOUNT: 'current_account',
         };
+        // 需要按账号隔离的数据 key
+        this.accountScopedKeys = [
+            this.keys.VFS,
+            this.keys.FAVORITES,
+            this.keys.RECENT,
+            this.keys.SHARES,
+            this.keys.REPOS,
+            this.keys.REPO_USAGE,
+            this.keys.STORAGE_CONFIG,
+            this.keys.SETTINGS,
+        ];
+    }
+    
+    // 获取当前账号 ID（直接读 localStorage，避免递归）
+    _getAccountId() {
+        try {
+            const value = localStorage.getItem(this.prefix + this.keys.CURRENT_ACCOUNT);
+            return value ? JSON.parse(value) : null;
+        } catch { return null; }
+    }
+    
+    // 获取带账号前缀的 key
+    _accountKey(key) {
+        if (this.accountScopedKeys.includes(key)) {
+            return 'account_' + (this._getAccountId() || 'default') + '_' + key;
+        }
+        return key;
+    }
+    
+    // 迁移旧数据到账号隔离的 key（只迁移一次）
+    _migrateToAccountScoped() {
+        try {
+            const migrated = localStorage.getItem(this.prefix + '_migrated_account_scoped');
+            if (migrated && JSON.parse(migrated)) return;
+        } catch { return; }
+        
+        const accountId = this._getAccountId() || 'default';
+        this.accountScopedKeys.forEach(key => {
+            const oldKey = this.prefix + key;
+            const newKey = this.prefix + 'account_' + accountId + '_' + key;
+            const oldValue = localStorage.getItem(oldKey);
+            const newValue = localStorage.getItem(newKey);
+            if (oldValue !== null && newValue === null) {
+                localStorage.setItem(newKey, oldValue);
+            }
+        });
+        
+        localStorage.setItem(this.prefix + '_migrated_account_scoped', JSON.stringify(true));
     }
 
     get(key, defaultValue = null) {
         // 首次访问账号相关数据时执行迁移
-        if (this.accountScopedKeys.includes(key) && !this.get('_migrated_account_scoped', false)) {
-            this._migrateToAccountScoped();
+        if (this.accountScopedKeys.includes(key)) {
+            try {
+                const migrated = localStorage.getItem(this.prefix + '_migrated_account_scoped');
+                if (!migrated || !JSON.parse(migrated)) {
+                    this._migrateToAccountScoped();
+                }
+            } catch { /* 忽略 */ }
         }
         try { const value = localStorage.getItem(this.prefix + this._accountKey(key)); return value ? JSON.parse(value) : defaultValue; } catch { return defaultValue; }
     }
