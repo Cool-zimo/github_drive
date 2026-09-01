@@ -336,7 +336,7 @@ class App {
             this.ui.showToast('下载完成', 'success');
         } catch (e) {
             this.ui.hideDownloadProgress();
-            this.ui.showToast('下载失败: ' + e.message, 'error');
+            this.ui.showToast(I18n.t('file.downloadFailed') + ': ' + e.message, 'error');
         }
     }
 
@@ -497,7 +497,7 @@ class App {
             // 显示成功状态 2 秒后自动关闭面板
             setTimeout(() => this.ui.hideUploadProgress?.(), 2000);
         } catch (e) {
-            this.ui.showToast('上传失败: ' + e.message, 'error');
+            this.ui.showToast(I18n.t('file.uploadFailed') + ': ' + e.message, 'error');
             setTimeout(() => this.ui.hideUploadProgress?.(), 3000);
         }
     }
@@ -529,7 +529,7 @@ class App {
             await this.loadFiles();
             setTimeout(() => this.ui.hideUploadProgress?.(), 2000);
         } catch (e) {
-            this.ui.showToast('上传失败: ' + e.message, 'error');
+            this.ui.showToast(I18n.t('file.uploadFailed') + ': ' + e.message, 'error');
             setTimeout(() => this.ui.hideUploadProgress?.(), 3000);
         }
     }

@@ -396,6 +396,8 @@ const I18n = {
             'file.renameSuccess': '重命名成功',
             'file.previewFailed': '预览失败',
             'file.downloading': '正在下载...',
+            'file.downloadFailed': '下载失败',
+            'file.uploadFailed': '上传失败',
             // 通用
             'common.loading': '加载中...',
             'common.success': '操作成功',
