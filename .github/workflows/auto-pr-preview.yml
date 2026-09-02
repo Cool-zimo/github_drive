@@ -9,7 +9,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  create-preview:
+  validate-and-preview:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR branch
@@ -18,17 +18,71 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Validate config.json
-        id: validate
+      - name: Check config.json exists
+        id: check_config
         run: |
           if [ ! -f "config.json" ]; then
-            echo "::error::config.json not found! Please add config.json with author, name, branch fields."
-            exit 1
+            echo "has_config=false" >> $GITHUB_OUTPUT
+            echo "::warning::config.json not found"
+          else
+            echo "has_config=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Close PR if no config.json
+        if: steps.check_config.outputs.has_config == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `
+            ## ❌ PR 被自动关闭
+            
+            **原因：缺少 config.json 配置文件**
+            
+            所有贡献必须包含 \`config.json\` 文件，用于标识作者、版本名称和分支名。
+            
+            ### 请按以下步骤修复：
+            
+            1. 在仓库根目录创建 \`config.json\`
+            2. 填写以下内容：
+            
+            \`\`\`json
+            {
+              "author": "你的GitHub用户名",
+              "name": "版本名称",
+              "branch": "分支名",
+              "description": "改进描述",
+              "version": "1.0.0"
+            }
+            \`\`\`
+            
+            3. 重新提交 PR
+            
+            > 参考模板：\`config.example.json\`
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+            
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              state: 'closed'
+            });
+            
+            console.log('PR closed due to missing config.json');
+
+      - name: Validate config.json
+        if: steps.check_config.outputs.has_config == 'true'
+        id: validate
+        run: |
           echo "config.json found:"
           cat config.json
           
-          # Validate required fields
           AUTHOR=$(python3 -c "import json; print(json.load(open('config.json')).get('author',''))" 2>/dev/null)
           NAME=$(python3 -c "import json; print(json.load(open('config.json')).get('name',''))" 2>/dev/null)
           BRANCH=$(python3 -c "import json; print(json.load(open('config.json')).get('branch',''))" 2>/dev/null)
@@ -44,13 +98,12 @@ jobs:
           echo "✅ config.json validation passed"
 
       - name: Create preview branch
-        if: success()
+        if: steps.check_config.outputs.has_config == 'true' && success()
         run: |
           AUTHOR="${{ steps.validate.outputs.author }}"
           NAME="${{ steps.validate.outputs.name }}"
           BRANCH="${{ steps.validate.outputs.branch }}"
           
-          # Sanitize branch name
           SANITIZED_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/-/g')
           PREVIEW_BRANCH="preview/${AUTHOR}/${SANITIZED_BRANCH}"
           
@@ -59,15 +112,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Create or update preview branch
           git checkout -B "$PREVIEW_BRANCH"
           git push origin "$PREVIEW_BRANCH" --force
           
           echo "preview_branch=$PREVIEW_BRANCH" >> $GITHUB_OUTPUT
           echo "✅ Preview branch created: $PREVIEW_BRANCH"
 
-      - name: Comment on PR
-        if: success()
+      - name: Comment success on PR
+        if: steps.check_config.outputs.has_config == 'true' && success()
         uses: actions/github-script@v7
         with:
           script: |
@@ -90,14 +142,13 @@ jobs:
             
             1. 打开 GitHub Drive
             2. 进入 设置 → 版本切换
-            3. 选择 "他人改进版本"
-            4. 输入分支名: \`${previewBranch}\`
-            5. 点击加载即可体验
+            3. 选择预览分支，或输入: \`${previewBranch}\`
+            4. 点击切换分支即可体验
             
-            ### Pages 预览地址
+            ### 直接访问
             https://cool-zimo.github.io/github_drive/?branch=${encodeURIComponent(previewBranch)}
             
-            > 注意：Pages 可能需要几分钟才能部署完成，请稍后再试。
+            > 注意：Pages 可能需要几分钟部署，请稍后再试。
             `;
             
             github.rest.issues.createComment({
