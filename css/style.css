@@ -2066,3 +2066,13 @@ body.dark-mode .context-menu {
 body.dark-mode .context-menu-item:hover {
     background: var(--bg-hover);
 }
+
+/* ===== 主题色系统 ===== */
+body.theme-blue { --accent-color: #0969da; --accent-hover: #0860c7; --accent-light: #ddf4ff; }
+body.theme-purple { --accent-color: #8b5cf6; --accent-hover: #7c3aed; --accent-light: #ede9fe; }
+body.theme-green { --accent-color: #10b981; --accent-hover: #059669; --accent-light: #d1fae5; }
+body.theme-orange { --accent-color: #f97316; --accent-hover: #ea580c; --accent-light: #ffedd5; }
+body.theme-pink { --accent-color: #ec4899; --accent-hover: #db2777; --accent-light: #fce7f3; }
+body.theme-red { --accent-color: #ef4444; --accent-hover: #dc2626; --accent-light: #fee2e2; }
+body.theme-teal { --accent-color: #14b8a6; --accent-hover: #0d9488; --accent-light: #ccfbf1; }
+body.theme-indigo { --accent-color: #6366f1; --accent-hover: #4f46e5; --accent-light: #e0e7ff; }

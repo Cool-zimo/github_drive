@@ -1175,6 +1175,42 @@ class UI {
         this.showModal(I18n.t('help.title'), body, '', true);
     }
 
+    showThemeCustomizer() {
+        const themes = [
+            {id: 'blue', name: '蓝色', color: '#0969da'},
+            {id: 'purple', name: '紫色', color: '#8b5cf6'},
+            {id: 'green', name: '绿色', color: '#10b981'},
+            {id: 'orange', name: '橙色', color: '#f97316'},
+            {id: 'pink', name: '粉色', color: '#ec4899'},
+            {id: 'red', name: '红色', color: '#ef4444'},
+            {id: 'teal', name: '青色', color: '#14b8a6'},
+            {id: 'indigo', name: '靛蓝', color: '#6366f1'}
+        ];
+        const current = localStorage.getItem('gd_theme') || 'blue';
+        let body = '<div style="padding:8px 0;"><div style="font-size:13px;color:#6b7280;margin-bottom:12px;">选择主题色，即时生效</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
+        themes.forEach(t => {
+            const active = current === t.id ? 'style="border:3px solid #333;transform:scale(1.1);"' : '';
+            body += '<div onclick="ui.setTheme('' + t.id + '')" style="text-align:center;cursor:pointer;padding:8px;border-radius:8px;transition:all 0.2s;" ' + active + '>';
+            body += '<div style="width:40px;height:40px;border-radius:50%;background:' + t.color + ';margin:0 auto 6px;"></div>';
+            body += '<div style="font-size:12px;color:#374151;">' + t.name + '</div></div>';
+        });
+        body += '</div></div>';
+        this.showModal('🎨 主题色', body, '', true);
+    }
+    
+    setTheme(themeId) {
+        document.body.className = document.body.className.replace(/theme-\w+/g, '');
+        document.body.classList.add('theme-' + themeId);
+        localStorage.setItem('gd_theme', themeId);
+        this.showToast('主题已切换', 'success');
+        this.showThemeCustomizer();
+    }
+    
+    initTheme() {
+        const theme = localStorage.getItem('gd_theme') || 'blue';
+        if (theme !== 'blue') document.body.classList.add('theme-' + theme);
+    }
+
     toggleDarkMode() {
         document.body.classList.toggle('dark-mode');
         const isDark = document.body.classList.contains('dark-mode');
@@ -1196,6 +1232,7 @@ class UI {
         var version = versionEl ? versionEl.textContent : 'v-';
         var repoSize = repoSizeEl ? repoSizeEl.textContent : '📦 --';
         var items = [
+            {icon:'🎨', title:I18n.t('settings.theme') || '主题色', desc:I18n.t('settings.themeDesc') || '自定义主题颜色', action:'ui.closeModal();ui.showThemeCustomizer();'},
             {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
             {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
             {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
