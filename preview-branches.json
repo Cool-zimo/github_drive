@@ -29,7 +29,17 @@
       "sourceBranch": "dark-mode",
       "prNumber": 3,
       "updatedAt": "2026-09-02T14:29:32.576Z"
+    },
+    {
+      "branch": "preview/AI-Agent/content-search",
+      "author": "AI-Agent",
+      "name": "文件内容搜索",
+      "description": "支持搜索文本文件内容，显示匹配片段，可在设置中开启",
+      "version": "1.0.0",
+      "sourceBranch": "content-search",
+      "prNumber": 4,
+      "updatedAt": "2026-09-02T14:30:25.376Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:29:32.576Z"
+  "updatedAt": "2026-09-02T14:30:25.376Z"
 }
