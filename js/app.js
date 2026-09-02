@@ -580,6 +580,60 @@ class App {
     }
 
 
+
+    // ==================== 拖拽移动文件 ====================
+    initDragMove() {
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const folderEl = e.target.closest('.file-item.folder');
+            if (folderEl) {
+                document.querySelectorAll('.file-item.folder').forEach(f => f.classList.remove('drag-over'));
+                folderEl.classList.add('drag-over');
+            }
+        });
+        
+        document.addEventListener('dragleave', (e) => {
+            const folderEl = e.target.closest('.file-item.folder');
+            if (folderEl) folderEl.classList.remove('drag-over');
+        });
+        
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.file-item.folder').forEach(f => f.classList.remove('drag-over'));
+            
+            const folderEl = e.target.closest('.file-item.folder');
+            if (!folderEl) return;
+            
+            const folderPath = folderEl.dataset.path;
+            const draggedFiles = this.selectedFiles && this.selectedFiles.length > 0 
+                ? this.selectedFiles 
+                : [this.currentFiles?.find(f => f.path === e.dataTransfer?.getData('text/plain'))];
+            
+            if (draggedFiles && draggedFiles.length > 0 && folderPath) {
+                this.moveFilesToFolder(draggedFiles, folderPath);
+            }
+        });
+    }
+    
+    async moveFilesToFolder(files, targetFolderPath) {
+        let success = 0;
+        for (const file of files) {
+            try {
+                if (file.path === targetFolderPath + '/' + file.name) continue;
+                if (targetFolderPath.startsWith(file.path)) continue; // 防止移动到自身子目录
+                await this.fileManager.moveFile?.(file.path, targetFolderPath + '/' + file.name);
+                success++;
+            } catch (e) {
+                console.error('移动失败:', file.name, e.message);
+            }
+        }
+        if (success > 0) {
+            this.ui.showToast?.(`已移动 ${success} 个文件`, 'success');
+            this.selectedFiles = [];
+            this.loadFiles();
+        }
+    }
+
     // ==================== 快捷键系统 ====================
     initShortcuts() {
         document.addEventListener('keydown', (e) => {
