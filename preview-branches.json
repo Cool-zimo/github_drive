@@ -31,16 +31,6 @@
       "updatedAt": "2026-09-02T14:30:25.376Z"
     },
     {
-      "branch": "preview/AI-Agent/shortcuts",
-      "author": "AI-Agent",
-      "name": "快捷键系统",
-      "description": "添加完整快捷键系统：新建/上传/搜索/刷新/删除/重命名/全选/收藏/帮助",
-      "version": "1.0.0",
-      "sourceBranch": "shortcuts",
-      "prNumber": 5,
-      "updatedAt": "2026-09-02T14:31:46.865Z"
-    },
-    {
       "branch": "preview/AI-Agent/storage-stats",
       "author": "AI-Agent",
       "name": "存储用量统计",
@@ -51,5 +41,5 @@
       "updatedAt": "2026-09-02T14:33:16.834Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:39:47.464Z"
+  "updatedAt": "2026-09-02T14:40:27.711Z"
 }
