@@ -2047,7 +2047,11 @@ body.dark-mode .file-item.selected {
     background: var(--accent-light);
 }
 
-body.dark-mode .modal-content {
+body.dark-mode .modal {
+    background: #1f2937;
+    color: #f3f4f6;
+}
+body.dark-mode .modal-content-old {
     background: var(--bg-secondary);
     color: var(--text-primary);
 }
@@ -2065,4 +2069,14 @@ body.dark-mode .context-menu {
 
 body.dark-mode .context-menu-item:hover {
     background: var(--bg-hover);
+}
+
+body.dark-mode .modal-header {
+    border-bottom-color: #374151;
+}
+body.dark-mode .modal-body {
+    color: #d1d5db;
+}
+body.dark-mode .modal-close {
+    color: #9ca3af;
 }

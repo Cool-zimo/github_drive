@@ -847,6 +847,9 @@ class App {
     // ==================== 存储用量统计 ====================
     async showStorageStats() {
         try {
+            // 先显示加载中弹窗
+            this.ui.showModal?.('📊 存储用量统计', '<div style="text-align:center;padding:40px;color:#6b7280;">⏳ 正在统计...</div>', '', true);
+            
             const vfs = this.storage.getVFS();
             const files = Object.entries(vfs.files || {});
             const folders = Object.entries(vfs.folders || {});
@@ -904,9 +907,16 @@ class App {
                 (sortedTypes.length > 0 ? typeHtml : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>') +
                 '</div></div>';
             
-            this.ui.showModal?.('📊 存储用量统计', body, '', true);
+            // 更新弹窗内容
+            const modalBody = document.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.innerHTML = body;
+            } else {
+                this.ui.showModal?.('📊 存储用量统计', body, '', true);
+            }
         } catch (e) {
             this.ui.showToast?.('统计失败: ' + e.message, 'error');
+            this.ui.closeModal?.();
         }
     }
 
