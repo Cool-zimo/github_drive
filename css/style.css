@@ -2066,3 +2066,16 @@ body.dark-mode .context-menu {
 body.dark-mode .context-menu-item:hover {
     background: var(--bg-hover);
 }
+
+/* 拖拽移动 */
+.file-item.folder.drag-over {
+    background: var(--accent-light) !important;
+    border: 2px dashed var(--accent-color) !important;
+    transform: scale(1.05);
+}
+.file-item {
+    cursor: grab;
+}
+.file-item:active {
+    cursor: grabbing;
+}

@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "文件拖拽移动",
+  "branch": "drag-move",
+  "description": "支持拖拽文件到文件夹进行移动，多选批量移动，防止移动到自身子目录",
+  "version": "2.0.0",
+  "contact": "agent@github-drive.dev"
+}
