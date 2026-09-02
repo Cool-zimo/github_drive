@@ -11,16 +11,6 @@
       "updatedAt": "2026-09-02T14:00:00.000Z"
     },
     {
-      "branch": "preview/AI-Agent/add-login-version",
-      "author": "AI-Agent",
-      "name": "登录页显示版本号",
-      "description": "在登录页面底部显示当前应用版本号，方便用户确认版本",
-      "version": "1.0.0",
-      "sourceBranch": "add-login-version",
-      "prNumber": 2,
-      "updatedAt": "2026-09-02T14:22:26.657Z"
-    },
-    {
       "branch": "preview/AI-Agent/dark-mode",
       "author": "AI-Agent",
       "name": "全局暗色模式",
@@ -61,5 +51,5 @@
       "updatedAt": "2026-09-02T14:33:16.834Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:33:16.835Z"
+  "updatedAt": "2026-09-02T14:39:47.464Z"
 }
