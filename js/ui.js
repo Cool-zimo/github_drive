@@ -1251,6 +1251,9 @@ class UI {
             
             const res = await fetch('https://api.github.com/repos/Cool-zimo/github_drive/branches?per_page=100', { headers });
             const branches = await res.json();
+            if (!Array.isArray(branches)) {
+                throw new Error(branches.message || 'API 返回错误');
+            }
             const previewBranches = branches.filter(b => b.name.startsWith('preview/'));
             
             const listEl = document.getElementById('preview-branches-list');
