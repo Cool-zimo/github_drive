@@ -1186,6 +1186,7 @@ class UI {
 
             {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
             {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/Github_Drive-Documentation/','_blank');"},
+            {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
             {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
             {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
             {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
@@ -1201,6 +1202,91 @@ class UI {
             body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
         }
         this.showModal(I18n.t('settings.title'), body, '', true);
+    }
+
+    showVersionSwitcher() {
+        const currentBranch = localStorage.getItem('gd_custom_branch') || 'main';
+        const body = `
+            <div style="padding:8px 0;">
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:16px;">
+                    <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px;">💡 关于他人改进版本</div>
+                    <div style="font-size:12px;color:#1e40af;line-height:1.5;">
+                        开发者可以通过 Pull Request 提交改进，系统会自动创建预览分支。<br>
+                        你可以输入分支名来体验他人的改进版本。
+                    </div>
+                </div>
+                
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">当前分支</label>
+                    <div style="padding:10px 12px;background:#f3f4f6;border-radius:6px;font-family:monospace;font-size:13px;color:#374151;">${currentBranch}</div>
+                </div>
+                
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">输入分支名</label>
+                    <input type="text" id="branch-input" placeholder="preview/author/feature-name" 
+                        style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:monospace;"
+                        value="${currentBranch === 'main' ? '' : currentBranch}">
+                </div>
+                
+                <div style="display:flex;gap:8px;">
+                    <button onclick="ui.switchBranch()" style="flex:1;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🔀 切换分支</button>
+                    <button onclick="ui.resetToMain()" style="padding:10px 16px;background:#f3f4f6;color:#374151;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🏠 恢复官方版</button>
+                </div>
+                
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">
+                    <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">📋 可用预览分支（从 PR 自动生成）：</div>
+                    <div id="preview-branches-list" style="font-size:12px;color:#6b7280;">加载中...</div>
+                </div>
+            </div>
+        `;
+        this.showModal('🔀 版本切换', body, '', true);
+        this.loadPreviewBranches();
+    }
+
+    async loadPreviewBranches() {
+        try {
+            const token = localStorage.getItem('gd_token');
+            const headers = { 'Accept': 'application/vnd.github.v3+json' };
+            if (token) headers['Authorization'] = 'token ' + token;
+            
+            const res = await fetch('https://api.github.com/repos/Cool-zimo/github_drive/branches?per_page=100', { headers });
+            const branches = await res.json();
+            const previewBranches = branches.filter(b => b.name.startsWith('preview/'));
+            
+            const listEl = document.getElementById('preview-branches-list');
+            if (!listEl) return;
+            
+            if (previewBranches.length === 0) {
+                listEl.innerHTML = '<span style="color:#9ca3af;">暂无预览分支</span>';
+                return;
+            }
+            
+            listEl.innerHTML = previewBranches.map(b => 
+                `<div style="padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:4px;" 
+                    onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'"
+                    onclick="document.getElementById('branch-input').value='${b.name}'">
+                    <span style="font-family:monospace;color:#2563eb;">${b.name}</span>
+                </div>`
+            ).join('');
+        } catch (e) {
+            const listEl = document.getElementById('preview-branches-list');
+            if (listEl) listEl.innerHTML = '<span style="color:#ef4444;">加载失败: ' + e.message + '</span>';
+        }
+    }
+
+    switchBranch() {
+        const branch = document.getElementById('branch-input').value.trim();
+        if (!branch) { alert('请输入分支名'); return; }
+        
+        localStorage.setItem('gd_custom_branch', branch);
+        alert('已切换到分支: ' + branch + '\n页面将刷新以加载新版本。\n\n注意：如果分支不存在或 Pages 未部署，页面可能无法正常加载。');
+        location.reload();
+    }
+
+    resetToMain() {
+        localStorage.removeItem('gd_custom_branch');
+        alert('已恢复官方版本 (main)，页面将刷新。');
+        location.reload();
     }
 
     showOAuthSettings() {

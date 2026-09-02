@@ -4,8 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub Drive - Virtual File System based on GitHub</title>
-    <link rel="stylesheet" href="css/style.css?v=25">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📁</text></svg>">
+    <script>
+    // 分支切换：检测自定义分支，动态加载资源
+    (function() {
+        var customBranch = localStorage.getItem('gd_custom_branch');
+        var urlParams = new URLSearchParams(window.location.search);
+        var urlBranch = urlParams.get('branch');
+        
+        if (urlBranch) {
+            customBranch = urlBranch;
+            localStorage.setItem('gd_custom_branch', urlBranch);
+        }
+        
+        if (customBranch && customBranch !== 'main') {
+            // 显示分支切换提示
+            window.__CUSTOM_BRANCH__ = customBranch;
+            var baseUrl = 'https://raw.githubusercontent.com/Cool-zimo/github_drive/' + customBranch + '/';
+            
+            // 动态加载 CSS
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = baseUrl + 'css/style.css';
+            document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
+            
+            // 标记使用自定义分支
+            window.__BRANCH_BASE__ = baseUrl;
+        } else {
+            document.write('<link rel="stylesheet" href="css/style.css?v=25">');
+        }
+    })();
+    </script>
 </head>
 <body>
     <!-- 登录页 -->

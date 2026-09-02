@@ -68,6 +68,8 @@ const I18n = {
             'settings.docs': '使用文档',
             'settings.docsDesc': '查看完整使用文档',
             'settings.export': '导出备份',
+            'settings.versionSwitch': '版本切换',
+            'settings.versionSwitchDesc': '体验他人改进的版本',
             'settings.exportDesc': '导出所有配置为 JSON 文件',
             'settings.version': '版本',
             'settings.logout': '退出登录',

@@ -1,0 +1,108 @@
+name: Auto PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Validate config.json
+        id: validate
+        run: |
+          if [ ! -f "config.json" ]; then
+            echo "::error::config.json not found! Please add config.json with author, name, branch fields."
+            exit 1
+          fi
+          echo "config.json found:"
+          cat config.json
+          
+          # Validate required fields
+          AUTHOR=$(python3 -c "import json; print(json.load(open('config.json')).get('author',''))" 2>/dev/null)
+          NAME=$(python3 -c "import json; print(json.load(open('config.json')).get('name',''))" 2>/dev/null)
+          BRANCH=$(python3 -c "import json; print(json.load(open('config.json')).get('branch',''))" 2>/dev/null)
+          
+          if [ -z "$AUTHOR" ] || [ -z "$NAME" ] || [ -z "$BRANCH" ]; then
+            echo "::error::config.json must contain 'author', 'name', and 'branch' fields"
+            exit 1
+          fi
+          
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "✅ config.json validation passed"
+
+      - name: Create preview branch
+        if: success()
+        run: |
+          AUTHOR="${{ steps.validate.outputs.author }}"
+          NAME="${{ steps.validate.outputs.name }}"
+          BRANCH="${{ steps.validate.outputs.branch }}"
+          
+          # Sanitize branch name
+          SANITIZED_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/-/g')
+          PREVIEW_BRANCH="preview/${AUTHOR}/${SANITIZED_BRANCH}"
+          
+          echo "Creating preview branch: $PREVIEW_BRANCH"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create or update preview branch
+          git checkout -B "$PREVIEW_BRANCH"
+          git push origin "$PREVIEW_BRANCH" --force
+          
+          echo "preview_branch=$PREVIEW_BRANCH" >> $GITHUB_OUTPUT
+          echo "✅ Preview branch created: $PREVIEW_BRANCH"
+
+      - name: Comment on PR
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const author = '${{ steps.validate.outputs.author }}';
+            const name = '${{ steps.validate.outputs.name }}';
+            const branch = '${{ steps.validate.outputs.branch }}';
+            const previewBranch = `preview/${author}/${branch.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+            
+            const comment = `
+            ## ✅ 自动预览分支已创建
+            
+            | 字段 | 值 |
+            |------|-----|
+            | 作者 | ${author} |
+            | 版本名称 | ${name} |
+            | 分支名 | ${branch} |
+            | 预览分支 | \`${previewBranch}\` |
+            
+            ### 如何测试此版本
+            
+            1. 打开 GitHub Drive
+            2. 进入 设置 → 版本切换
+            3. 选择 "他人改进版本"
+            4. 输入分支名: \`${previewBranch}\`
+            5. 点击加载即可体验
+            
+            ### Pages 预览地址
+            https://cool-zimo.github.io/github_drive/?branch=${encodeURIComponent(previewBranch)}
+            
+            > 注意：Pages 可能需要几分钟才能部署完成，请稍后再试。
+            `;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
