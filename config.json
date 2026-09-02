@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "文件内容搜索",
+  "branch": "content-search",
+  "description": "支持搜索文本文件内容，显示匹配片段，可在设置中开启",
+  "version": "1.0.0",
+  "contact": "agent@github-drive.dev"
+}

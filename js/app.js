@@ -573,7 +573,8 @@ class App {
 
     async searchFiles(query) {
         if (!query.trim()) { await this.loadFiles(); return; }
-        const results = this.fileManager.searchFiles(query);
+        const searchContent = localStorage.getItem('gd_search_content') === '1';
+        const results = this.fileManager.searchFiles(query, searchContent);
         this.currentFiles = results;
         this.ui.renderFileList(results);
     }

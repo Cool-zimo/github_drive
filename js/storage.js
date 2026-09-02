@@ -481,13 +481,38 @@ class Storage {
     /**
      * 搜索文件
      */
-    searchFiles(query) {
+    searchFiles(query, searchContent = false) {
         query = query.toLowerCase();
         const vfs = this.getVFS();
         const results = [];
+        const textExts = ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.csv', '.xml', '.yml', '.yaml', '.json', '.log'];
+        
         Object.entries(vfs.files).forEach(([path, info]) => {
+            let matched = false;
+            let matchPreview = '';
+            
+            // 文件名匹配
             if (info.name.toLowerCase().includes(query)) {
-                results.push({ ...info, path, isFile: true });
+                matched = true;
+            }
+            
+            // 内容匹配（仅文本文件）
+            if (searchContent && !matched) {
+                const ext = '.' + (info.name.split('.').pop() || '').toLowerCase();
+                if (textExts.includes(ext) && info.content) {
+                    const content = typeof info.content === 'string' ? info.content : '';
+                    const idx = content.toLowerCase().indexOf(query);
+                    if (idx >= 0) {
+                        matched = true;
+                        const start = Math.max(0, idx - 20);
+                        const end = Math.min(content.length, idx + query.length + 40);
+                        matchPreview = '...' + content.substring(start, end) + '...';
+                    }
+                }
+            }
+            
+            if (matched) {
+                results.push({ ...info, path, isFile: true, matchPreview, contentMatch: !!matchPreview });
             }
         });
         return results;
