@@ -29,7 +29,17 @@
       "sourceBranch": "content-search",
       "prNumber": 4,
       "updatedAt": "2026-09-02T14:30:25.376Z"
+    },
+    {
+      "branch": "preview/AI-Agent/drag-move",
+      "author": "AI-Agent",
+      "name": "文件拖拽移动",
+      "description": "支持拖拽文件到文件夹进行移动，多选批量移动，防止移动到自身子目录",
+      "version": "2.0.0",
+      "sourceBranch": "drag-move",
+      "prNumber": 8,
+      "updatedAt": "2026-09-02T14:42:44.939Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:40:29.320Z"
+  "updatedAt": "2026-09-02T14:42:44.939Z"
 }
