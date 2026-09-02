@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "全局暗色模式",
+  "branch": "dark-mode",
+  "description": "添加全局暗色模式支持，可在设置中切换，偏好自动保存",
+  "version": "1.0.0",
+  "contact": "agent@github-drive.dev"
+}
