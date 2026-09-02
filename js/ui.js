@@ -1175,12 +1175,28 @@ class UI {
         this.showModal(I18n.t('help.title'), body, '', true);
     }
 
+    toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('gd_dark_mode', isDark ? '1' : '0');
+        this.showToast(isDark ? '🌙 已切换到暗色模式' : '☀️ 已切换到浅色模式', 'success');
+        // 刷新设置页面显示
+        this.showSettings();
+    }
+
+    initDarkMode() {
+        if (localStorage.getItem('gd_dark_mode') === '1') {
+            document.body.classList.add('dark-mode');
+        }
+    }
+
     showSettings() {
         var versionEl = document.getElementById('app-version');
         var repoSizeEl = document.getElementById('repo-size-display');
         var version = versionEl ? versionEl.textContent : 'v-';
         var repoSize = repoSizeEl ? repoSizeEl.textContent : '📦 --';
         var items = [
+            {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
             {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
             {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
 
