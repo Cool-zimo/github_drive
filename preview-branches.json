@@ -1,0 +1,15 @@
+{
+  "branches": [
+    {
+      "branch": "preview/Cool-zimo/test-dark-mode",
+      "author": "Cool-zimo",
+      "name": "Test Dark Mode",
+      "description": "测试 CI/CD 自动预览分支功能，添加深色模式主题",
+      "version": "1.0.0",
+      "sourceBranch": "test-dark-mode",
+      "prNumber": 1,
+      "updatedAt": "2026-09-02T14:00:00.000Z"
+    }
+  ],
+  "updatedAt": "2026-09-02T14:00:00.000Z"
+}

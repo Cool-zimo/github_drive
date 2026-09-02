@@ -1209,72 +1209,86 @@ class UI {
         const body = `
             <div style="padding:8px 0;">
                 <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:16px;">
-                    <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px;">💡 关于他人改进版本</div>
+                    <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px;">💡 版本广场</div>
                     <div style="font-size:12px;color:#1e40af;line-height:1.5;">
-                        开发者可以通过 Pull Request 提交改进，系统会自动创建预览分支。<br>
-                        你可以输入分支名来体验他人的改进版本。
+                        开发者通过 Pull Request 提交改进，系统自动创建预览分支并展示在这里。<br>
+                        点击任意版本即可加载体验。
                     </div>
                 </div>
                 
-                <div style="margin-bottom:16px;">
-                    <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">当前分支</label>
-                    <div style="padding:10px 12px;background:#f3f4f6;border-radius:6px;font-family:monospace;font-size:13px;color:#374151;">${currentBranch}</div>
+                <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:12px;color:#6b7280;">当前版本</div>
+                        <div style="font-family:monospace;font-size:14px;font-weight:600;color:#374151;">${currentBranch === 'main' ? '🏠 官方版 (main)' : '🔀 ' + currentBranch}</div>
+                    </div>
+                    ${currentBranch !== 'main' ? '<button onclick="ui.resetToMain()" style="padding:8px 14px;background:#f3f4f6;color:#374151;border:none;border-radius:6px;cursor:pointer;font-size:12px;">🏠 恢复官方版</button>' : ''}
                 </div>
                 
-                <div style="margin-bottom:16px;">
-                    <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">输入分支名</label>
-                    <input type="text" id="branch-input" placeholder="preview/author/feature-name" 
-                        style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:monospace;"
-                        value="${currentBranch === 'main' ? '' : currentBranch}">
+                <div style="border-top:1px solid #e5e7eb;padding-top:12px;">
+                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px;">🌟 社区版本</div>
+                    <div id="version-plaza" style="max-height:400px;overflow-y:auto;">
+                        <div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px;">加载中...</div>
+                    </div>
                 </div>
                 
-                <div style="display:flex;gap:8px;">
-                    <button onclick="ui.switchBranch()" style="flex:1;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🔀 切换分支</button>
-                    <button onclick="ui.resetToMain()" style="padding:10px 16px;background:#f3f4f6;color:#374151;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🏠 恢复官方版</button>
-                </div>
-                
-                <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">📋 可用预览分支（从 PR 自动生成）：</div>
-                    <div id="preview-branches-list" style="font-size:12px;color:#6b7280;">加载中...</div>
+                <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb;">
+                    <details style="font-size:12px;color:#6b7280;">
+                        <summary style="cursor:pointer;">⚙️ 高级：手动输入分支名</summary>
+                        <div style="margin-top:8px;display:flex;gap:8px;">
+                            <input type="text" id="branch-input" placeholder="preview/author/feature-name" 
+                                style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-family:monospace;">
+                            <button onclick="ui.switchBranch()" style="padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">加载</button>
+                        </div>
+                    </details>
                 </div>
             </div>
         `;
-        this.showModal('🔀 版本切换', body, '', true);
-        this.loadPreviewBranches();
+        this.showModal('🌐 版本广场', body, '', true);
+        this.loadVersionPlaza();
     }
 
-    async loadPreviewBranches() {
+    async loadVersionPlaza() {
         try {
-            const token = localStorage.getItem('gd_token');
-            const headers = { 'Accept': 'application/vnd.github.v3+json' };
-            if (token) headers['Authorization'] = 'token ' + token;
+            // 从 main 分支读取 preview-branches.json 配置清单
+            const res = await fetch('https://raw.githubusercontent.com/Cool-zimo/github_drive/main/preview-branches.json?t=' + Date.now());
+            if (!res.ok) throw new Error('配置清单加载失败');
+            const data = await res.json();
             
-            const res = await fetch('https://api.github.com/repos/Cool-zimo/github_drive/branches?per_page=100', { headers });
-            const branches = await res.json();
-            if (!Array.isArray(branches)) {
-                throw new Error(branches.message || 'API 返回错误');
-            }
-            const previewBranches = branches.filter(b => b.name.startsWith('preview/'));
+            const plazaEl = document.getElementById('version-plaza');
+            if (!plazaEl) return;
             
-            const listEl = document.getElementById('preview-branches-list');
-            if (!listEl) return;
-            
-            if (previewBranches.length === 0) {
-                listEl.innerHTML = '<span style="color:#9ca3af;">暂无预览分支</span>';
+            if (!data.branches || data.branches.length === 0) {
+                plazaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;font-size:13px;">暂无社区版本<br><span style="font-size:11px;">成为第一个贡献者吧！</span></div>';
                 return;
             }
             
-            listEl.innerHTML = previewBranches.map(b => 
-                `<div style="padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:4px;" 
-                    onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'"
-                    onclick="document.getElementById('branch-input').value='${b.name}'">
-                    <span style="font-family:monospace;color:#2563eb;">${b.name}</span>
-                </div>`
-            ).join('');
+            plazaEl.innerHTML = data.branches.map(b => {
+                const isCurrent = localStorage.getItem('gd_custom_branch') === b.branch;
+                return `
+                <div onclick="ui.loadVersion('${b.branch}')" 
+                    style="padding:12px;border:1px solid ${isCurrent ? '#2563eb' : '#e5e7eb'};border-radius:8px;margin-bottom:8px;cursor:pointer;background:${isCurrent ? '#eff6ff' : '#fff'};"
+                    onmouseover="this.style.borderColor='#2563eb';this.style.background='#f8fafc'" 
+                    onmouseout="this.style.borderColor='${isCurrent ? '#2563eb' : '#e5e7eb'}';this.style.background='${isCurrent ? '#eff6ff' : '#fff'}'">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                        <div style="font-weight:600;font-size:14px;color:#111827;">${this.escapeHtml(b.name || b.branch)}</div>
+                        <span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:10px;">v${b.version || '1.0.0'}</span>
+                    </div>
+                    <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">👤 ${this.escapeHtml(b.author || 'unknown')}</div>
+                    <div style="font-size:12px;color:#374151;line-height:1.4;">${this.escapeHtml(b.description || '暂无描述')}</div>
+                    <div style="font-size:11px;color:#9ca3af;margin-top:6px;font-family:monospace;">${b.branch}</div>
+                    ${isCurrent ? '<div style="font-size:11px;color:#2563eb;margin-top:4px;font-weight:600;">✅ 当前使用中</div>' : ''}
+                </div>`;
+            }).join('');
         } catch (e) {
-            const listEl = document.getElementById('preview-branches-list');
-            if (listEl) listEl.innerHTML = '<span style="color:#ef4444;">加载失败: ' + e.message + '</span>';
+            const plazaEl = document.getElementById('version-plaza');
+            if (plazaEl) plazaEl.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;font-size:13px;">加载失败: ' + e.message + '<br><span style="font-size:11px;color:#9ca3af;">请检查网络连接</span></div>';
         }
+    }
+    
+    loadVersion(branch) {
+        localStorage.setItem('gd_custom_branch', branch);
+        alert('正在加载版本: ' + branch + '\n页面将刷新以加载新版本。');
+        location.reload();
     }
 
     switchBranch() {

@@ -2,7 +2,7 @@ name: Auto PR Preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
   contents: write
@@ -13,12 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR branch
+        if: github.event.action != 'closed'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Check config.json exists
+        if: github.event.action != 'closed'
         id: check_config
         run: |
           if [ ! -f "config.json" ]; then
@@ -29,7 +31,7 @@ jobs:
           fi
 
       - name: Close PR if no config.json
-        if: steps.check_config.outputs.has_config == 'false'
+        if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -73,11 +75,9 @@ jobs:
               pull_number: context.issue.number,
               state: 'closed'
             });
-            
-            console.log('PR closed due to missing config.json');
 
       - name: Validate config.json
-        if: steps.check_config.outputs.has_config == 'true'
+        if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true'
         id: validate
         run: |
           echo "config.json found:"
@@ -86,6 +86,8 @@ jobs:
           AUTHOR=$(python3 -c "import json; print(json.load(open('config.json')).get('author',''))" 2>/dev/null)
           NAME=$(python3 -c "import json; print(json.load(open('config.json')).get('name',''))" 2>/dev/null)
           BRANCH=$(python3 -c "import json; print(json.load(open('config.json')).get('branch',''))" 2>/dev/null)
+          DESCRIPTION=$(python3 -c "import json; print(json.load(open('config.json')).get('description',''))" 2>/dev/null)
+          VERSION=$(python3 -c "import json; print(json.load(open('config.json')).get('version','1.0.0'))" 2>/dev/null)
           
           if [ -z "$AUTHOR" ] || [ -z "$NAME" ] || [ -z "$BRANCH" ]; then
             echo "::error::config.json must contain 'author', 'name', and 'branch' fields"
@@ -95,10 +97,12 @@ jobs:
           echo "author=$AUTHOR" >> $GITHUB_OUTPUT
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "✅ config.json validation passed"
 
       - name: Create preview branch
-        if: steps.check_config.outputs.has_config == 'true' && success()
+        if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true' && success()
         run: |
           AUTHOR="${{ steps.validate.outputs.author }}"
           NAME="${{ steps.validate.outputs.name }}"
@@ -118,8 +122,77 @@ jobs:
           echo "preview_branch=$PREVIEW_BRANCH" >> $GITHUB_OUTPUT
           echo "✅ Preview branch created: $PREVIEW_BRANCH"
 
+      - name: Update preview branches registry on main
+        if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true' && success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const author = '${{ steps.validate.outputs.author }}';
+            const name = '${{ steps.validate.outputs.name }}';
+            const branch = '${{ steps.validate.outputs.branch }}';
+            const description = '${{ steps.validate.outputs.description }}';
+            const version = '${{ steps.validate.outputs.version }}';
+            const previewBranch = `preview/${author}/${branch.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+            
+            // 获取当前 preview-branches.json
+            let registry = { branches: [], updatedAt: new Date().toISOString() };
+            try {
+              const { data: file } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: 'preview-branches.json',
+                ref: 'main'
+              });
+              const content = Buffer.from(file.content, 'base64').toString();
+              registry = JSON.parse(content);
+            } catch (e) {
+              console.log('Creating new preview-branches.json');
+            }
+            
+            // 更新或添加分支信息
+            const existingIndex = registry.branches.findIndex(b => b.branch === previewBranch);
+            const branchInfo = {
+              branch: previewBranch,
+              author,
+              name,
+              description,
+              version,
+              sourceBranch: branch,
+              prNumber: context.issue.number,
+              updatedAt: new Date().toISOString()
+            };
+            
+            if (existingIndex >= 0) {
+              registry.branches[existingIndex] = branchInfo;
+            } else {
+              registry.branches.push(branchInfo);
+            }
+            
+            registry.updatedAt = new Date().toISOString();
+            
+            // 写回 main 分支
+            const content = Buffer.from(JSON.stringify(registry, null, 2)).toString('base64');
+            const sha = registry.branches.length > 0 ? (await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'preview-branches.json',
+              ref: 'main'
+            })).data.sha : undefined;
+            
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'preview-branches.json',
+              message: `chore: 更新预览分支清单 - ${name}`,
+              content,
+              sha,
+              branch: 'main'
+            });
+            
+            console.log('✅ preview-branches.json updated on main');
+
       - name: Comment success on PR
-        if: steps.check_config.outputs.has_config == 'true' && success()
+        if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true' && success()
         uses: actions/github-script@v7
         with:
           script: |
@@ -141,14 +214,13 @@ jobs:
             ### 如何测试此版本
             
             1. 打开 GitHub Drive
-            2. 进入 设置 → 版本切换
-            3. 选择预览分支，或输入: \`${previewBranch}\`
-            4. 点击切换分支即可体验
+            2. 进入 设置 → 版本切换 → 版本广场
+            3. 找到 "${name}" 并点击加载
             
             ### 直接访问
             https://cool-zimo.github.io/github_drive/?branch=${encodeURIComponent(previewBranch)}
             
-            > 注意：Pages 可能需要几分钟部署，请稍后再试。
+            > 已自动添加到版本广场清单，所有用户都能看到此版本。
             `;
             
             github.rest.issues.createComment({
@@ -157,3 +229,39 @@ jobs:
               issue_number: context.issue.number,
               body: comment
             });
+
+      - name: Remove from registry when PR closed
+        if: github.event.action == 'closed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: file } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: 'preview-branches.json',
+                ref: 'main'
+              });
+              const content = Buffer.from(file.content, 'base64').toString();
+              const registry = JSON.parse(content);
+              
+              // 移除对应 PR 的分支
+              registry.branches = registry.branches.filter(b => b.prNumber !== context.issue.number);
+              registry.updatedAt = new Date().toISOString();
+              
+              const newContent = Buffer.from(JSON.stringify(registry, null, 2)).toString('base64');
+              
+              await github.rest.repos.createOrUpdateFileContents({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: 'preview-branches.json',
+                message: `chore: 移除预览分支 - PR #${context.issue.number} 已关闭`,
+                content: newContent,
+                sha: file.sha,
+                branch: 'main'
+              });
+              
+              console.log('✅ Branch removed from registry');
+            } catch (e) {
+              console.log('No registry to update:', e.message);
+            }
