@@ -1190,7 +1190,7 @@ class UI {
         let body = '<div style="padding:8px 0;"><div style="font-size:13px;color:#6b7280;margin-bottom:12px;">选择主题色，即时生效</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
         themes.forEach(t => {
             const active = current === t.id ? 'style="border:3px solid #333;transform:scale(1.1);"' : '';
-            body += '<div onclick="ui.setTheme('' + t.id + '')" style="text-align:center;cursor:pointer;padding:8px;border-radius:8px;transition:all 0.2s;" ' + active + '>';
+            body += '<div onclick=\'ui.setTheme("' + t.id + '")\' style="text-align:center;cursor:pointer;padding:8px;border-radius:8px;transition:all 0.2s;" ' + active + '>';
             body += '<div style="width:40px;height:40px;border-radius:50%;background:' + t.color + ';margin:0 auto 6px;"></div>';
             body += '<div style="font-size:12px;color:#374151;">' + t.name + '</div></div>';
         });
