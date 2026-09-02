@@ -1187,6 +1187,7 @@ class UI {
             {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
             {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/Github_Drive-Documentation/','_blank');"},
             {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
+            {icon:'📊', title:I18n.t('settings.storageStats') || '存储用量', desc:I18n.t('settings.storageStatsDesc') || '查看文件统计和仓库大小', action:'ui.closeModal();app.showStorageStats();'},
             {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
             {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
             {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
