@@ -1,8 +1,0 @@
-{
-  "author": "AI-Agent",
-  "name": "存储用量统计",
-  "branch": "storage-stats",
-  "description": "添加详细的存储用量统计面板：文件数、文件夹数、类型分布、仓库大小",
-  "version": "1.0.0",
-  "contact": "agent@github-drive.dev"
-}
