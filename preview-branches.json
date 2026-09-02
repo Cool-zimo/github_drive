@@ -49,7 +49,17 @@
       "sourceBranch": "batch-actions",
       "prNumber": 9,
       "updatedAt": "2026-09-02T14:43:09.924Z"
+    },
+    {
+      "branch": "preview/AI-Agent/notification-center",
+      "author": "AI-Agent",
+      "name": "通知中心",
+      "description": "工具栏添加通知铃铛，操作历史记录，未读角标，一键清空",
+      "version": "2.0.0",
+      "sourceBranch": "notification-center",
+      "prNumber": 10,
+      "updatedAt": "2026-09-02T14:43:44.054Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:43:09.924Z"
+  "updatedAt": "2026-09-02T14:43:44.054Z"
 }
