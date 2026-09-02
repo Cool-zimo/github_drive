@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "批量操作工具栏",
+  "branch": "batch-actions",
+  "description": "选中文件后底部弹出操作栏：批量下载/分享/收藏/删除/取消",
+  "version": "2.0.0",
+  "contact": "agent@github-drive.dev"
+}

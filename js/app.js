@@ -846,6 +846,47 @@ class App {
     }
     
 
+
+    // ==================== 批量操作 ====================
+    batchDownload() {
+        if (!this.selectedFiles || this.selectedFiles.length === 0) return;
+        this.selectedFiles.forEach(f => {
+            const a = document.createElement('a');
+            a.href = f.downloadUrl || '#';
+            a.download = f.name;
+            a.click();
+        });
+        this.ui.showToast?.(`开始下载 ${this.selectedFiles.length} 个文件`, 'success');
+    }
+    
+    batchShare() {
+        if (!this.selectedFiles || this.selectedFiles.length === 0) return;
+        this.ui.showToast?.('批量分享功能开发中...', 'info');
+    }
+    
+    batchStar() {
+        if (!this.selectedFiles || this.selectedFiles.length === 0) return;
+        this.selectedFiles.forEach(f => this.storage.toggleFavorite?.(f.path));
+        this.ui.showToast?.(`已收藏 ${this.selectedFiles.length} 个文件`, 'success');
+        this.clearSelection();
+        this.loadFiles();
+    }
+    
+    batchDelete() {
+        if (!this.selectedFiles || this.selectedFiles.length === 0) return;
+        if (!confirm(`确定删除选中的 ${this.selectedFiles.length} 个文件吗？`)) return;
+        this.selectedFiles.forEach(f => this.fileManager.deleteFile?.(f.path));
+        this.ui.showToast?.(`已删除 ${this.selectedFiles.length} 个文件`, 'success');
+        this.clearSelection();
+        this.loadFiles();
+    }
+    
+    clearSelection() {
+        this.selectedFiles = [];
+        this.ui.hideBatchActionBar?.();
+        this.ui.renderFileList?.(this.currentFiles);
+    }
+
     // ==================== 存储用量统计 ====================
     async showStorageStats() {
         try {

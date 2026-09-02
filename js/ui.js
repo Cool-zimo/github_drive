@@ -1190,6 +1190,36 @@ class UI {
         }
     }
 
+
+    // ==================== 批量操作工具栏 ====================
+    showBatchActionBar(count) {
+        let bar = document.getElementById('batch-action-bar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'batch-action-bar';
+            bar.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:12px 20px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);display:flex;align-items:center;gap:16px;z-index:1000;animation:slideUp 0.3s ease;';
+            document.body.appendChild(bar);
+            
+            const style = document.createElement('style');
+            style.textContent = '@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
+            document.head.appendChild(style);
+        }
+        
+        bar.innerHTML = '<span style="font-size:14px;font-weight:600;">已选 ' + count + ' 项</span>' +
+            '<div style="width:1px;height:24px;background:#374151;"></div>' +
+            '<button onclick="app.batchDownload()" style="background:transparent;border:none;color:#fff;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px;" onmouseover="this.style.background=\'#374151\'" onmouseout="this.style.background=\'transparent\'">📥 下载</button>' +
+            '<button onclick="app.batchShare()" style="background:transparent;border:none;color:#fff;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px;" onmouseover="this.style.background=\'#374151\'" onmouseout="this.style.background=\'transparent\'">🔗 分享</button>' +
+            '<button onclick="app.batchStar()" style="background:transparent;border:none;color:#fff;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px;" onmouseover="this.style.background=\'#374151\'" onmouseout="this.style.background=\'transparent\'">⭐ 收藏</button>' +
+            '<button onclick="app.batchDelete()" style="background:transparent;border:none;color:#f87171;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px;" onmouseover="this.style.background=\'#374151\'" onmouseout="this.style.background=\'transparent\'">🗑️ 删除</button>' +
+            '<button onclick="app.clearSelection()" style="background:#374151;border:none;color:#fff;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px;">✕ 取消</button>';
+        bar.style.display = 'flex';
+    }
+    
+    hideBatchActionBar() {
+        const bar = document.getElementById('batch-action-bar');
+        if (bar) bar.style.display = 'none';
+    }
+
     showSettings() {
         var versionEl = document.getElementById('app-version');
         var repoSizeEl = document.getElementById('repo-size-display');
