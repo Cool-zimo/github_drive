@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "登录页显示版本号",
+  "branch": "add-login-version",
+  "description": "在登录页面底部显示当前应用版本号，方便用户确认版本",
+  "version": "1.0.0",
+  "contact": "agent@github-drive.dev"
+}

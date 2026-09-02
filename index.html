@@ -56,8 +56,27 @@
                 </div>
                 <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=GitHub+Drive" target="_blank" class="token-link"><span data-i18n="login.noToken">No Token? Click here to create →</span></a>
             </div>
+            <div class="login-version" id="login-version" style="text-align:center;margin-top:16px;font-size:12px;color:#6b7280;">
+                加载版本中...
+            </div>
         </div>
     </div>
+    <script>
+    // 登录页显示版本号
+    (function() {
+        fetch('js/version.js?t=' + Date.now())
+            .then(r => r.text())
+            .then(t => {
+                const m = t.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+                const m2 = t.match(/version\s*[:=]\s*['"]([^'"]+)['"]/i);
+                const v = m ? m[1] : (m2 ? m2[1] : 'v-');
+                document.getElementById('login-version').textContent = 'GitHub Drive ' + v;
+            })
+            .catch(() => {
+                document.getElementById('login-version').textContent = 'GitHub Drive';
+            });
+    })();
+    </script>
 
     <!-- 主应用 -->
     <div id="app" class="app hidden">
