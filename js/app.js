@@ -579,6 +579,125 @@ class App {
         this.ui.renderFileList(results);
     }
 
+
+    // ==================== 快捷键系统 ====================
+    initShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // 输入框中不触发快捷键
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+                if (e.key === 'Escape') e.target.blur();
+                return;
+            }
+            
+            const ctrl = e.ctrlKey || e.metaKey;
+            
+            // Ctrl + N: 新建文件夹
+            if (ctrl && e.key === 'n') {
+                e.preventDefault();
+                this.ui.showNewFolderModal?.();
+                return;
+            }
+            
+            // Ctrl + U: 上传文件
+            if (ctrl && e.key === 'u') {
+                e.preventDefault();
+                this.ui.showUploadModal?.();
+                return;
+            }
+            
+            // Ctrl + F: 搜索
+            if (ctrl && e.key === 'f') {
+                e.preventDefault();
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) searchInput.focus();
+                return;
+            }
+            
+            // Ctrl + R: 刷新（阻止浏览器刷新）
+            if (ctrl && e.key === 'r') {
+                e.preventDefault();
+                this.loadFiles();
+                this.ui.showToast('已刷新', 'success');
+                return;
+            }
+            
+            // Delete / Backspace: 删除选中文件
+            if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedFiles?.length > 0) {
+                e.preventDefault();
+                this.deleteSelectedFiles();
+                return;
+            }
+            
+            // F2: 重命名
+            if (e.key === 'F2' && this.selectedFiles?.length === 1) {
+                e.preventDefault();
+                this.ui.showRenameModal?.(this.selectedFiles[0]);
+                return;
+            }
+            
+            // Escape: 取消选择/关闭弹窗
+            if (e.key === 'Escape') {
+                this.selectedFiles = [];
+                this.ui.renderFileList?.(this.currentFiles);
+                return;
+            }
+            
+            // Ctrl + A: 全选
+            if (ctrl && e.key === 'a') {
+                e.preventDefault();
+                this.selectedFiles = [...(this.currentFiles || [])];
+                this.ui.renderFileList?.(this.currentFiles, { selected: this.selectedFiles });
+                return;
+            }
+            
+            // Ctrl + D: 收藏/取消收藏
+            if (ctrl && e.key === 'd' && this.selectedFiles?.length === 1) {
+                e.preventDefault();
+                this.toggleStar(this.selectedFiles[0]);
+                return;
+            }
+            
+            // ?: 显示快捷键帮助
+            if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+                e.preventDefault();
+                this.showShortcutsHelp();
+                return;
+            }
+        });
+    }
+    
+    showShortcutsHelp() {
+        const shortcuts = [
+            { key: 'Ctrl + N', desc: '新建文件夹' },
+            { key: 'Ctrl + U', desc: '上传文件' },
+            { key: 'Ctrl + F', desc: '搜索文件' },
+            { key: 'Ctrl + R', desc: '刷新文件列表' },
+            { key: 'Ctrl + A', desc: '全选文件' },
+            { key: 'Ctrl + D', desc: '收藏/取消收藏' },
+            { key: 'Delete', desc: '删除选中文件' },
+            { key: 'F2', desc: '重命名文件' },
+            { key: 'Escape', desc: '取消选择/关闭弹窗' },
+            { key: '?', desc: '显示快捷键帮助' }
+        ];
+        const body = '<div style="padding:8px 0;">' + 
+            shortcuts.map(s => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;">
+                <span style="font-family:monospace;background:#f3f4f6;padding:4px 10px;border-radius:4px;font-size:13px;">${s.key}</span>
+                <span style="font-size:14px;color:#374151;">${s.desc}</span>
+            </div>`).join('') + '</div>';
+        this.ui.showModal?.('⌨️ 快捷键列表', body, '', true);
+    }
+    
+    deleteSelectedFiles() {
+        if (!this.selectedFiles || this.selectedFiles.length === 0) return;
+        const count = this.selectedFiles.length;
+        if (confirm(`确定要删除选中的 ${count} 个文件吗？`)) {
+            this.selectedFiles.forEach(f => this.fileManager.deleteFile?.(f.path));
+            this.selectedFiles = [];
+            this.loadFiles();
+            this.ui.showToast(`已删除 ${count} 个文件`, 'success');
+        }
+    }
+
     // 收藏/取消收藏
     async toggleStar(file) {
         const isFav = this.storage.toggleFavorite(file.path);

@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "快捷键系统",
+  "branch": "shortcuts",
+  "description": "添加完整快捷键系统：新建/上传/搜索/刷新/删除/重命名/全选/收藏/帮助",
+  "version": "1.0.0",
+  "contact": "agent@github-drive.dev"
+}
