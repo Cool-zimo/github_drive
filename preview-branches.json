@@ -39,7 +39,17 @@
       "sourceBranch": "drag-move",
       "prNumber": 8,
       "updatedAt": "2026-09-02T14:42:44.939Z"
+    },
+    {
+      "branch": "preview/AI-Agent/batch-actions",
+      "author": "AI-Agent",
+      "name": "批量操作工具栏",
+      "description": "选中文件后底部弹出操作栏：批量下载/分享/收藏/删除/取消",
+      "version": "2.0.0",
+      "sourceBranch": "batch-actions",
+      "prNumber": 9,
+      "updatedAt": "2026-09-02T14:43:09.924Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:42:44.939Z"
+  "updatedAt": "2026-09-02T14:43:09.924Z"
 }
