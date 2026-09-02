@@ -733,7 +733,6 @@ class App {
             const files = Object.entries(vfs.files || {});
             const folders = Object.entries(vfs.folders || {});
             
-            // 统计文件类型
             const typeStats = {};
             let totalSize = 0;
             files.forEach(([path, info]) => {
@@ -742,68 +741,50 @@ class App {
                 totalSize += info.size || 0;
             });
             
-            // 排序类型
             const sortedTypes = Object.entries(typeStats).sort((a, b) => b[1] - a[1]).slice(0, 8);
-            
-            // 获取仓库大小
             const repoInfo = await this.getRepoSize();
             
-            const body = `
-                <div style="padding:8px 0;">
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
-                        <div style="text-align:center;padding:16px;background:#eff6ff;border-radius:12px;">
-                            <div style="font-size:28px;font-weight:700;color:#2563eb;">${files.length}</div>
-                            <div style="font-size:12px;color:#6b7280;">文件数</div>
-                        </div>
-                        <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:12px;">
-                            <div style="font-size:28px;font-weight:700;color:#16a34a;">${folders.length}</div>
-                            <div style="font-size:12px;color:#6b7280;">文件夹数</div>
-                        </div>
-                        <div style="text-align:center;padding:16px;background:#fef3c7;border-radius:12px;">
-                            <div style="font-size:24px;font-weight:700;color:#d97706;">${(totalSize/1024/1024).toFixed(2)}MB</div>
-                            <div style="font-size:12px;color:#6b7280;">本地缓存</div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom:16px;">
-                        <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📦 仓库存储</div>
-                        ${repoInfo ? `
-                            <div style="padding:12px;background:#f9fafb;border-radius:8px;">
-                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                                    <span style="font-size:13px;color:#6b7280;">GitHub 仓库大小</span>
-                                    <span style="font-size:13px;font-weight:600;">${repoInfo.sizeMB} MB</span>
-                                </div>
-                                <div style="display:flex;justify-content:space-between;">
-                                    <span style="font-size:13px;color:#6b7280;">存储仓库数</span>
-                                    <span style="font-size:13px;font-weight:600;">${repoInfo.name}</span>
-                                </div>
-                                <div style="margin-top:8px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
-                                    <div style="height:100%;width:${Math.min(100, parseFloat(repoInfo.sizeMB) / 1024 * 100)}%;background:linear-gradient(90deg,#2563eb,#7c3aed);"></div>
-                                </div>
-                                <div style="font-size:11px;color:#9ca3af;margin-top:4px;">GitHub 建议仓库不超过 1GB</div>
-                            </div>
-                        ` : '<div style="font-size:13px;color:#9ca3af;">仓库信息加载中...</div>'}
-                    </div>
-                    
-                    <div>
-                        <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📊 文件类型分布</div>
-                        ${sortedTypes.length > 0 ? sortedTypes.map(([ext, count]) => {
-                            const percent = (count / files.length * 100).toFixed(1);
-                            return \`
-                                <div style="margin-bottom:8px;">
-                                    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;">
-                                        <span style="color:#374151;">.${ext}</span>
-                                        <span style="color:#6b7280;">${count} 个 (${percent}%)</span>
-                                    </div>
-                                    <div style="height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden;">
-                                        <div style="height:100%;width:${percent}%;background:#2563eb;"></div>
-                                    </div>
-                                </div>
-                            \`;
-                        }).join('') : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>'}
-                    </div>
-                </div>
-            `;
+            let typeHtml = '';
+            sortedTypes.forEach(([ext, count]) => {
+                const percent = (count / files.length * 100).toFixed(1);
+                typeHtml += '<div style="margin-bottom:8px;">';
+                typeHtml += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;">';
+                typeHtml += '<span style="color:#374151">.' + ext + '</span>';
+                typeHtml += '<span style="color:#6b7280;">' + count + ' 个 (' + percent + '%)</span>';
+                typeHtml += '</div>';
+                typeHtml += '<div style="height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden;">';
+                typeHtml += '<div style="height:100%;width:' + percent + '%;background:#2563eb;"></div>';
+                typeHtml += '</div></div>';
+            });
+            
+            const repoHtml = repoInfo ? 
+                '<div style="padding:12px;background:#f9fafb;border-radius:8px;">' +
+                '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+                '<span style="font-size:13px;color:#6b7280;">GitHub 仓库大小</span>' +
+                '<span style="font-size:13px;font-weight:600;">' + repoInfo.sizeMB + ' MB</span></div>' +
+                '<div style="display:flex;justify-content:space-between;">' +
+                '<span style="font-size:13px;color:#6b7280;">存储仓库数</span>' +
+                '<span style="font-size:13px;font-weight:600;">' + repoInfo.name + '</span></div>' +
+                '<div style="margin-top:8px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">' +
+                '<div style="height:100%;width:' + Math.min(100, parseFloat(repoInfo.sizeMB) / 1024 * 100) + '%;background:linear-gradient(90deg,#2563eb,#7c3aed);"></div></div>' +
+                '<div style="font-size:11px;color:#9ca3af;margin-top:4px;">GitHub 建议仓库不超过 1GB</div></div>'
+                : '<div style="font-size:13px;color:#9ca3af;">仓库信息加载中...</div>';
+            
+            const body = '<div style="padding:8px 0;">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">' +
+                '<div style="text-align:center;padding:16px;background:#eff6ff;border-radius:12px;">' +
+                '<div style="font-size:28px;font-weight:700;color:#2563eb;">' + files.length + '</div>' +
+                '<div style="font-size:12px;color:#6b7280;">文件数</div></div>' +
+                '<div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:12px;">' +
+                '<div style="font-size:28px;font-weight:700;color:#16a34a;">' + folders.length + '</div>' +
+                '<div style="font-size:12px;color:#6b7280;">文件夹数</div></div>' +
+                '<div style="text-align:center;padding:16px;background:#fef3c7;border-radius:12px;">' +
+                '<div style="font-size:24px;font-weight:700;color:#d97706;">' + (totalSize/1024/1024).toFixed(2) + 'MB</div>' +
+                '<div style="font-size:12px;color:#6b7280;">本地缓存</div></div></div>' +
+                '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📦 仓库存储</div>' + repoHtml + '</div>' +
+                '<div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📊 文件类型分布</div>' +
+                (sortedTypes.length > 0 ? typeHtml : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>') +
+                '</div></div>';
             
             this.ui.showModal?.('📊 存储用量统计', body, '', true);
         } catch (e) {
