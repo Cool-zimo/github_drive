@@ -49,7 +49,17 @@
       "sourceBranch": "shortcuts",
       "prNumber": 5,
       "updatedAt": "2026-09-02T14:31:46.865Z"
+    },
+    {
+      "branch": "preview/AI-Agent/storage-stats",
+      "author": "AI-Agent",
+      "name": "存储用量统计",
+      "description": "添加详细的存储用量统计面板：文件数、文件夹数、类型分布、仓库大小",
+      "version": "1.0.0",
+      "sourceBranch": "storage-stats",
+      "prNumber": 6,
+      "updatedAt": "2026-09-02T14:33:16.834Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:31:46.865Z"
+  "updatedAt": "2026-09-02T14:33:16.835Z"
 }
