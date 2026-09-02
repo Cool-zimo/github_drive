@@ -1,3 +1,14 @@
+
+/* 测试深色模式 */
+.login-screen {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
+}
+.login-card {
+    background: #0f3460 !important;
+}
+.login-card h1 {
+    color: #e94560 !important;
+}
 /* ===== 全局样式 ===== */
 * {
     margin: 0;
