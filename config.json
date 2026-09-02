@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "通知中心",
+  "branch": "notification-center",
+  "description": "工具栏添加通知铃铛，操作历史记录，未读角标，一键清空",
+  "version": "2.0.0",
+  "contact": "agent@github-drive.dev"
+}
