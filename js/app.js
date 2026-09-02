@@ -601,7 +601,7 @@ class App {
             // Ctrl + U: 上传文件
             if (ctrl && e.key === 'u') {
                 e.preventDefault();
-                this.ui.showUploadModal?.();
+                this.ui.openUploadModal?.();
                 return;
             }
             
@@ -691,10 +691,8 @@ class App {
         if (!this.selectedFiles || this.selectedFiles.length === 0) return;
         const count = this.selectedFiles.length;
         if (confirm(`确定要删除选中的 ${count} 个文件吗？`)) {
-            this.selectedFiles.forEach(f => this.fileManager.deleteFile?.(f.path));
+            this.deleteFiles(this.selectedFiles);
             this.selectedFiles = [];
-            this.loadFiles();
-            this.ui.showToast(`已删除 ${count} 个文件`, 'success');
         }
     }
 
