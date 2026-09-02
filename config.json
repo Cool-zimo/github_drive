@@ -1,0 +1,8 @@
+{
+  "author": "Cool-zimo",
+  "name": "Test Dark Mode",
+  "branch": "test-dark-mode",
+  "description": "测试 CI/CD 自动预览分支功能，添加深色模式主题",
+  "version": "1.0.0",
+  "contact": "test@example.com"
+}
