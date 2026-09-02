@@ -39,7 +39,17 @@
       "sourceBranch": "content-search",
       "prNumber": 4,
       "updatedAt": "2026-09-02T14:30:25.376Z"
+    },
+    {
+      "branch": "preview/AI-Agent/shortcuts",
+      "author": "AI-Agent",
+      "name": "快捷键系统",
+      "description": "添加完整快捷键系统：新建/上传/搜索/刷新/删除/重命名/全选/收藏/帮助",
+      "version": "1.0.0",
+      "sourceBranch": "shortcuts",
+      "prNumber": 5,
+      "updatedAt": "2026-09-02T14:31:46.865Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:30:25.376Z"
+  "updatedAt": "2026-09-02T14:31:46.865Z"
 }
