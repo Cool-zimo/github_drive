@@ -19,7 +19,17 @@
       "sourceBranch": "add-login-version",
       "prNumber": 2,
       "updatedAt": "2026-09-02T14:22:26.657Z"
+    },
+    {
+      "branch": "preview/AI-Agent/dark-mode",
+      "author": "AI-Agent",
+      "name": "全局暗色模式",
+      "description": "添加全局暗色模式支持，可在设置中切换，偏好自动保存",
+      "version": "1.0.0",
+      "sourceBranch": "dark-mode",
+      "prNumber": 3,
+      "updatedAt": "2026-09-02T14:29:32.576Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:22:26.657Z"
+  "updatedAt": "2026-09-02T14:29:32.576Z"
 }
