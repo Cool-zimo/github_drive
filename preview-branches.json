@@ -99,7 +99,17 @@
       "sourceBranch": "dashboard",
       "prNumber": 14,
       "updatedAt": "2026-09-03T10:13:53.958Z"
+    },
+    {
+      "branch": "preview/AI-Agent/file-tags",
+      "author": "AI-Agent",
+      "name": "文件标签系统",
+      "description": "为文件添加自定义标签，支持常用标签快速添加，右键菜单管理标签",
+      "version": "3.0.0",
+      "sourceBranch": "file-tags",
+      "prNumber": 15,
+      "updatedAt": "2026-09-03T10:14:23.793Z"
     }
   ],
-  "updatedAt": "2026-09-03T10:13:53.958Z"
+  "updatedAt": "2026-09-03T10:14:23.793Z"
 }
