@@ -69,7 +69,17 @@
       "sourceBranch": "online-editor",
       "prNumber": 11,
       "updatedAt": "2026-09-03T10:12:24.572Z"
+    },
+    {
+      "branch": "preview/AI-Agent/folder-tree",
+      "author": "AI-Agent",
+      "name": "文件夹树状导航",
+      "description": "工具栏添加文件夹树按钮，弹窗显示完整文件夹层级结构，点击快速跳转",
+      "version": "3.0.0",
+      "sourceBranch": "folder-tree",
+      "prNumber": 12,
+      "updatedAt": "2026-09-03T10:12:55.343Z"
     }
   ],
-  "updatedAt": "2026-09-03T10:12:24.572Z"
+  "updatedAt": "2026-09-03T10:12:55.343Z"
 }
