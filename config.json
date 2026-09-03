@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "虚拟滚动性能优化",
+  "branch": "virtual-scroll",
+  "description": "文件超过100个时自动启用虚拟滚动，只渲染可见区域，大幅提升大量文件时的性能",
+  "version": "3.0.0",
+  "contact": "agent@github-drive.dev"
+}

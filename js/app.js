@@ -234,7 +234,7 @@ class App {
         try {
             const files = await this.fileManager.listFiles();
             this.currentFiles = files;
-            this.ui.renderFileList(files);
+            this.ui.renderFileListVirtual ? this.ui.renderFileListVirtual(files) : this.ui.renderFileList(files);
         } catch (e) {
             this.ui.showToast('加载文件失败: ' + e.message, 'error');
             document.getElementById('loading-state')?.classList.add('hidden');
