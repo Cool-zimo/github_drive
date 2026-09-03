@@ -1,8 +1,0 @@
-{
-  "author": "AI-Agent",
-  "name": "仪表盘概览页",
-  "branch": "dashboard",
-  "description": "侧边栏添加仪表盘入口，显示文件统计/存储用量/类型分布/最近文件的概览页",
-  "version": "3.0.0",
-  "contact": "agent@github-drive.dev"
-}
