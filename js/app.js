@@ -580,6 +580,37 @@ class App {
     }
 
 
+
+    // ==================== 在线文件编辑 ====================
+    async editFile(file) {
+        try {
+            const content = await this.fileManager.readFileContent?.(file.path);
+            this._editingFile = file;
+            this.ui.showOnlineEditor(file, content);
+        } catch (e) {
+            this.ui.showToast('无法读取文件: ' + e.message, 'error');
+        }
+    }
+    
+    async saveEditedFile() {
+        const textarea = document.getElementById('editor-textarea');
+        const statusEl = document.getElementById('editor-status');
+        if (!textarea || !this._editingFile) return;
+        
+        try {
+            if (statusEl) statusEl.textContent = '保存中...';
+            const content = textarea.value;
+            await this.fileManager.writeFileContent?.(this._editingFile.path, content);
+            if (statusEl) statusEl.textContent = '✅ 已保存';
+            this.ui.showToast('文件已保存', 'success');
+            this._editingFile = null;
+            setTimeout(() => { this.ui.closeModal(); this.loadFiles(); }, 800);
+        } catch (e) {
+            if (statusEl) statusEl.textContent = '❌ 保存失败';
+            this.ui.showToast('保存失败: ' + e.message, 'error');
+        }
+    }
+
     // ==================== 快捷键系统 ====================
     initShortcuts() {
         document.addEventListener('keydown', (e) => {
