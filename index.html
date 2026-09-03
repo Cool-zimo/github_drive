@@ -89,6 +89,7 @@
             <nav class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title"><span data-i18n="sidebar.myFiles">My Files</span></div>
+                    <a href="#" class="nav-item" id="dashboard-nav" onclick="app.showDashboard();return false;"><span class="nav-icon">📊</span><span>仪表盘</span></a>
                     <a href="#" class="nav-item active" data-view="all-files">
                         <span class="nav-icon">🗂️</span>
                         <span data-i18n="nav.allFiles">全部文件</span>
@@ -142,6 +143,8 @@
                     <div class="search-box">
                         <input type="text" id="search-input" placeholder="Search files...">
                     </div>
+                    <button class="btn-secondary" id="adv-search-btn" title="高级筛选"><span>⚙️</span></button>
+                    <button class="btn-secondary" id="folder-tree-btn" title="文件夹导航"><span>🗂️</span></button>
                     <button class="btn-secondary" id="new-folder-btn" title="New Folder">
                         <span>📁</span> <span class="btn-text"><span data-i18n="btn.newFolder">New Folder</span></span>
                     </button>
