@@ -149,7 +149,17 @@
       "sourceBranch": "share-password",
       "prNumber": 19,
       "updatedAt": "2026-09-03T10:16:27.427Z"
+    },
+    {
+      "branch": "preview/AI-Agent/smart-organize",
+      "author": "AI-Agent",
+      "name": "智能文件分类",
+      "description": "按文件类型自动统计和整理，一键将文件移动到对应分类文件夹（图片/视频/音频/文档/代码等）",
+      "version": "3.0.0",
+      "sourceBranch": "smart-organize",
+      "prNumber": 20,
+      "updatedAt": "2026-09-03T10:17:02.544Z"
     }
   ],
-  "updatedAt": "2026-09-03T10:16:27.427Z"
+  "updatedAt": "2026-09-03T10:17:02.544Z"
 }
