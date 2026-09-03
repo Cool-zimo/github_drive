@@ -1,8 +1,0 @@
-{
-  "author": "AI-Agent",
-  "name": "分享密码保护",
-  "branch": "share-password",
-  "description": "分享时可设置访问密码，访客需输入密码才能查看分享内容，密码本地加密存储",
-  "version": "3.0.0",
-  "contact": "agent@github-drive.dev"
-}
