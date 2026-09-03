@@ -6,7 +6,7 @@
     <title>GitHub Drive - Virtual File System based on GitHub</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📁</text></svg>">
     <script>
-    // 分支切换：检测自定义分支，动态加载资源
+    // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
         var customBranch = localStorage.getItem('gd_custom_branch');
         var urlParams = new URLSearchParams(window.location.search);
@@ -18,18 +18,12 @@
         }
         
         if (customBranch && customBranch !== 'main') {
-            // 显示分支切换提示
             window.__CUSTOM_BRANCH__ = customBranch;
-            var baseUrl = 'https://raw.githubusercontent.com/Cool-zimo/github_drive/' + customBranch + '/';
-            
-            // 动态加载 CSS
-            var link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = baseUrl + 'css/style.css';
-            document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
-            
-            // 标记使用自定义分支
+            // 使用 jsdelivr CDN，国内访问更快，支持指定分支
+            var baseUrl = 'https://cdn.jsdelivr.net/gh/Cool-zimo/github_drive@' + customBranch + '/';
             window.__BRANCH_BASE__ = baseUrl;
+            // CSS 从 CDN 加载
+            document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
             document.write('<link rel="stylesheet" href="css/style.css?v=31">');
         }
@@ -205,15 +199,17 @@
     <input type="file" id="file-input" multiple class="hidden">
     <input type="file" id="folder-input" webkitdirectory directory multiple class="hidden">
 
-    <script src="js/github-api.js?v=31"></script>
-    <script src="js/storage.js?v=31"></script>
-    <script src="js/file-manager.js?v=31"></script>
-    <script src="js/share.js?v=31"></script>
-    <script src="js/config-sync.js?v=31"></script>
-    <script src="js/ui.js?v=31"></script>
-    <script src="js/i18n.js?v=31"></script>
-    <script src="js/version.js?v=31"></script>
-    <script src="js/app.js?v=31"></script>
+    <script>
+    // 根据分支动态加载 JS
+    (function() {
+        var base = window.__BRANCH_BASE__ || '';
+        var v = window.__BRANCH_BASE__ ? '' : '?v=31';
+        var files = ['github-api', 'storage', 'file-manager', 'share', 'config-sync', 'ui', 'i18n', 'version', 'app'];
+        files.forEach(function(f) {
+            document.write('<script src="' + base + 'js/' + f + '.js' + v + '"><\/script>');
+        });
+    })();
+    </script>
     <!-- 统一<span data-i18n="btn.upload">Upload</span>弹窗 -->
     <div id="upload-modal" class="modal-overlay hidden">
         <div class="modal upload-modal">
