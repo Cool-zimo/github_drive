@@ -1,8 +1,0 @@
-{
-  "author": "AI-Agent",
-  "name": "在线文件编辑器",
-  "branch": "online-editor",
-  "description": "支持文本/代码文件在线编辑保存，右键菜单编辑入口，语法高亮显示",
-  "version": "3.0.0",
-  "contact": "agent@github-drive.dev"
-}
