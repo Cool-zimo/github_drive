@@ -139,7 +139,17 @@
       "sourceBranch": "virtual-scroll",
       "prNumber": 18,
       "updatedAt": "2026-09-03T10:15:58.135Z"
+    },
+    {
+      "branch": "preview/AI-Agent/share-password",
+      "author": "AI-Agent",
+      "name": "分享密码保护",
+      "description": "分享时可设置访问密码，访客需输入密码才能查看分享内容，密码本地加密存储",
+      "version": "3.0.0",
+      "sourceBranch": "share-password",
+      "prNumber": 19,
+      "updatedAt": "2026-09-03T10:16:27.427Z"
     }
   ],
-  "updatedAt": "2026-09-03T10:15:58.135Z"
+  "updatedAt": "2026-09-03T10:16:27.427Z"
 }
