@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "文件版本历史",
+  "branch": "file-history",
+  "description": "右键查看文件提交历史，支持恢复到任意历史版本，显示作者/时间/commit信息",
+  "version": "3.0.0",
+  "contact": "agent@github-drive.dev"
+}
