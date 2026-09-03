@@ -168,6 +168,7 @@ class UI {
             });
         }
         document.getElementById('view-toggle-btn')?.addEventListener('click', () => this.toggleView());
+        document.getElementById('folder-tree-btn')?.addEventListener('click', () => this.showFolderTree());
         document.getElementById('new-folder-btn').addEventListener('click', () => this.showNewFolderModal());
         // document.getElementById('create-repo-btn')?.addEventListener('click', () => this.showCreateRepoModal());
         // document.getElementById('add-repo-btn')?.addEventListener('click', () => this.showLinkRepoModal());

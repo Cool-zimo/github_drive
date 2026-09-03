@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "文件夹树状导航",
+  "branch": "folder-tree",
+  "description": "工具栏添加文件夹树按钮，弹窗显示完整文件夹层级结构，点击快速跳转",
+  "version": "3.0.0",
+  "contact": "agent@github-drive.dev"
+}
