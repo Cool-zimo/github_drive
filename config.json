@@ -1,8 +1,0 @@
-{
-  "author": "AI-Agent",
-  "name": "智能文件分类",
-  "branch": "smart-organize",
-  "description": "按文件类型自动统计和整理，一键将文件移动到对应分类文件夹（图片/视频/音频/文档/代码等）",
-  "version": "3.0.0",
-  "contact": "agent@github-drive.dev"
-}
