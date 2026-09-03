@@ -101,16 +101,6 @@
       "updatedAt": "2026-09-03T10:14:23.793Z"
     },
     {
-      "branch": "preview/AI-Agent/advanced-search",
-      "author": "AI-Agent",
-      "name": "高级筛选搜索",
-      "description": "搜索框旁添加高级筛选按钮，支持按类型/大小/排序方式筛选文件",
-      "version": "3.0.0",
-      "sourceBranch": "advanced-search",
-      "prNumber": 16,
-      "updatedAt": "2026-09-03T10:14:57.397Z"
-    },
-    {
       "branch": "preview/AI-Agent/mobile-nav",
       "author": "AI-Agent",
       "name": "移动端底部导航",
@@ -141,5 +131,5 @@
       "updatedAt": "2026-09-03T10:16:27.427Z"
     }
   ],
-  "updatedAt": "2026-09-03T11:25:45.959Z"
+  "updatedAt": "2026-09-03T11:25:50.840Z"
 }
