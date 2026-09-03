@@ -1496,6 +1496,29 @@ class UI {
     /**
      * 新建文件夹模态框
      */
+
+    // ==================== 在线文件编辑器 ====================
+    showOnlineEditor(file, content) {
+        const isCode = /\.(js|py|json|html|css|md|txt|xml|yml|yaml|toml|cfg|ini|sh|bat|java|c|cpp|go|rs|ts|jsx|tsx|vue)$/i.test(file.name);
+        const lang = file.name.split('.').pop().toLowerCase();
+        
+        const body = '<div style="padding:0;">' +
+            '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;">' +
+            '<span style="font-size:14px;font-weight:600;">📝 ' + file.name + '</span>' +
+            '<span style="font-size:11px;color:#6b7280;background:#e5e7eb;padding:2px 8px;border-radius:4px;">' + lang.toUpperCase() + '</span>' +
+            '<span id="editor-status" style="font-size:12px;color:#6b7280;margin-left:auto;">已加载</span>' +
+            '</div>' +
+            '<textarea id="editor-textarea" style="width:100%;height:400px;border:none;outline:none;padding:16px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;background:#fff;color:#1f2937;" spellcheck="false">' + (content || '') + '</textarea>' +
+            '</div>';
+        
+        const footer = '<div style="display:flex;gap:8px;">' +
+            '<button onclick="ui.closeModal()" style="padding:8px 20px;background:#f3f4f6;border:none;border-radius:6px;cursor:pointer;font-size:14px;">取消</button>' +
+            '<button onclick="app.saveEditedFile()" style="padding:8px 20px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">💾 保存</button>' +
+            '</div>';
+        
+        this.showModal('📝 在线编辑器', body, footer, true);
+    }
+
     showNewFolderModal() {
         this.showModal(
             '新建文件夹',
