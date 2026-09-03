@@ -188,6 +188,7 @@ class UI {
         });
 
         // 搜索
+        document.getElementById('adv-search-btn')?.addEventListener('click', () => this.showAdvancedSearch());
         document.getElementById('search-input').addEventListener('input', (e) => {
             clearTimeout(this.searchTimeout);
             this.searchTimeout = setTimeout(() => {
