@@ -177,6 +177,50 @@ class Storage {
         });
     }
 
+
+    // ==================== 文件标签系统 ====================
+    getFileTags(path) {
+        const tags = this.get('file_tags', {});
+        return tags[path] || [];
+    }
+    
+    setFileTags(path, tags) {
+        const allTags = this.get('file_tags', {});
+        if (tags.length === 0) {
+            delete allTags[path];
+        } else {
+            allTags[path] = tags;
+        }
+        this.set('file_tags', allTags);
+    }
+    
+    addFileTag(path, tag) {
+        const tags = this.getFileTags(path);
+        if (!tags.includes(tag)) {
+            tags.push(tag);
+            this.setFileTags(path, tags);
+        }
+    }
+    
+    removeFileTag(path, tag) {
+        const tags = this.getFileTags(path).filter(t => t !== tag);
+        this.setFileTags(path, tags);
+    }
+    
+    getAllTags() {
+        const allTags = this.get('file_tags', {});
+        const tagSet = new Set();
+        Object.values(allTags).forEach(tags => tags.forEach(t => tagSet.add(t)));
+        return Array.from(tagSet).sort();
+    }
+    
+    getFilesByTag(tag) {
+        const allTags = this.get('file_tags', {});
+        return Object.entries(allTags)
+            .filter(([path, tags]) => tags.includes(tag))
+            .map(([path]) => path);
+    }
+
     // ==================== 用户信息 ====================
     getUser() { return this.get(this.keys.USER, null); }
     setUser(user) { this.set(this.keys.USER, user); }
