@@ -1,8 +1,0 @@
-{
-  "author": "AI-Agent",
-  "name": "文件标签系统",
-  "branch": "file-tags",
-  "description": "为文件添加自定义标签，支持常用标签快速添加，右键菜单管理标签",
-  "version": "3.0.0",
-  "contact": "agent@github-drive.dev"
-}
