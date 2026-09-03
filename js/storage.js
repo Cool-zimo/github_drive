@@ -178,6 +178,27 @@ class Storage {
     }
 
 
+
+    // ==================== 分享密码保护 ====================
+    setSharePassword(shareId, password) {
+        const passwords = this.get('share_passwords', {});
+        passwords[shareId] = btoa(password);
+        this.set('share_passwords', passwords);
+    }
+    getSharePassword(shareId) {
+        const passwords = this.get('share_passwords', {});
+        return passwords[shareId] ? atob(passwords[shareId]) : null;
+    }
+    removeSharePassword(shareId) {
+        const passwords = this.get('share_passwords', {});
+        delete passwords[shareId];
+        this.set('share_passwords', passwords);
+    }
+    verifySharePassword(shareId, inputPassword) {
+        const saved = this.getSharePassword(shareId);
+        return saved === null || saved === inputPassword;
+    }
+
     // ==================== 文件标签系统 ====================
     getFileTags(path) {
         const tags = this.get('file_tags', {});
@@ -573,6 +594,13 @@ class Storage {
         return idx < 0;
     }
     isFavorite(virtualPath) { return this.getFavorites().includes(Storage.normalizePath(virtualPath)); }
+
+
+    // 检查文件夹是否存在
+    folderExists(path) {
+        const vfs = this.getVFS();
+        return !!vfs.folders[path];
+    }
 
     // ==================== 最近使用 ====================
     getRecent() { return this.get(this.keys.RECENT, []); }

@@ -234,7 +234,7 @@ class App {
         try {
             const files = await this.fileManager.listFiles();
             this.currentFiles = files;
-            this.ui.renderFileListVirtual ? this.ui.renderFileListVirtual(files) : this.ui.renderFileList(files);
+            this.ui.renderFileList(files);
         } catch (e) {
             this.ui.showToast('加载文件失败: ' + e.message, 'error');
             document.getElementById('loading-state')?.classList.add('hidden');
@@ -581,10 +581,213 @@ class App {
 
 
 
+
+    // ==================== 文件版本历史 ====================
+    async showFileHistory(file) {
+        try {
+            this.ui.showToast('正在加载版本历史...', 'info');
+            const repos = this.storage.getRepos();
+            if (repos.length === 0) return;
+            const repo = repos[0];
+            const history = await this.api.getFileHistory(repo.owner, repo.repo, file.path, repo.branch || 'main');
+            if (history.length === 0) { this.ui.showToast('暂无版本历史', 'info'); return; }
+            let body = '<div style="max-height:400px;overflow-y:auto;padding:8px 0;">';
+            history.forEach((v, i) => {
+                const date = new Date(v.date).toLocaleString('zh-CN');
+                body += '<div style="padding:12px;border-bottom:1px solid #f3f4f6;display:flex;gap:12px;align-items:flex-start;">';
+                body += '<div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">📝</div>';
+                body += '<div style="flex:1;"><div style="font-size:13px;font-weight:600;">' + v.message.substring(0, 50) + '</div>';
+                body += '<div style="font-size:11px;color:#6b7280;margin-top:2px;">' + v.author + ' · ' + date + '</div>';
+                body += '<div style="font-size:11px;color:#9ca3af;font-family:monospace;margin-top:2px;">' + v.sha + '</div></div>';
+                if (i > 0) {
+                    body += '<button onclick="app.restoreVersion(\'' + file.path + '\', \'' + v.fullSha + '\')" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:4px;cursor:pointer;font-size:12px;flex-shrink:0;">恢复</button>';
+                } else {
+                    body += '<span style="font-size:11px;color:#10b981;background:#d1fae5;padding:2px 8px;border-radius:4px;flex-shrink:0;">当前</span>';
+                }
+                body += '</div>';
+            });
+            body += '</div>';
+            this.ui.showModal('📜 版本历史 - ' + file.name, body, '', true);
+        } catch (e) { this.ui.showToast('加载失败: ' + e.message, 'error'); }
+    }
+    
+    async restoreVersion(path, sha) {
+        if (!confirm('确定要恢复到此版本吗？当前内容将被覆盖。')) return;
+        try {
+            const repos = this.storage.getRepos();
+            const repo = repos[0];
+            const content = await this.api.getFileAtVersion(repo.owner, repo.repo, path, sha);
+            if (content !== null) {
+                await this.fileManager.writeFileContent?.(path, content);
+                this.ui.showToast('已恢复到指定版本', 'success');
+                this.ui.closeModal();
+                this.loadFiles();
+            }
+        } catch (e) { this.ui.showToast('恢复失败: ' + e.message, 'error'); }
+    }
+
+    // ==================== 仪表盘概览 ====================
+    async showDashboard() {
+        const vfs = this.storage.getVFS();
+        const files = Object.entries(vfs.files || {});
+        const folders = Object.entries(vfs.folders || {});
+        const favorites = this.storage.getFavorites?.() || [];
+        const recent = this.storage.getRecent?.() || [];
+        let totalSize = 0;
+        const typeStats = {};
+        files.forEach(([path, info]) => {
+            totalSize += info.size || 0;
+            const ext = (info.name.split('.').pop() || 'other').toLowerCase();
+            typeStats[ext] = (typeStats[ext] || 0) + 1;
+        });
+        const topTypes = Object.entries(typeStats).sort((a,b) => b[1]-a[1]).slice(0, 5);
+        const repoInfo = await this.getRepoSize().catch(() => null);
+        const body = '<div style="padding:8px 0;">' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">' +
+            '<div style="text-align:center;padding:16px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;color:#fff;"><div style="font-size:24px;font-weight:700;">' + files.length + '</div><div style="font-size:11px;opacity:0.9;">文件</div></div>' +
+            '<div style="text-align:center;padding:16px;background:linear-gradient(135deg,#f093fb,#f5576c);border-radius:12px;color:#fff;"><div style="font-size:24px;font-weight:700;">' + folders.length + '</div><div style="font-size:11px;opacity:0.9;">文件夹</div></div>' +
+            '<div style="text-align:center;padding:16px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:12px;color:#fff;"><div style="font-size:20px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + 'MB</div><div style="font-size:11px;opacity:0.9;">本地缓存</div></div>' +
+            '<div style="text-align:center;padding:16px;background:linear-gradient(135deg,#43e97b,#38f9d7);border-radius:12px;color:#fff;"><div style="font-size:24px;font-weight:700;">' + favorites.length + '</div><div style="font-size:11px;opacity:0.9;">收藏</div></div></div>' +
+            '<div style="margin-bottom:20px;padding:16px;background:#f9fafb;border-radius:12px;"><div style="font-size:14px;font-weight:600;margin-bottom:8px;">📦 GitHub 仓库存储</div>' +
+            (repoInfo ? '<div style="font-size:13px;color:#6b7280;">仓库大小: ' + repoInfo.sizeMB + ' MB · ' + repoInfo.name + '</div>' : '<div style="font-size:13px;color:#9ca3af;">加载中...</div>') + '</div>' +
+            '<div style="margin-bottom:20px;"><div style="font-size:14px;font-weight:600;margin-bottom:10px;">📊 文件类型分布</div>' +
+            topTypes.map(([ext, count]) => {
+                const pct = (count/files.length*100).toFixed(1);
+                return '<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;"><span>.' + ext + '</span><span>' + count + ' (' + pct + '%)</span></div><div style="height:6px;background:#e5e7eb;border-radius:3px;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;"></div></div></div>';
+            }).join('') + '</div>' +
+            '<div><div style="font-size:14px;font-weight:600;margin-bottom:10px;">🕐 最近使用</div>' +
+            (recent.length > 0 ? recent.slice(0,5).map(p => '<div style="padding:8px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;">📄 ' + p.split('/').pop() + '</div>').join('') : '<div style="font-size:13px;color:#9ca3af;">暂无最近文件</div>') + '</div></div>';
+        this.ui.showModal('📊 仪表盘', body, '', true);
+    }
+
+    // ==================== 文件标签管理 ====================
+    showTagManager(file) {
+        const currentTags = this.storage.getFileTags(file.path);
+        const allTags = this.storage.getAllTags();
+        let body = '<div style="padding:8px 0;">';
+        body += '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">文件: ' + file.name + '</div>';
+        body += '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:600;margin-bottom:8px;">当前标签</div>';
+        if (currentTags.length > 0) {
+            body += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+            currentTags.forEach(tag => {
+                body += '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#dbeafe;color:#1e40af;border-radius:12px;font-size:12px;">#' + tag + '<button onclick="app.removeTag(\'' + file.path + '\', \'' + tag + '\')" style="background:none;border:none;cursor:pointer;color:#1e40af;font-weight:bold;">×</button></span>';
+            });
+            body += '</div>';
+        } else { body += '<div style="font-size:13px;color:#9ca3af;">暂无标签</div>'; }
+        body += '</div>';
+        if (allTags.length > 0) {
+            body += '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:600;margin-bottom:8px;">常用标签</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+            allTags.forEach(tag => {
+                if (!currentTags.includes(tag)) {
+                    body += '<button onclick="app.addTag(\'' + file.path + '\', \'' + tag + '\')" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-size:12px;">#' + tag + '</button>';
+                }
+            });
+            body += '</div></div>';
+        }
+        body += '<div><div style="font-size:14px;font-weight:600;margin-bottom:8px;">新建标签</div>';
+        body += '<div style="display:flex;gap:8px;"><input id="new-tag-input" type="text" placeholder="输入标签名" style="flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">';
+        body += '<button onclick="app.addNewTag(\'' + file.path + '\')" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">添加</button></div></div></div>';
+        this.ui.showModal('🏷️ 标签管理', body, '', false);
+    }
+    addTag(path, tag) { this.storage.addFileTag(path, tag); this.showTagManager({path, name: path.split('/').pop()}); this.loadFiles(); }
+    removeTag(path, tag) { this.storage.removeFileTag(path, tag); this.showTagManager({path, name: path.split('/').pop()}); this.loadFiles(); }
+    addNewTag(path) { const input = document.getElementById('new-tag-input'); if (input && input.value.trim()) { this.addTag(path, input.value.trim()); input.value = ''; } }
+
+    // ==================== 高级筛选 ====================
+    applyAdvancedFilter() {
+        const type = document.getElementById('filter-type')?.value || '';
+        const size = document.getElementById('filter-size')?.value || '';
+        const sort = document.getElementById('filter-sort')?.value || 'name';
+        const order = document.getElementById('filter-order')?.value || 'asc';
+        let files = [...(this.currentFiles || [])];
+        if (type) {
+            const typeMap = { image: ['jpg','jpeg','png','gif','webp','svg'], video: ['mp4','avi','mkv','mov'], audio: ['mp3','wav','flac','aac'], document: ['pdf','doc','docx','xls','xlsx','txt','md','csv'], code: ['js','py','java','c','cpp','go','html','css','json'], archive: ['zip','rar','7z','tar','gz'] };
+            const exts = typeMap[type] || [];
+            files = files.filter(f => { if (f.isFolder) return type === ''; const ext = (f.name.split('.').pop() || '').toLowerCase(); return exts.includes(ext); });
+        }
+        if (size) {
+            const ranges = { tiny: [0, 100*1024], small: [100*1024, 1024*1024], medium: [1024*1024, 10*1024*1024], large: [10*1024*1024, 100*1024*1024], huge: [100*1024*1024, Infinity] };
+            const [min, max] = ranges[size] || [0, Infinity];
+            files = files.filter(f => f.isFolder || (f.size >= min && f.size < max));
+        }
+        files.sort((a, b) => {
+            let cmp = 0;
+            if (sort === 'name') cmp = a.name.localeCompare(b.name);
+            else if (sort === 'size') cmp = (a.size || 0) - (b.size || 0);
+            else if (sort === 'date') cmp = new Date(a.modified || 0) - new Date(b.modified || 0);
+            else if (sort === 'type') cmp = (a.name.split('.').pop() || '').localeCompare(b.name.split('.').pop() || '');
+            return order === 'desc' ? -cmp : cmp;
+        });
+        this.ui.renderFileList(files);
+        this.ui.closeModal();
+        this.ui.showToast('筛选结果: ' + files.length + ' 个文件', 'success');
+    }
+
+    // ==================== 分享密码保护 ====================
+    saveSharePassword(shareId) {
+        const pwd = document.getElementById('share-pwd-input')?.value;
+        const confirm = document.getElementById('share-pwd-confirm')?.value;
+        if (!pwd || pwd.length < 4) { this.ui.showToast('密码至少4位', 'error'); return; }
+        if (pwd !== confirm) { this.ui.showToast('两次密码不一致', 'error'); return; }
+        this.storage.setSharePassword(shareId, pwd);
+        this.ui.showToast('密码已设置', 'success');
+        this.ui.closeModal();
+    }
+    verifyShareAccess(shareId) {
+        const input = document.getElementById('share-access-pwd')?.value;
+        if (this.storage.verifySharePassword(shareId, input)) {
+            this.ui.closeModal();
+            this.ui.showToast('验证成功', 'success');
+            if (this.ui._shareAccessCallback) { this.ui._shareAccessCallback(); this.ui._shareAccessCallback = null; }
+        } else { this.ui.showToast('密码错误', 'error'); }
+    }
+
+    // ==================== 智能文件分类 ====================
+    async smartOrganize() {
+        if (!confirm('将自动按文件类型整理到对应文件夹，是否继续？')) return;
+        const vfs = this.storage.getVFS();
+        const files = Object.entries(vfs.files || {}).map(([path, info]) => ({path, ...info}));
+        const categories = { '图片': ['jpg','jpeg','png','gif','webp','svg'], '视频': ['mp4','avi','mkv','mov'], '音频': ['mp3','wav','flac','aac'], '文档': ['pdf','doc','docx','xls','xlsx','txt','md','csv'], '代码': ['js','py','java','c','cpp','go','html','css','json'], '压缩包': ['zip','rar','7z','tar','gz'], '应用': ['exe','dmg','apk'], '设计': ['psd','ai','fig'] };
+        let moved = 0, created = 0;
+        for (const file of files) {
+            if (file.path.includes('/')) continue;
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            let category = '其他';
+            for (const [cat, exts] of Object.entries(categories)) { if (exts.includes(ext)) { category = cat; break; } }
+            if (!this.storage.folderExists?.(category)) { await this.fileManager.createFolder?.(category); created++; }
+            const newPath = category + '/' + file.name;
+            if (file.path !== newPath) { await this.fileManager.moveFile?.(file.path, newPath); moved++; }
+        }
+        this.ui.showToast('智能整理完成：创建 ' + created + ' 个文件夹，移动 ' + moved + ' 个文件', 'success');
+        this.loadFiles();
+    }
+    showCategoryStats() {
+        const vfs = this.storage.getVFS();
+        const files = Object.entries(vfs.files || {}).map(([path, info]) => ({path, ...info}));
+        const categories = { '🖼️ 图片': ['jpg','jpeg','png','gif','webp'], '🎬 视频': ['mp4','avi','mkv','mov'], '🎵 音频': ['mp3','wav','flac'], '📄 文档': ['pdf','doc','docx','xls','xlsx','txt','md','csv'], '💻 代码': ['js','py','java','c','cpp','go','html','css','json'], '📦 压缩包': ['zip','rar','7z','tar','gz'], '📱 应用': ['exe','dmg','apk'], '📁 其他': [] };
+        const stats = {};
+        Object.keys(categories).forEach(c => stats[c] = 0);
+        files.forEach(f => {
+            const ext = (f.name.split('.').pop() || '').toLowerCase();
+            let found = false;
+            for (const [cat, exts] of Object.entries(categories)) { if (exts.includes(ext)) { stats[cat]++; found = true; break; } }
+            if (!found) stats['📁 其他']++;
+        });
+        let body = '<div style="padding:8px 0;"><div style="font-size:13px;color:#6b7280;margin-bottom:16px;">共 ' + files.length + ' 个文件</div>';
+        for (const [cat, count] of Object.entries(stats)) {
+            if (count === 0) continue;
+            const pct = (count / files.length * 100).toFixed(1);
+            body += '<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>' + cat + '</span><span style="color:#6b7280;">' + count + ' 个 (' + pct + '%)</span></div>';
+            body += '<div style="height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:4px;"></div></div></div>';
+        }
+        body += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;"><button onclick="app.smartOrganize()" style="width:100%;padding:12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">✨ 一键智能整理</button></div></div>';
+        this.ui.showModal('🎯 智能分类', body, '', true);
+    }
+
     // ==================== 在线文件编辑 ====================
     async editFile(file) {
         try {
-            const content = await this.fileManager.readFileContent?.(file.path);
+            const content = await this.fileManager.getFileContent?.(file.path);
             this._editingFile = file;
             this.ui.showOnlineEditor(file, content);
         } catch (e) {

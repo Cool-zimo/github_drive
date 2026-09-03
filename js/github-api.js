@@ -550,4 +550,27 @@ class GitHubAPI {
     getPagesUrl(owner, repo) {
         return `https://${owner}.github.io/${repo}/`;
     }
+
+    // 获取文件的提交历史
+    async getFileHistory(owner, repo, path, branch = 'main') {
+        try {
+            const res = await this.request('/repos/' + owner + '/' + repo + '/commits?path=' + encodeURIComponent(path) + '&sha=' + branch + '&per_page=10');
+            return res.map(commit => ({
+                sha: commit.sha.substring(0, 7),
+                fullSha: commit.sha,
+                message: commit.commit.message,
+                date: commit.commit.author.date,
+                author: commit.commit.author.name
+            }));
+        } catch (e) { return []; }
+    }
+    
+    // 获取特定版本的文件内容
+    async getFileAtVersion(owner, repo, path, sha) {
+        try {
+            const res = await this.request('/repos/' + owner + '/' + repo + '/contents/' + encodeURIComponent(path) + '?ref=' + sha);
+            if (res.content) return atob(res.content.replace(/\s/g, ''));
+            return null;
+        } catch (e) { return null; }
+    }
 }

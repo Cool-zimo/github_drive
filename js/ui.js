@@ -853,6 +853,15 @@ class UI {
             case 'share':
                 this.showShareModal(getActionFiles());
                 break;
+            case 'edit':
+                this.app.editFile(file);
+                break;
+            case 'history':
+                this.app.showFileHistory(file);
+                break;
+            case 'tags':
+                this.app.showTagManager(file);
+                break;
             case 'rename':
                 this.showRenameModal(file);
                 break;

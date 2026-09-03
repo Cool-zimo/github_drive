@@ -261,6 +261,42 @@ class FileManager {
         console.log(`[FileManager] 下载完成: ${fileInfo.name}`);
     }
 
+
+    // 写入文本文件内容（用于在线编辑器）
+    async writeFileContent(virtualPath, content) {
+        const fileInfo = this.storage.getFile(virtualPath);
+        if (!fileInfo) throw new Error('文件不存在');
+        
+        const chunks = this.storage.getFileChunks(virtualPath);
+        if (!chunks || chunks.length === 0) throw new Error('文件分片信息不存在');
+        
+        // 使用第一个分片的仓库信息
+        const chunk = chunks[0];
+        const fileName = virtualPath.split('/').pop();
+        
+        // 对于小文件，直接覆盖写入
+        if (content.length < 1024 * 1024) { // 小于1MB
+            const base64 = btoa(unescape(encodeURIComponent(content)));
+            await this.api.createOrUpdateFile(
+                chunk.owner, chunk.repo, chunk.path,
+                base64,
+                `编辑文件: ${fileName}`,
+                chunk.branch || 'main',
+                chunk.sha || null
+            );
+            
+            // 更新本地文件信息
+            this.storage.updateFile(virtualPath, {
+                size: new Blob([content]).size,
+                modified: new Date().toISOString()
+            });
+            
+            return true;
+        }
+        
+        throw new Error('文件过大，请使用上传功能');
+    }
+
     async getFileContent(virtualPath) {
         virtualPath = Storage.normalizePath(virtualPath);
         const fileInfo = this.storage.getFile(virtualPath);
@@ -398,6 +434,19 @@ class FileManager {
         }
 
         this.storage.deleteFolder(virtualPath);
+    }
+
+
+    // 移动文件
+    async moveFile(sourcePath, targetPath) {
+        // 读取源文件内容
+        const content = await this.getFileContent(sourcePath);
+        if (content === null) throw new Error('无法读取源文件');
+        // 写入目标位置
+        await this.writeFileContent(targetPath, content);
+        // 删除源文件
+        await this.deleteFile(sourcePath);
+        return true;
     }
 
     async renameItem(virtualPath, newName) {
