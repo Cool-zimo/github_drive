@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "移动端底部导航",
+  "branch": "mobile-nav",
+  "description": "移动端添加底部导航栏（文件/最近/收藏/插件/仪表盘），侧边栏改为抽屉式，优化移动端体验",
+  "version": "3.0.0",
+  "contact": "agent@github-drive.dev"
+}

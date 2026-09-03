@@ -260,5 +260,26 @@
             <button class="ms-btn ms-cancel" onclick="ui.exitMultiSelectMode()"><span data-i18n="btn.cancel">Cancel</span></button>
         </div>
     </div>
+
+    <!-- 移动端底部导航 -->
+    <div class="mobile-bottom-nav">
+        <div class="mobile-nav-items">
+            <div class="mobile-nav-item active" onclick="app.switchView('files')">
+                <span class="icon">📁</span><span>文件</span>
+            </div>
+            <div class="mobile-nav-item" onclick="app.switchView('recent')">
+                <span class="icon">🕐</span><span>最近</span>
+            </div>
+            <div class="mobile-nav-item" onclick="app.switchView('favorites')">
+                <span class="icon">⭐</span><span>收藏</span>
+            </div>
+            <div class="mobile-nav-item" onclick="app.switchView('plugins')">
+                <span class="icon">🧩</span><span>插件</span>
+            </div>
+            <div class="mobile-nav-item" onclick="app.showDashboard()">
+                <span class="icon">📊</span><span>仪表盘</span>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
