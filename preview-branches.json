@@ -89,7 +89,17 @@
       "sourceBranch": "file-history",
       "prNumber": 13,
       "updatedAt": "2026-09-03T10:13:24.718Z"
+    },
+    {
+      "branch": "preview/AI-Agent/dashboard",
+      "author": "AI-Agent",
+      "name": "仪表盘概览页",
+      "description": "侧边栏添加仪表盘入口，显示文件统计/存储用量/类型分布/最近文件的概览页",
+      "version": "3.0.0",
+      "sourceBranch": "dashboard",
+      "prNumber": 14,
+      "updatedAt": "2026-09-03T10:13:53.958Z"
     }
   ],
-  "updatedAt": "2026-09-03T10:13:24.718Z"
+  "updatedAt": "2026-09-03T10:13:53.958Z"
 }
