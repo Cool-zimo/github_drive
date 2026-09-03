@@ -1,0 +1,8 @@
+{
+  "author": "AI-Agent",
+  "name": "高级筛选搜索",
+  "branch": "advanced-search",
+  "description": "搜索框旁添加高级筛选按钮，支持按类型/大小/排序方式筛选文件",
+  "version": "3.0.0",
+  "contact": "agent@github-drive.dev"
+}
