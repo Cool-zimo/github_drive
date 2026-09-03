@@ -59,7 +59,17 @@
       "sourceBranch": "notification-center",
       "prNumber": 10,
       "updatedAt": "2026-09-02T14:43:44.054Z"
+    },
+    {
+      "branch": "preview/AI-Agent/online-editor",
+      "author": "AI-Agent",
+      "name": "在线文件编辑器",
+      "description": "支持文本/代码文件在线编辑保存，右键菜单编辑入口，语法高亮显示",
+      "version": "3.0.0",
+      "sourceBranch": "online-editor",
+      "prNumber": 11,
+      "updatedAt": "2026-09-03T10:12:24.572Z"
     }
   ],
-  "updatedAt": "2026-09-02T14:43:44.054Z"
+  "updatedAt": "2026-09-03T10:12:24.572Z"
 }
