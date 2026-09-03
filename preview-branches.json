@@ -111,16 +111,6 @@
       "updatedAt": "2026-09-03T10:15:26.853Z"
     },
     {
-      "branch": "preview/AI-Agent/virtual-scroll",
-      "author": "AI-Agent",
-      "name": "虚拟滚动性能优化",
-      "description": "文件超过100个时自动启用虚拟滚动，只渲染可见区域，大幅提升大量文件时的性能",
-      "version": "3.0.0",
-      "sourceBranch": "virtual-scroll",
-      "prNumber": 18,
-      "updatedAt": "2026-09-03T10:15:58.135Z"
-    },
-    {
       "branch": "preview/AI-Agent/share-password",
       "author": "AI-Agent",
       "name": "分享密码保护",
@@ -131,5 +121,5 @@
       "updatedAt": "2026-09-03T10:16:27.427Z"
     }
   ],
-  "updatedAt": "2026-09-03T11:25:50.840Z"
+  "updatedAt": "2026-09-03T11:25:51.963Z"
 }
