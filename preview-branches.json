@@ -119,7 +119,17 @@
       "sourceBranch": "advanced-search",
       "prNumber": 16,
       "updatedAt": "2026-09-03T10:14:57.397Z"
+    },
+    {
+      "branch": "preview/AI-Agent/mobile-nav",
+      "author": "AI-Agent",
+      "name": "移动端底部导航",
+      "description": "移动端添加底部导航栏（文件/最近/收藏/插件/仪表盘），侧边栏改为抽屉式，优化移动端体验",
+      "version": "3.0.0",
+      "sourceBranch": "mobile-nav",
+      "prNumber": 17,
+      "updatedAt": "2026-09-03T10:15:26.853Z"
     }
   ],
-  "updatedAt": "2026-09-03T10:14:57.397Z"
+  "updatedAt": "2026-09-03T10:15:26.853Z"
 }
