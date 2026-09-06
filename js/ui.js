@@ -2128,6 +2128,26 @@ class UI {
     }
 
     showPluginRunner(plugin) {
+        // 外部 URL 插件：直接用 iframe 加载
+        if (plugin.externalUrl) {
+            const isGame = plugin.type === 'game' || plugin.fullscreen === true;
+            const modalId = 'plugin-runner-' + Date.now();
+            if (isGame) {
+                const overlay = document.createElement('div');
+                overlay.id = modalId;
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:#000;display:flex;flex-direction:column;';
+                overlay.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#111;color:#fff;font-size:13px;">' +
+                    '<span>🎮 ' + this.escapeHtml(plugin.name) + '</span>' +
+                    '<button onclick="ui.closePluginRunner(\'' + modalId + '\')" style="padding:4px 12px;border:none;border-radius:4px;background:#333;color:#fff;cursor:pointer;">✕ 关闭</button></div>' +
+                    '<iframe src="' + plugin.externalUrl + '" style="flex:1;width:100%;border:none;background:#fff;"></iframe>';
+                document.body.appendChild(overlay);
+                return;
+            }
+            this.showModal(plugin.name,
+                '<div style="height:70vh;"><iframe src="' + plugin.externalUrl + '" style="width:100%;height:100%;border:1px solid #e5e7eb;border-radius:8px;"></iframe></div>',
+                '<button class="btn-secondary" onclick="ui.closeModal()">关闭</button>', true);
+            return;
+        }
         // 注入 I18n 支持，让插件可以使用 window.I18n.t() 做双语
         const i18nScript = `
 <script>
