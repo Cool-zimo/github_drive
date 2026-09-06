@@ -326,6 +326,14 @@ class UI {
             }
             this.app.fileManager.setCurrentRepo(null);
             this.app.loadFiles();
+        } else if (view === 'dashboard') {
+            // 仪表盘视图：隐藏面包屑和工具栏，但显示文件区域
+            if (breadcrumb) breadcrumb.style.display = 'none';
+            if (toolbarActions) toolbarActions.style.display = 'none';
+            if (fileList) fileList.style.display = '';
+            if (emptyState) emptyState.classList.add('hidden');
+            if (loadingState) loadingState.classList.add('hidden');
+            this.app.showDashboard();
         } else {
             // 非文件视图：隐藏面包屑、工具栏和文件区域
             if (breadcrumb) breadcrumb.style.display = 'none';
