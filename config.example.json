@@ -1,0 +1,8 @@
+{
+  "author": "your-github-username",
+  "name": "My Awesome Feature",
+  "branch": "my-feature-branch",
+  "description": "Describe what this version improves or adds",
+  "version": "1.0.0",
+  "contact": "your-email@example.com"
+}

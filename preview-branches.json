@@ -1,0 +1,125 @@
+{
+  "branches": [
+    {
+      "branch": "preview/Cool-zimo/test-dark-mode",
+      "author": "Cool-zimo",
+      "name": "Test Dark Mode",
+      "description": "测试 CI/CD 自动预览分支功能，添加深色模式主题",
+      "version": "1.0.0",
+      "sourceBranch": "test-dark-mode",
+      "prNumber": 1,
+      "updatedAt": "2026-09-02T14:00:00.000Z"
+    },
+    {
+      "branch": "preview/AI-Agent/dark-mode",
+      "author": "AI-Agent",
+      "name": "全局暗色模式",
+      "description": "添加全局暗色模式支持，可在设置中切换，偏好自动保存",
+      "version": "1.0.0",
+      "sourceBranch": "dark-mode",
+      "prNumber": 3,
+      "updatedAt": "2026-09-02T14:29:32.576Z"
+    },
+    {
+      "branch": "preview/AI-Agent/content-search",
+      "author": "AI-Agent",
+      "name": "文件内容搜索",
+      "description": "支持搜索文本文件内容，显示匹配片段，可在设置中开启",
+      "version": "1.0.0",
+      "sourceBranch": "content-search",
+      "prNumber": 4,
+      "updatedAt": "2026-09-02T14:30:25.376Z"
+    },
+    {
+      "branch": "preview/AI-Agent/drag-move",
+      "author": "AI-Agent",
+      "name": "文件拖拽移动",
+      "description": "支持拖拽文件到文件夹进行移动，多选批量移动，防止移动到自身子目录",
+      "version": "2.0.0",
+      "sourceBranch": "drag-move",
+      "prNumber": 8,
+      "updatedAt": "2026-09-02T14:42:44.939Z"
+    },
+    {
+      "branch": "preview/AI-Agent/batch-actions",
+      "author": "AI-Agent",
+      "name": "批量操作工具栏",
+      "description": "选中文件后底部弹出操作栏：批量下载/分享/收藏/删除/取消",
+      "version": "2.0.0",
+      "sourceBranch": "batch-actions",
+      "prNumber": 9,
+      "updatedAt": "2026-09-02T14:43:09.924Z"
+    },
+    {
+      "branch": "preview/AI-Agent/notification-center",
+      "author": "AI-Agent",
+      "name": "通知中心",
+      "description": "工具栏添加通知铃铛，操作历史记录，未读角标，一键清空",
+      "version": "2.0.0",
+      "sourceBranch": "notification-center",
+      "prNumber": 10,
+      "updatedAt": "2026-09-02T14:43:44.054Z"
+    },
+    {
+      "branch": "preview/AI-Agent/online-editor",
+      "author": "AI-Agent",
+      "name": "在线文件编辑器",
+      "description": "支持文本/代码文件在线编辑保存，右键菜单编辑入口，语法高亮显示",
+      "version": "3.0.0",
+      "sourceBranch": "online-editor",
+      "prNumber": 11,
+      "updatedAt": "2026-09-03T10:12:24.572Z"
+    },
+    {
+      "branch": "preview/AI-Agent/folder-tree",
+      "author": "AI-Agent",
+      "name": "文件夹树状导航",
+      "description": "工具栏添加文件夹树按钮，弹窗显示完整文件夹层级结构，点击快速跳转",
+      "version": "3.0.0",
+      "sourceBranch": "folder-tree",
+      "prNumber": 12,
+      "updatedAt": "2026-09-03T10:12:55.343Z"
+    },
+    {
+      "branch": "preview/AI-Agent/file-history",
+      "author": "AI-Agent",
+      "name": "文件版本历史",
+      "description": "右键查看文件提交历史，支持恢复到任意历史版本，显示作者/时间/commit信息",
+      "version": "3.0.0",
+      "sourceBranch": "file-history",
+      "prNumber": 13,
+      "updatedAt": "2026-09-03T10:13:24.718Z"
+    },
+    {
+      "branch": "preview/AI-Agent/file-tags",
+      "author": "AI-Agent",
+      "name": "文件标签系统",
+      "description": "为文件添加自定义标签，支持常用标签快速添加，右键菜单管理标签",
+      "version": "3.0.0",
+      "sourceBranch": "file-tags",
+      "prNumber": 15,
+      "updatedAt": "2026-09-03T10:14:23.793Z"
+    },
+    {
+      "branch": "preview/AI-Agent/mobile-nav",
+      "author": "AI-Agent",
+      "name": "移动端底部导航",
+      "description": "移动端添加底部导航栏（文件/最近/收藏/插件/仪表盘），侧边栏改为抽屉式，优化移动端体验",
+      "version": "3.0.0",
+      "sourceBranch": "mobile-nav",
+      "prNumber": 17,
+      "updatedAt": "2026-09-03T10:15:26.853Z"
+    },
+    {
+      "branch": "preview/AI-Agent/share-password",
+      "author": "AI-Agent",
+      "name": "分享密码保护",
+      "description": "分享时可设置访问密码，访客需输入密码才能查看分享内容，密码本地加密存储",
+      "version": "3.0.0",
+      "sourceBranch": "share-password",
+      "prNumber": 19,
+      "updatedAt": "2026-09-03T10:16:27.427Z"
+    }
+  ],
+  "updatedAt": "2026-09-03T11:25:51.963Z"
+}
