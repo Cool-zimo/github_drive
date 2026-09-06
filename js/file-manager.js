@@ -237,17 +237,26 @@ class FileManager {
 
         console.log(`[FileManager] 下载文件: ${virtualPath}, 分片数: ${fileInfo.chunks.length}`);
 
-        const blobs = [];
+        const parts = [];
         const totalChunks = fileInfo.chunks.length;
         for (let i = 0; i < totalChunks; i++) {
             const chunk = fileInfo.chunks[i];
             console.log(`[FileManager] 下载分片 ${i + 1}/${totalChunks}: ${chunk.repo}/${chunk.path}`);
             const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-            blobs.push(new Blob([content]));
+            if (content instanceof Uint8Array) {
+                parts.push(content);
+            } else if (content instanceof ArrayBuffer) {
+                parts.push(new Uint8Array(content));
+            } else {
+                throw new Error('分片数据类型错误');
+            }
             if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100), i + 1, totalChunks);
         }
-
-        const mergedBlob = new Blob(blobs, { type: 'application/octet-stream' });
+        const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+        const merged = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const p of parts) { merged.set(p, offset); offset += p.length; }
+        const mergedBlob = new Blob([merged], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(mergedBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -326,14 +335,35 @@ class FileManager {
         virtualPath = Storage.normalizePath(virtualPath);
         const fileInfo = this.storage.getFile(virtualPath);
         if (!fileInfo) throw new Error('文件不存在');
+        if (!fileInfo.chunks || fileInfo.chunks.length === 0) throw new Error('文件分片信息缺失');
 
         const parts = [];
-        for (const chunk of fileInfo.chunks) {
-            const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-            parts.push(content);
+        for (let i = 0; i < fileInfo.chunks.length; i++) {
+            const chunk = fileInfo.chunks[i];
+            try {
+                const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
+                // 确保是 Uint8Array
+                if (content instanceof Uint8Array) {
+                    parts.push(content);
+                } else if (content instanceof ArrayBuffer) {
+                    parts.push(new Uint8Array(content));
+                } else if (typeof content === 'string') {
+                    // base64 字符串，转换
+                    const binary = atob(content);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+                    parts.push(bytes);
+                } else {
+                    console.warn('[FileManager] 分片 ' + i + ' 返回未知类型:', typeof content);
+                    throw new Error('分片数据类型错误');
+                }
+            } catch (e) {
+                console.error('[FileManager] 下载分片 ' + i + ' 失败:', e);
+                throw new Error('下载分片失败: ' + e.message);
+            }
         }
-        const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
-        if (totalLen === 0) return new Blob();
+        const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+        if (totalLen === 0) throw new Error('文件内容为空');
         const merged = new Uint8Array(totalLen);
         let offset = 0;
         for (const p of parts) {

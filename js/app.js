@@ -293,6 +293,9 @@ class App {
         try {
             this.ui.showToast(I18n.t('file.previewLoading') || '正在加载预览...', 'info');
             let blob = await this.fileManager.getFileBlob(file.path);
+            if (!blob || !(blob instanceof Blob) || blob.size === 0) {
+                throw new Error('文件数据无效或为空');
+            }
             // 文本文件自动检测编码（GBK/UTF-8），避免乱码
             const textExts = ['txt','md','csv','log','json','js','css','html','htm','xml','yaml','yml','ini','conf','py','java','c','cpp','h','go','rs','ts','jsx','tsx','sh','bat','sql'];
             const ext = file.name.split('.').pop().toLowerCase();
