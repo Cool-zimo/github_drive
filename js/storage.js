@@ -645,7 +645,9 @@ class Storage {
      * repoNamePrefix: 自动创建仓库的名称前缀
      * warnThreshold: 容量警告阈值（0-1），默认 0.8
      * chunkSize: 文件拆分大小（字节），默认 512KB
-     * minChunkSize: 触发拆分的最小文件大小（字节），默认 10MB
+     * minChunkSize: 触发拆分的最小文件大小（字节），默认 512KB
+     *               注：早期文档写的是 10MB，实际默认值一直是 512KB，
+     *               即超过 512KB 的文件就会被分片（而非 10MB 才分）
      */
     getConfig() { return this.getStorageConfig(); }
     getStorageConfig() {

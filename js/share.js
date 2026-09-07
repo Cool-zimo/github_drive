@@ -184,6 +184,18 @@ class ShareManager {
     /**
      * 生成下载页面 HTML
      */
+    /**
+     * HTML 转义：防止文件名 / 描述中的恶意内容被当作 HTML 执行
+     * 分享页是公开 Pages 页面，任何访问者都会加载，属于存储型 XSS 高危场景
+     * @param {*} value - 待转义的值
+     * @returns {string}
+     */
+    escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
     generateDownloadPage(repoName, description, files, username) {
         const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js');
         // 用 Pages 相对路径，分段编码（保留 / 分隔符），国内访问更快
@@ -197,7 +209,7 @@ class ShareManager {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${description || I18n.t('share.pageTitle')} - GitHub Drive</title>
+    <title>${this.escapeHtml(description || I18n.t('share.pageTitle'))} - GitHub Drive</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -355,7 +367,7 @@ class ShareManager {
     <div class="container">
         <div class="header">
             <div class="header-icon">📦</div>
-            <h1>${description || '<span data-i18n="page.title">File Share</span>'}</h1>
+            <h1>${this.escapeHtml(description || '<span data-i18n="page.title">File Share</span>')}</h1>
             <p>${fileList.length} files · Shared via GitHub Drive</p>
             <button class="lang-switch" onclick="toggleLang()" title="切换语言">🌐 EN / 中</button>
         </div>
@@ -369,11 +381,11 @@ class ShareManager {
                 <div class="promo-icon">📁✨</div>
                 <div class="promo-title"><span data-i18n="promo.title">Want unlimited cloud storage with GitHub?</span></div>
                 <div class="promo-desc" data-i18n="promo.desc">Turn your GitHub repos into a private cloud drive<br>Multi-repo management, smart storage allocation, one-click sharing</div>
-                <a href="https://${username}.github.io/github_drive" target="_blank" class="promo-btn"><span data-i18n="promo.btn">🚀 Use GitHub Drive Now</span></a>
+                <a href="https://${this.escapeHtml(username)}.github.io/github_drive" target="_blank" class="promo-btn"><span data-i18n="promo.btn">🚀 Use GitHub Drive Now</span></a>
             </div>
         </div>
         <div class="footer">
-            <span data-i18n="footer.powered">Powered by</span> <a href="https://${username}.github.io/github_drive" target="_blank">GitHub Drive</a> · <span data-i18n="footer.stored">Stored on GitHub</span>
+            <span data-i18n="footer.powered">Powered by</span> <a href="https://${this.escapeHtml(username)}.github.io/github_drive" target="_blank">GitHub Drive</a> · <span data-i18n="footer.stored">Stored on GitHub</span>
         </div>
     </div>
     <script>
@@ -402,6 +414,13 @@ class ShareManager {
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
+        // 转义函数在页面内联定义：此处代码运行于访客浏览器，无法访问 ShareManager 实例
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
         fileList.innerHTML = '';
         files.forEach(file => {
             const li = document.createElement('li');
@@ -410,10 +429,10 @@ class ShareManager {
             li.innerHTML = \`
                 <span class="file-icon">\${getFileIcon(file.name)}</span>
                 <div class="file-info">
-                    <div class="file-name">\${file.name}</div>
+                    <div class="file-name">\${escapeHtml(file.name)}</div>
                     <div class="file-size">\${file.size ? formatSize(file.size) : '<span data-i18n=\'clickDownload\'>Click to download</span>'}</div>
                 </div>
-                <button class="download-btn" onclick="event.stopPropagation(); window.open('\\\${file.url}', '_blank')"><span data-i18n="download">Download</span></button>
+                <button class="download-btn" onclick="event.stopPropagation(); window.open('\${escapeHtml(file.url)}', '_blank')"><span data-i18n="download">Download</span></button>
             \`;
             fileList.appendChild(li);
         });
@@ -477,7 +496,7 @@ class ShareManager {
     generateReadme(repoName, description, files, username) {
         const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js');
         let md = `# ${description || I18n.t('share.pageTitle')}\n\n`;
-        md += `> 通过 [GitHub Drive](https://${username}.github.io/github_drive) 分享的文件\n\n`;
+        md += `> 通过 [GitHub Drive](https://${this.escapeHtml(username)}.github.io/github_drive) 分享的文件\n\n`;
         md += `## 文件列表\n\n`;
         fileList.forEach(f => {
             md += `- [${f.path}](./${encodeURIComponent(f.path)})\n`;

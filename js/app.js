@@ -157,7 +157,15 @@ class App {
         // 覆盖本地可能混乱的仓库列表，确保数据严格隔离
         if (user && user.login) {
             try {
-                const allRepos = await this.api.listRepositories(100, 1);
+                // 修复：原版只取第 1 页（上限 100），仓库数超过 100 时会漏掉靠后的存储仓。
+                // 且列表按 updated 排序，长期未更新的存储仓排在最末，最容易被截断丢失。
+                const allRepos = [];
+                for (let page = 1; page <= 10; page++) {
+                    const batch = await this.api.listRepositories(100, page);
+                    if (!Array.isArray(batch) || batch.length === 0) break;
+                    allRepos.push(...batch);
+                    if (batch.length < 100) break;
+                }
                 const storageRepos = allRepos
                     .filter(r => r.name.startsWith('drive-storage-') && r.owner.login === user.login)
                     .map(r => ({
