@@ -1406,51 +1406,6 @@ class UI {
         location.reload();
     }
 
-    showOAuthSettings() {
-        const currentUrl = localStorage.getItem('gd_oauth_url') || '';
-        const body = `
-            <div style="padding:8px 0;">
-                <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">` + I18n.t('oauth.urlLabel') + `</label>
-                <input type="text" id="oauth-url-input" value="${currentUrl}" placeholder="https://your-worker.workers.dev" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:8px;">
-                <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">` + I18n.t('oauth.urlHint') + `</p>
-                <div style="display:flex;gap:8px;">
-                    <button class="btn-primary" onclick="ui.saveOAuthUrl()" style="flex:1;">` + I18n.t('btn.save') + `</button>
-                    <button class="btn-secondary" onclick="ui.testOAuth()" style="flex:1;">` + I18n.t('oauth.test') + `</button>
-                </div>
-                <div id="oauth-test-result" style="margin-top:12px;font-size:13px;"></div>
-            </div>
-        `;
-        this.showModal(I18n.t('settings.oauth'), body, '', true);
-    }
-    
-    saveOAuthUrl() {
-        const url = document.getElementById('oauth-url-input').value.trim();
-        localStorage.setItem('gd_oauth_url', url);
-        this.showToast(I18n.t('oauth.saved'), 'success');
-        this.closeModal();
-    }
-    
-    async testOAuth() {
-        const url = document.getElementById('oauth-url-input').value.trim();
-        const result = document.getElementById('oauth-test-result');
-        if (!url) {
-            result.innerHTML = '<span style="color:#dc2626;">' + I18n.t('oauth.urlEmpty') + '</span>';
-            return;
-        }
-        result.innerHTML = '<span style="color:#6b7280;">' + I18n.t('oauth.testing') + '</span>';
-        try {
-            const resp = await fetch(url.replace(/\/$/, '') + '/url');
-            const data = await resp.json();
-            if (data.enabled) {
-                result.innerHTML = '<span style="color:#16a34a;">✅ ' + I18n.t('oauth.testSuccess') + '</span>';
-            } else {
-                result.innerHTML = '<span style="color:#dc2626;">❌ ' + (data.error || I18n.t('oauth.testFailed')) + '</span>';
-            }
-        } catch (e) {
-            result.innerHTML = '<span style="color:#dc2626;">❌ ' + I18n.t('oauth.testFailed') + ': ' + e.message + '</span>';
-        }
-    }
-
     showBackendSettings() {
         const config = this.app.getBackendConfig();
         const body = `
