@@ -179,24 +179,24 @@ class Storage {
 
 
 
-    // ==================== 分享密码保护 ====================
-    setSharePassword(shareId, password) {
-        const passwords = this.get('share_passwords', {});
-        passwords[shareId] = btoa(password);
-        this.set('share_passwords', passwords);
-    }
-    getSharePassword(shareId) {
-        const passwords = this.get('share_passwords', {});
-        return passwords[shareId] ? atob(passwords[shareId]) : null;
-    }
-    removeSharePassword(shareId) {
-        const passwords = this.get('share_passwords', {});
-        delete passwords[shareId];
-        this.set('share_passwords', passwords);
-    }
-    verifySharePassword(shareId, inputPassword) {
-        const saved = this.getSharePassword(shareId);
-        return saved === null || saved === inputPassword;
+    // ==================== 分享密码（已移除） ====================
+    //
+    // 原实现有问题，已整体砍掉：
+    //   1. btoa() 是编码不是加密，逆向即可还原
+    //   2. 密码只存 localStorage —— 换设备就没了，链接在别的设备上打不开
+    //   3. 校验是纯前端的 —— 分享仓库本身是公开的，绕过校验即可拿到内容
+    // 结论：这个"密码"只防误点，不防真想看的人。留着反而给用户虚假的安全感。
+    //
+    // 分享本身就是"公开仓库 + Pages"，要给就给链接，别给密码。
+    //
+    // ★ 下面这个方法用于清理老用户 localStorage 里的历史遗留数据，
+    //   不要删 —— 否则旧数据会一直躺在用户浏览器里。
+    purgeLegacySharePasswords() {
+        if (this.get('share_passwords', null) !== null) {
+            this.remove('share_passwords');
+            return true;
+        }
+        return false;
     }
 
     // ==================== 文件标签系统 ====================
