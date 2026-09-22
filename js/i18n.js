@@ -35,18 +35,6 @@ const I18n = {
             'login.savedAccounts': '已保存的账号',
             'login.addAccount': '添加新账号',
             'login.githubLogin': '使用 GitHub 登录',
-            // OAuth 设置
-            'settings.oauth': '🔐 OAuth 登录',
-            'settings.oauthDesc': '配置 Cloudflare Worker 或后端 OAuth 地址',
-            'oauth.urlLabel': 'OAuth 服务地址',
-            'oauth.urlHint': '填入 Cloudflare Worker 地址，如 https://xxx.workers.dev，或留空使用本地后端',
-            'oauth.test': '测试连接',
-            'oauth.saved': 'OAuth 地址已保存',
-            'oauth.urlEmpty': '请输入 OAuth 地址',
-            'oauth.testing': '正在测试...',
-            'oauth.testSuccess': '连接成功！OAuth 已配置',
-            'oauth.testFailed': '连接失败',
-            'oauth.notConfigured': '配置 OAuth 地址后可使用 GitHub 一键登录',
             // 空状态
             'empty.noFiles': '这里还没有文件',
             'empty.dragHint': '拖拽文件到此处，或点击上方"上传文件"按钮',
@@ -175,6 +163,7 @@ const I18n = {
             'backend.notRunningDesc': '部分插件（如B站下载器）需要后端服务才能运行。点击下方按钮下载，双击运行后自动连接。',
             // 分享
             'share.failed': '分享失败',
+            'share.ready': '分享已就绪',
             'share.unshareSuccess': '取消分享成功',
             'share.unshareFailed': '取消分享失败',
             'share.copySuccess': '复制成功',
@@ -434,18 +423,6 @@ const I18n = {
             'login.savedAccounts': 'Saved Accounts',
             'login.addAccount': 'Add Account',
             'login.githubLogin': 'Login with GitHub',
-            // OAuth settings
-            'settings.oauth': '🔐 OAuth Login',
-            'settings.oauthDesc': 'Configure Cloudflare Worker or backend OAuth URL',
-            'oauth.urlLabel': 'OAuth Service URL',
-            'oauth.urlHint': 'Enter Cloudflare Worker URL (e.g. https://xxx.workers.dev), or leave empty for local backend',
-            'oauth.test': 'Test Connection',
-            'oauth.saved': 'OAuth URL saved',
-            'oauth.urlEmpty': 'Please enter OAuth URL',
-            'oauth.testing': 'Testing...',
-            'oauth.testSuccess': 'Connected! OAuth is configured',
-            'oauth.testFailed': 'Connection failed',
-            'oauth.notConfigured': 'Configure OAuth URL to enable GitHub one-click login',
             // Empty state
             'empty.noFiles': 'No files here yet',
             'empty.dragHint': 'Drag files here, or click "Upload" button above',
@@ -565,6 +542,7 @@ const I18n = {
             'backend.notRunningDesc': 'Some plugins (e.g. Bilibili Downloader) require backend. Click download below, double-click to run and auto-connect.',
             // Share
             'share.failed': 'Share failed',
+            'share.ready': 'Share ready',
             'share.unshareSuccess': 'Unshared successfully',
             'share.unshareFailed': 'Unshare failed',
             'share.copySuccess': 'Copied',
