@@ -6,6 +6,8 @@ class App {
     constructor() {
         this.api = null;
         this.storage = new Storage();
+        // 清理旧版本遗留的分享密码（那些是 base64 明文，留着没意义）
+        try { this.storage.purgeLegacySharePasswords(); } catch (e) { /* 清理失败不影响使用 */ }
         this.fileManager = null;
         this.shareManager = null;
         this.configSync = null;
@@ -784,24 +786,13 @@ class App {
         this.ui.showToast('筛选结果: ' + files.length + ' 个文件', 'success');
     }
 
-    // ==================== 分享密码保护 ====================
-    saveSharePassword(shareId) {
-        const pwd = document.getElementById('share-pwd-input')?.value;
-        const confirm = document.getElementById('share-pwd-confirm')?.value;
-        if (!pwd || pwd.length < 4) { this.ui.showToast('密码至少4位', 'error'); return; }
-        if (pwd !== confirm) { this.ui.showToast('两次密码不一致', 'error'); return; }
-        this.storage.setSharePassword(shareId, pwd);
-        this.ui.showToast('密码已设置', 'success');
-        this.ui.closeModal();
-    }
-    verifyShareAccess(shareId) {
-        const input = document.getElementById('share-access-pwd')?.value;
-        if (this.storage.verifySharePassword(shareId, input)) {
-            this.ui.closeModal();
-            this.ui.showToast('验证成功', 'success');
-            if (this.ui._shareAccessCallback) { this.ui._shareAccessCallback(); this.ui._shareAccessCallback = null; }
-        } else { this.ui.showToast('密码错误', 'error'); }
-    }
+    // ==================== 分享密码（已移除） ====================
+    //
+    // 分享 = 公开仓库 + GitHub Pages，本身就是公开的。
+    // 原密码实现只防误点、不防真想看的人（详见 storage.js 同名注释），
+    // 留着反而给用户虚假的安全感，所以整体砍掉。
+    //
+    // 需要保护的内容：不要分享。要分享的：就当它公开。
 
     // ==================== 智能文件分类 ====================
     async smartOrganize() {
