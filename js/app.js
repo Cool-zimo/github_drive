@@ -33,7 +33,6 @@ class App {
     showLogin() {
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('app').classList.add('hidden');
-        // 检查后端是否支持 OAuth
         this.ui?.renderSavedAccounts();
     }
     
@@ -1874,7 +1873,6 @@ let ui = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     app = new App();
-    // GitHub OAuth 登录按钮
     // 在 DOM 加载完成后初始化 UI，确保 UI 绑定的元素已存在于页面中
     app.ui = new UI(app);
     window.ui = app.ui;
