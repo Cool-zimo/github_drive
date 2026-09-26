@@ -102,6 +102,18 @@ class FileManager {
         const totalSize = file.size;
         const chunks = [];
 
+        // ★ 覆盖上传会泄漏旧分片（线上实测：56.2MB / 45 个文件因此丢失）
+        //
+        //   成因：每次上传都新建随机目录 `mtrand/filename`，
+        //   VFS 只指向最新那份，旧目录的 blob 从不删除 ——
+        //   save.json 在仓库里累积了 4 份、math_history.json 3 份。
+        //
+        //   所以这里必须先记住旧记录，等新版本写入成功后再清理。
+        //   ★ 顺序不能反：先删旧的、新上传又失败 = 文件彻底没了。
+        const oldFile = this.storage.getFile(virtualPath);
+        const oldChunks = (oldFile && Array.isArray(oldFile.chunks))
+            ? oldFile.chunks.slice() : [];
+
         console.log(`[FileManager] 上传文件: ${file.name}, 大小: ${Storage.formatBytes(totalSize)}`);
 
         const needSplit = totalSize > config.minChunkSize;
@@ -213,6 +225,11 @@ class FileManager {
             size: totalSize,
             chunks: chunks
         });
+
+        // ★ 新版本已写入 VFS，此时旧分片才真正成为孤儿，可以安全清理
+        if (oldChunks.length) {
+            await this._cleanupOrphanChunks(oldChunks, virtualPath);
+        }
 
         console.log(`[FileManager] 上传完成: ${virtualPath}, 共 ${chunks.length} 个分片`);
         return { virtualPath, fileInfo, chunks, split: totalChunks > 1 };
@@ -409,6 +426,48 @@ class FileManager {
         return btoa(binary);
     }
 
+    /**
+     * 清理孤儿分片（覆盖上传/删除时遗留）
+     *
+     * ★ 这里**不能抛异常**。调用方（uploadFile）已经成功了，
+     *   因为清理旧分片失败就报"上传失败"是错的 —— 文件明明在。
+     *   失败的分片记进 pendingOrphanChunks，下次有机会再清。
+     */
+    async _cleanupOrphanChunks(chunks, why) {
+        for (const chunk of chunks) {
+            try {
+                let sha = chunk.sha;
+                try {
+                    const fi = await this.api.getFileContents(
+                        chunk.owner, chunk.repo, chunk.path, chunk.branch);
+                    sha = fi.sha || sha;
+                } catch (e) { /* 用记录里的 sha */ }
+
+                if (!sha) {
+                    this._pendingOrphan(chunk, why, '无 sha，跳过');
+                    continue;
+                }
+                await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path,
+                    `清理孤儿分片: ${chunk.path}`, chunk.branch, sha);
+                this.storage.subtractFromRepoUsage?.(
+                    chunk.owner, chunk.repo, chunk.size);
+            } catch (e) {
+                // ★ 不 throw：清理失败不影响主流程，但要留痕
+                this._pendingOrphan(chunk, why, e.message);
+            }
+        }
+    }
+
+    _pendingOrphan(chunk, why, err) {
+        if (!this.pendingOrphanChunks) this.pendingOrphanChunks = [];
+        this.pendingOrphanChunks.push({
+            owner: chunk.owner, repo: chunk.repo, path: chunk.path,
+            size: chunk.size, why: why, error: err,
+            at: new Date().toISOString()
+        });
+        console.warn(`[FileManager] 孤儿分片清理失败（已记入待清理）: ${chunk.path}`, err);
+    }
+
     // ==================== 文件删除 ====================
     async deleteFile(virtualPath) {
         virtualPath = Storage.normalizePath(virtualPath);
@@ -429,7 +488,10 @@ class FileManager {
                 await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path, `删除分片: ${chunk.path}`, chunk.branch, sha);
                 console.log(`[FileManager] 已删除分片 ${i + 1}/${fileInfo.chunks.length}: ${chunk.repo}/${chunk.path}`);
             } catch (e) {
-                console.warn(`[FileManager] 删除分片失败: ${chunk.path}`, e.message);
+                // ★ 原来是纯 console.warn —— 分片静默留下，
+                //   时间一长就变成"界面看不到但占容量"的孤儿数据。
+                //   现在记进 pendingOrphanChunks，可被扫描/重试发现。
+                this._pendingOrphan(chunk, virtualPath, e.message);
             }
         }
 
