@@ -30,12 +30,25 @@ class FileManager {
     getBreadcrumbs(path = this.currentPath) {
         path = Storage.normalizePath(path);
         const parts = path.substring('/drive_home'.length).split('/').filter(Boolean);
-        const crumbs = [{ name: 'Drive Home', path: '/drive_home' }];
+        // ★ 根显示"网盘" —— 与桌面版 textutil.py 的 ROOT_LABEL 一致。
+        //   drive_home 是内部实现，不该暴露给用户。
+        const crumbs = [{ name: BREADCRUMB_ROOT_LABEL, path: '/drive_home' }];
         let current = '/drive_home';
         parts.forEach(part => {
             current += '/' + part;
-            crumbs.push({ name: part, path: current });
+            // ★ 长名截断：不截断的话深层长目录名会把面包屑撑爆
+            crumbs.push({ name: shortenName(part), path: current });
         });
+
+        // ★ 折叠：超过 BREADCRUMB_MAX 时保留根 + 末尾若干级，中间折叠
+        //   不折叠的话，深路径只能靠横向滚动才能看到当前位置
+        //   （CSS 是 max-width:45% + overflow-x:auto，当前项经常被滚出视野）
+        if (crumbs.length > BREADCRUMB_MAX) {
+            const tail = Math.max(1, BREADCRUMB_MAX - 2);
+            return [crumbs[0],
+                    { name: BREADCRUMB_ELLIPSIS, path: null }]
+                   .concat(crumbs.slice(crumbs.length - tail));
+        }
         return crumbs;
     }
 
