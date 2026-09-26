@@ -44,6 +44,20 @@ class FileManager {
         const config = this.storage.getStorageConfig();
         const currentUser = this.storage.getUser()?.login;
         let repos = this.storage.getRepos();
+
+        // ★ 分块超过单仓上限时直接报错，不能走进下面的 autoCreateRepo
+        //
+        //   否则 canRepoFit 永远 false → 每个分片都 create_repo。
+        //   500MB 文件 × 512KB 分片 = 上千次 create_repo，
+        //   而且新建的仓库同样装不下 —— 问题没解决只是被放大。
+        //
+        //   ★ 这个保护此前只在桌面版 Python 侧做过（v0.0.9），
+        //     js 侧（线上实际在跑的这份）从来没修 —— 双实现的代价。
+        if (neededSize > config.maxRepoSize) {
+            throw new Error(
+                `单个分块 ${Storage.formatBytes(neededSize)} 超过仓库上限 ` +
+                `${Storage.formatBytes(config.maxRepoSize)}，无法上传`);
+        }
         
         // 关键修复：只选择 owner 和当前用户匹配的仓库，避免访问其他账号的仓库导致 401
         if (currentUser) {
