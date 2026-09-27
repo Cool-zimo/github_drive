@@ -1,0 +1,62 @@
+name: 清理仓库历史
+
+on:
+  schedule:
+    # 每周日凌晨 3 点（UTC）自动清理
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    # 支持手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库（完整历史）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: 配置 Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config advice.detachedHead false
+
+      - name: 压缩 Git 历史
+        run: |
+          set -e
+          echo "当前仓库大小："
+          du -sh .git
+
+          # 记录当前分支
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "当前分支: $CURRENT_BRANCH"
+
+          # 创建无历史的 orphan 分支
+          git checkout --orphan temp_branch
+
+          # 清空索引（orphan 分支默认索引为空，但确保一下）
+          git rm -rf --cached . 2>/dev/null || true
+
+          # 添加所有文件
+          git add -A
+
+          # 提交
+          git commit -m "chore: 压缩仓库历史 $(date +%Y-%m-%d)"
+
+          # 删除旧分支
+          git branch -D "$CURRENT_BRANCH"
+
+          # 重命名当前分支
+          git branch -m main
+
+          # 强制推送
+          git push --force origin main
+
+          echo "清理后仓库大小："
+          du -sh .git
+          echo "✅ 仓库历史已压缩为单个 commit"
