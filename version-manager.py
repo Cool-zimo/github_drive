@@ -75,18 +75,46 @@ def calculate_next_formal_version(last_date_version, last_formal_version, new_da
     
     return f"{x}.{y}.{z}"
 
+def date_style_keys(versions):
+    """只取 'YYYYMMDDx' 形式的键
+
+    ★ 为什么必须过滤：
+      version-map.json 里现在混着两套键 ——
+        日期式  20260831m  (version-manager.py 写的)
+        数字式  44         (release.py 写的)
+      早期 add_version 直接 sorted(versions.keys())[-1]，
+      字典序 '20260831m' < '44'，取到的是数字键 '44'，
+      再交给 parse_date_version('44') → ValueError。
+      实测：只要 release.py 跑过一次，本脚本的 add 就必崩。
+    """
+    return [k for k in versions if re.match(r'^\d{8}[a-z]+$', str(k))]
+
+
 def add_version(new_date_version):
     """添加新版本到映射表"""
     data = load_version_map()
     versions = data['versions']
-    
+
     if new_date_version in versions:
         print(f"版本 {new_date_version} 已存在: {versions[new_date_version]}")
         return versions[new_date_version]
-    
-    # 找到最新的版本
-    sorted_versions = sorted(versions.keys())
-    last_date_version = sorted_versions[-1]
+
+    date_keys = date_style_keys(versions)
+    if not date_keys:
+        raise SystemExit(
+            "version-map.json 里没有日期式键（YYYYMMDDx）。\n"
+            "现在版本号由 release.py 维护（纯数字计数器），请改用：\n"
+            "    python release.py patch '提交信息'")
+
+    numeric = [int(k) for k in versions if str(k).isdigit()]
+    if numeric and max(numeric) > 0:
+        newest_date = sorted(date_keys)[-1]
+        print(f"注意：version-map.json 里已有 release.py 写入的数字键（最大 {max(numeric)}），"
+              f"日期式键最新只到 {newest_date}。\n"
+              f"      两套键并存时本脚本只能按日期式那一串推算，结果可能与实际发布不符。\n"
+              f"      建议统一用 release.py。")
+
+    last_date_version = sorted(date_keys)[-1]
     last_formal_version = versions[last_date_version]
     
     # 计算新的正式版本号

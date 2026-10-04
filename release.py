@@ -70,8 +70,11 @@ def update_index_html_version(new_version):
     with open(INDEX_HTML_FILE, 'r', encoding='utf-8') as f:
         content = f.read()
     # 替换所有 v=数字 或 v=日期字母 格式的版本号
-    content = re.sub(r'v=\d{8}[a-z]*', f'v={new_version}', content)
-    content = re.sub(r'v=\d+', f'v={new_version}', content)
+    # ★ 必须锚定在 ?v= / &v= 上。
+    #   早期写成裸 r'v=\d+'，会把 '?rev=123' 里的 'v=123' 一起换成 'v=44'，
+    #   URL 被改成 '?rev=44' —— 不报错，但指向的资源悄悄变了。
+    content = re.sub(r'([?&]v=)\d{8}[a-z]*', lambda m: m.group(1) + new_version, content)
+    content = re.sub(r'([?&]v=)\d+', lambda m: m.group(1) + new_version, content)
     with open(INDEX_HTML_FILE, 'w', encoding='utf-8') as f:
         f.write(content)
 

