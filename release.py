@@ -75,7 +75,64 @@ def update_index_html_version(new_version):
     with open(INDEX_HTML_FILE, 'w', encoding='utf-8') as f:
         f.write(content)
 
+def check_consistency():
+    """★ 三处版本号一致性自检
+
+    曾经出现过：index.html 里 CSS 用 ?v=44、JS 用 ?v=45，
+    而 js/version.js 里写的是 internalVersion '44'。
+    结果是一次发布后用户可能拿到新版 JS + 旧版 CSS，
+    表现为"功能变了但样式是旧的"——排查成本极高。
+
+    更隐蔽的一处：assets/version-map.json 是发布记录，
+    一度停在 25，而 version.js 已经到 44 —— 用户报"v0.0.44"
+    在版本表里根本查不到，没法把问题对应到代码。
+
+    返回 (ok, [问题列表])
+    """
+    problems = []
+
+    html = open(INDEX_HTML_FILE, encoding='utf-8').read()
+    found = sorted(set(re.findall(r'v=(\d+)', html)))
+    if len(found) > 1:
+        problems.append('index.html 里出现多个缓存版本号: %s —— CSS 与 JS 必须一致' % found)
+
+    vjs = open(VERSION_JS_FILE, encoding='utf-8').read()
+    m = re.search(r"internalVersion:\s*'(\d+)'", vjs)
+    internal = m.group(1) if m else None
+    if internal is None:
+        problems.append('version.js 里找不到 internalVersion')
+    elif found and internal not in found:
+        problems.append('version.js internalVersion=%s 与 index.html 的 v=%s 不一致' % (internal, found))
+
+    m2 = re.search(r"formalVersion:\s*'([0-9.]+)'", vjs)
+    formal = m2.group(1) if m2 else None
+    data = load_version_map()
+    versions = data.get('versions', {})
+    if internal and internal not in versions:
+        problems.append('version-map.json 缺少内部版本 %s（最大已记录: %s）—— '
+                        '用户报的版本号在发布记录里查不到'
+                        % (internal, max([int(k) for k in versions if k.isdigit()] or [0])))
+    elif internal and formal and versions.get(internal) != formal:
+        problems.append('version-map.json[%s]=%s 与 version.js formalVersion=%s 不一致'
+                        % (internal, versions.get(internal), formal))
+
+    return (len(problems) == 0), problems
+
+
+def cmd_check():
+    ok, problems = check_consistency()
+    if ok:
+        print('✅ 版本号三处一致')
+        return 0
+    print('❌ 版本号不一致：')
+    for p in problems:
+        print('   -', p)
+    return 1
+
 def main():
+    if len(sys.argv) >= 2 and sys.argv[1].lower() == 'check':
+        sys.exit(cmd_check())
+
     if len(sys.argv) < 3:
         print("用法:")
         print("  python release.py patch \"提交信息\"   # 补丁版本 z+1")
@@ -122,6 +179,12 @@ def main():
     print(f"内部版本号: {last_internal_version} → {new_internal_version}")
     print(f"版本长链: {today}-{new_internal_version}-v{new_formal_version}-<git_hash>")
     print(f"提交信息: {commit_msg}")
+    ok, problems = check_consistency()
+    if not ok:
+        print("\n⚠️ 版本号自检未通过（先确认上面这几处，别带着不一致发出去）：")
+        for p in problems:
+            print('   -', p)
+
     print("\n下一步:")
     print(f"  git add -A")
     print(f"  git commit -m \"{commit_msg}\"")
