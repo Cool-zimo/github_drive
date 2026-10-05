@@ -138,28 +138,52 @@ class FileManager {
      *
      * @returns {{direct:boolean, chunkSize:number, totalChunks:number, concurrency:number}}
      */
+    /**
+     * 分片 + 并发规划。
+     *
+     * 实测依据（详见 COOL-DOC → GitHub Drive → 传输性能与分片算法）：
+     *   1. 每片约 1~2 秒固定开销（TLS 握手 + API 往返），按片数付
+     *   2. 单片越大越接近带宽上限（实测封顶 ~7.9MB/s），所以大文件要少分片
+     *   3. 单片上限 ~38MB（卡的是 base64 之后的 payload）
+     *   4. 并发不是越大越好：32 片实测 conc16 = 14.63s 最优，conc24 = 20.52s 反而变慢
+     *   5. 片数多时并发收益明显（32 片：conc4 18.46s → conc16 14.63s）
+     *
+     * 三个参数互相牵制，所以分三步定：
+     *   分片大小 → 片数 → 并发数（受内存与实测上限双重约束）
+     *
+     * @returns {{direct:boolean, chunkSize:number, totalChunks:number, concurrency:number}}
+     */
     planUpload(totalSize, config) {
-        const DIRECT_MAX   = config.directMaxSize || 1 * 1024 * 1024;
-        const MIN_CHUNK    = config.minChunkSize  || 1 * 1024 * 1024;
-        const MAX_CHUNK    = config.chunkSize     || 32 * 1024 * 1024;
-        const CONCURRENCY  = Math.max(1, Math.min(8, config.concurrency || 4));
+        const DIRECT_MAX  = config.directMaxSize || 1 * 1024 * 1024;
+        const MIN_CHUNK   = config.minChunkSize  || 1 * 1024 * 1024;
+        const MAX_CHUNK   = config.chunkSize     || 32 * 1024 * 1024;
+        // 并发硬上限：实测 conc24 已劣化，conc16 是拐点
+        const HARD_CONC   = Math.max(1, Math.min(16, config.maxConcurrency || 16));
+        // 内存预算：base64 膨胀 1.34 倍，一次只允许这么多字节在内存里
+        const MEM_BUDGET  = config.memoryBudget || 512 * 1024 * 1024;
 
-        // 小文件直传：切成多片只会多付固定开销，没有任何收益
+        // 小文件直传：切分只会多付固定开销，没有任何收益
         if (totalSize <= DIRECT_MAX) {
             return { direct: true, chunkSize: totalSize, totalChunks: 1, concurrency: 1 };
         }
 
-        // 片数 ≈ 并发数。为什么不是"并发数 × N"：实测 16MB 切 13 片用了
-        // 16.68s，切 4 片只要 8.82s —— 片数够吃满并发就行，再多纯亏。
-        let chunkSize = Math.ceil(totalSize / CONCURRENCY);
+        // ── 第一步：分片大小 ──
+        // 目标片数 4（够吃满并发即可，再多纯付固定开销），再套上下限。
+        // 32MB 上限是 blob 的硬约束；1MB 下限是因为更小的片固定开销占比过高。
+        let chunkSize = Math.ceil(totalSize / 4);
         chunkSize = Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, chunkSize));
+        const totalChunks = Math.ceil(totalSize / chunkSize);
 
-        return {
-            direct: false,
-            chunkSize,
-            totalChunks: Math.ceil(totalSize / chunkSize),
-            concurrency: CONCURRENCY
-        };
+        // ── 第二步：并发数 ──
+        // 上限一：内存。单片越大，能同时编码的数量越少。
+        //         512MB/(32MB×1.34) ≈ 11 —— 一次性编码 16 个 32MB 分片要 672MB，
+        //         实测会直接被系统杀掉（512MB 那次就是这么没的）。
+        const maxByMemory = Math.max(1, Math.floor(MEM_BUDGET / (chunkSize * 1.34)));
+
+        // 上限二：实测拐点 16，再加只会劣化
+        const concurrency = Math.max(1, Math.min(totalChunks, maxByMemory, HARD_CONC));
+
+        return { direct: false, chunkSize, totalChunks, concurrency };
     }
 
     async uploadFile(file, targetPath = this.currentPath, onProgress = null) {

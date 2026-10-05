@@ -646,7 +646,8 @@ class Storage {
      * warnThreshold: 容量警告阈值（0-1），默认 0.8
      *
      * ── 分片参数（v45 起语义变了，实测详见 COOL-DOC 的传输性能页）──
-     * concurrency:   并发上传数，默认 4
+     * maxConcurrency: 并发硬上限，默认 16（实测 24 已劣化）
+     * memoryBudget:   同时编码的字节预算，默认 512MB（决定并发数上限）
      * chunkSize:     单片**上限**，默认 32MB（旧版是"切分阈值"，语义已废）
      * minChunkSize:  单片**下限**，默认 1MB
      * directMaxSize: ≤ 此值走 contents API 直传不切分，默认 1MB
@@ -668,7 +669,8 @@ class Storage {
             chunkSize: 32 * 1024 * 1024,
             minChunkSize: 1 * 1024 * 1024,
             directMaxSize: 1 * 1024 * 1024,
-            concurrency: 4,
+            maxConcurrency: 16,
+            memoryBudget: 512 * 1024 * 1024,
             configVersion: 3
         };
         const saved = this.get(this.keys.STORAGE_CONFIG, null);
