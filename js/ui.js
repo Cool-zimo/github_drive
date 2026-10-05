@@ -1290,6 +1290,7 @@ class UI {
 
             {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
             {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
+            {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
             {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
             {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
             {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();'},
@@ -1310,6 +1311,136 @@ class UI {
             body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
         }
         this.showModal(I18n.t('settings.title'), body, '', true);
+    }
+
+    /**
+     * 一键优化仓库存储
+     *
+     * ★ 与"仓库维护"的区别：
+     *   维护 = 把孤儿恢复成可见文件（只增不删）
+     *   优化 = 把孤儿彻底删掉（释放容量）
+     *
+     *   用户遇到的是"仓库满了传不进去"，要的是后者。
+     */
+    showStorageOptimizer() {
+        const body = `
+            <div style="padding:8px 0;">
+                <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:14px;">
+                    删除所有<b>孤儿分片</b>——覆盖上传留下的旧数据。<br>
+                    它们界面里看不见，却一直占着仓库容量，是"存储满了"的主因。
+                </div>
+                <div id="opt-result" style="display:none;margin-bottom:14px;"></div>
+                <button id="opt-scan-btn" class="btn-primary btn-sm"
+                    onclick="ui.runStorageOptimize('scan')">
+                    🔍 先看看能释放多少
+                </button>
+            </div>
+        `;
+        this.showModal('⚡ 一键优化仓库存储', body, '', true);
+    }
+
+    _optFmt(n) {
+        const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0; n = parseFloat(n || 0);
+        while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+        return (i === 0 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i];
+    }
+
+    async runStorageOptimize(stage) {
+        const box = document.getElementById('opt-result');
+        const btn = document.getElementById('opt-scan-btn');
+        if (!box) return;
+        box.style.display = 'block';
+
+        const app = this.app;
+        if (!app.maintain) app.maintain = new Maintain(app.api, app.storage);
+
+        if (stage === 'scan') {
+            btn.disabled = true;
+            btn.textContent = '扫描中…';
+            box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在读取仓库文件树…</div>';
+            try {
+                const rep = await app.maintain.scan((d, t, l) => {
+                    box.innerHTML = '<div style="font-size:13px;color:#6b7280;">扫描中 ' + d + '/' + t + '：' + l + '</div>';
+                });
+                this._optReport = rep;
+                box.innerHTML = this._renderOptimizeReport(rep);
+                btn.textContent = '重新扫描';
+                btn.disabled = false;
+            } catch (e) {
+                box.innerHTML = '<div style="color:#dc2626;font-size:13px;">扫描失败：' + (e && e.message || e) + '</div>';
+                btn.textContent = '重试';
+                btn.disabled = false;
+            }
+            return;
+        }
+
+        if (stage === 'purge') {
+            const rep = this._optReport;
+            if (!rep || !rep.orphans || !rep.orphans.length) return;
+            const dry = await app.maintain.purge(rep.orphans, { dryRun: true });
+            if (!dry.would_delete) {
+                box.innerHTML = '<div style="color:#059669;font-size:13px;">✓ 没有需要清理的内容</div>';
+                return;
+            }
+            // ★ 删除不可逆，必须让用户明确输入数量确认，不能只有一个 confirm
+            const answer = prompt(
+                '将永久删除 ' + dry.would_delete + ' 个孤儿分片，释放 ' + this._optFmt(dry.freed_bytes) + '。\n\n' +
+                '此操作不可撤销（GitHub 仓库历史里仍可找回，但 Drive 里看不到了）。\n' +
+                '确认请输入数字 ' + dry.would_delete + ' ：');
+            if (answer === null) { box.innerHTML = '<div style="font-size:13px;color:#6b7280;">已取消</div>'; return; }
+            if (String(answer).trim() !== String(dry.would_delete)) {
+                box.innerHTML = '<div style="color:#dc2626;font-size:13px;">数字不一致，已取消</div>';
+                return;
+            }
+
+            box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在删除…</div>';
+            try {
+                const res = await app.maintain.purge(rep.orphans, {
+                    onProgress: (d, t, l) => {
+                        box.innerHTML = '<div style="font-size:13px;color:#6b7280;">删除中 ' + d + '/' + t + '：' + l + '</div>';
+                    }
+                });
+                let h = '<div style="font-size:13px;line-height:1.7;">';
+                h += '<div style="color:#059669;">✓ 已释放 <b>' + this._optFmt(res.freed_bytes) + '</b></div>';
+                h += '删除 <b>' + res.deleted.length + '</b> 个分片<br>';
+                if (res.skipped_system) h += '<span style="color:#6b7280;">跳过系统文件 ' + res.skipped_system + ' 个（README 等）</span><br>';
+                if (res.skipped_stale) h += '<span style="color:#6b7280;">跳过 ' + res.skipped_stale + ' 个（扫描后又变成在用状态）</span><br>';
+                if (res.failed.length) h += '<span style="color:#dc2626;">失败 ' + res.failed.length + ' 个</span>';
+                h += '</div>';
+                box.innerHTML = h;
+                this._optReport = null;
+                if (app.loadFiles) app.loadFiles();
+            } catch (e) {
+                box.innerHTML = '<div style="color:#dc2626;font-size:13px;">清理失败：' + (e && e.message || e) + '</div>';
+            }
+        }
+    }
+
+    _renderOptimizeReport(rep) {
+        const fmt = this._optFmt;
+        let h = '<div style="font-size:13px;line-height:1.7;">';
+        h += '记录占用 <b>' + fmt(rep.recorded_bytes) + '</b>　' +
+             '仓库实际 <b>' + fmt(rep.actual_bytes) + '</b><br>';
+
+        if (!rep.orphans.length && !rep.ghosts.length) {
+            h += '<div style="color:#059669;margin-top:8px;">✓ 没有孤儿，无需清理</div>';
+            return h + '</div>';
+        }
+        if (rep.orphans.length) {
+            const pct = rep.actual_bytes
+                ? (rep.orphan_bytes / rep.actual_bytes * 100).toFixed(0) : 0;
+            h += '<div style="color:#d97706;margin-top:8px;">' +
+                 '孤儿 <b>' + rep.orphans.length + '</b> 个 · 可释放 <b>' + fmt(rep.orphan_bytes) + '</b>' +
+                 '（占仓库 ' + pct + '%）</div>';
+            h += '<button class="btn-primary btn-sm" style="margin-top:12px;" ' +
+                 'onclick="ui.runStorageOptimize(\'purge\')">⚡ 立即清理</button>';
+        }
+        if (rep.ghosts.length) {
+            h += '<div style="color:#dc2626;margin-top:8px;">' +
+                 '⚠ 幽灵 <b>' + rep.ghosts.length + '</b> 个（下载必失败，清理解决不了）</div>';
+        }
+        return h + '</div>';
     }
 
     /**
