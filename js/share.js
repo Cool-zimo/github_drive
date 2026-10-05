@@ -29,14 +29,33 @@ class ShareManager {
      * @param {Object} opts { force: 忽略缓存 }
      * @returns {Promise<Array>} 分享仓库数组
      */
+    /**
+     * 统一取值：api.request() 返回的是**解析后的响应体本身**（数组 / 对象），
+     *   不是 { ok, data } 包装。
+     *
+     *   旧代码写成 `if (!r.ok) break;` —— 数组的 .ok 是 undefined，
+     *   第一轮就 break，listMyShares 永远返回空数组。
+     *   于是"我的分享"只剩 localStorage 里的本地记录：
+     *   换浏览器 / 清缓存后就全空了，而"发现分享"走搜索接口所以看着正常 ——
+     *   这也解释了为什么"能搜到却在自己的列表里看不到"。
+     *
+     *   这个 bug 不抛异常、控制台也无报错，表现只是"列表少了一半"，极难定位。
+     */
+    _unwrapList(r) {
+        if (Array.isArray(r)) return r;
+        if (r && Array.isArray(r.data)) return r.data;
+        if (r && Array.isArray(r.items)) return r.items;
+        return [];
+    }
+
     async listMyShares(opts = {}) {
         const results = [];
         let page = 1;
         // 最多翻 5 页（500 个仓库），足够覆盖正常用户的分享数量
         while (page <= 5) {
             const r = await this.api.listRepositories(100, page);
-            if (!r.ok) break;
-            const list = Array.isArray(r.data) ? r.data : [];
+            const list = this._unwrapList(r);
+            if (list.length === 0) break;
             for (const repo of list) {
                 if (!/^(gd-share-|share-)/i.test(repo.name)) continue;
                 const username = repo.owner?.login || (repo.full_name || '').split('/')[0] || '';
@@ -56,6 +75,7 @@ class ShareManager {
             }
             if (list.length < 100) break;
             page++;
+            await this.sleep(120);   // 翻页太快会撞 secondary rate limit
         }
         // 按创建时间倒序，最近分享的在前
         results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -66,9 +86,12 @@ class ShareManager {
     async getShareFiles(repoName) {
         const username = await this.api.getUsername();
         const r = await this.api.request(`/repos/${username}/${repoName}/contents/`);
-        if (!r.ok || !Array.isArray(r.data)) return [];
-        const skip = new Set(['index.html', 'README.md', 'status.js', 'share.json']);
-        return r.data
+        // ★ 同 listMyShares：request() 返回裸数组，不是 { ok, data }。
+        //   旧代码在这里也是恒返回 []。
+        const list = this._unwrapList(r);
+        if (list.length === 0) return [];
+        const skip = new Set(['index.html', 'README.md', 'status.js', 'share.json', '.nojekyll']);
+        return list
             .filter(f => f.type === 'file' && !skip.has(f.name))
             .map(f => ({ name: f.name, size: f.size || 0 }));
     }
@@ -289,7 +312,7 @@ class ShareManager {
         // 浏览器不支持 compression stream 时整段跳过，不做任何压缩。
         const cfg = (this.storage && this.storage.getStorageConfig)
             ? (this.storage.getStorageConfig() || {}) : {};
-        const sysFiles = new Set(['index.html', 'README.md', 'share.json', 'status.js']);
+        const sysFiles = new Set(['index.html', 'README.md', 'share.json', 'status.js', '.nojekyll']);
         let savedBytes = 0;
         if (cfg.compression !== false && typeof CompressionStream !== 'undefined') {
             const skipExt = new Set(['mp4','mkv','avi','mov','webm','m4v','flv','wmv','mpg','mpeg','ts',
@@ -351,8 +374,8 @@ class ShareManager {
             description: description || '',
             author: username,
             createdAt: new Date().toISOString(),
-            fileCount: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js').length,
-            files: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js').map(f => ({ name: displayPath(f), size: f.size || 0, packed: f.path.endsWith('.gz') ? 'gzip' : undefined }))
+            fileCount: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js' && f.path !== '.nojekyll').length,
+            files: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js' && f.path !== '.nojekyll').map(f => ({ name: displayPath(f), size: f.size || 0, packed: f.path.endsWith('.gz') ? 'gzip' : undefined }))
         };
         fileObjects.push({
             path: 'share.json',
@@ -362,6 +385,21 @@ class ShareManager {
         fileObjects.push({
             path: 'status.js',
             content: 'window.__githubDrivePagesReady = true;'
+        });
+        // ★ 关闭 Jekyll。
+        //
+        //   GitHub Pages 默认用 Jekyll 构建，而 Jekyll 会**跳过所有以
+        //   下划线开头的目录和文件**（_layouts / _includes / _data 这类）。
+        //
+        //   实测翻车：分享 /drive_home/_recovered 里的文件时，全部落在
+        //   `_recovered/` 目录下 → Jekyll 整个目录不进 _site →
+        //   下载页列得出文件名，点下去一律 404。
+        //   `icons/default/_desc.ini` 同理（文件名本身带下划线前缀）。
+        //
+        //   加了 .nojekyll 之后 Pages 退化成纯静态拷贝，所有文件原样提供。
+        fileObjects.push({
+            path: '.nojekyll',
+            content: '\n'
         });
 
         if (onProgress) onProgress(70, I18n.t('share.uploadingFiles'));
@@ -397,7 +435,7 @@ class ShareManager {
             repoName,
             shareUrl,
             repoUrl: this.api.getRepoUrl(username, repoName),
-            files: fileObjects.filter(f => !['index.html', 'README.md', 'status.js', 'share.json'].includes(f.path)).map(f => ({ name: f.path })),
+            files: fileObjects.filter(f => !['index.html', 'README.md', 'status.js', 'share.json', '.nojekyll'].includes(f.path)).map(f => ({ name: f.path })),
             createdAt: new Date().toISOString()
         };
 
@@ -466,7 +504,7 @@ class ShareManager {
 
     generateDownloadPage(repoName, description, files, username, displayPath) {
         const dp = displayPath || (f => f.path);
-        const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js');
+        const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js' && f.path !== '.nojekyll');
         // 用 Pages 相对路径，分段编码（保留 / 分隔符），国内访问更快
         // JSON 里若出现 "</script>" 会提前闭合脚本块，必须转义；
         // 同理转义 <!-- 避免进入注释解析状态
@@ -804,7 +842,7 @@ class ShareManager {
      */
     generateReadme(repoName, description, files, username, displayPath) {
         const dp = displayPath || (f => f.path);
-        const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js');
+        const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js' && f.path !== '.nojekyll');
         let md = `# ${description || I18n.t('share.pageTitle')}\n\n`;
         md += `> 通过 [GitHub Drive](https://${this.escapeHtml(username)}.github.io/github_drive) 分享的文件\n\n`;
         md += `## 文件列表\n\n`;
@@ -821,12 +859,9 @@ class ShareManager {
     async getShareFiles(repoName) {
         const username = await this.api.getUsername();
         const contents = await this.api.getDirectoryContents(username, repoName, '', 'main');
-        return contents.filter(item =>
-            item.type === 'file' &&
-            item.name !== 'index.html' &&
-            item.name !== 'README.md' &&
-            item.name !== '.gitkeep'
-        );
+        const skip = new Set(['index.html', 'README.md', '.gitkeep',
+                              'status.js', 'share.json', '.nojekyll']);
+        return contents.filter(item => item.type === 'file' && !skip.has(item.name));
     }
 
     /**
