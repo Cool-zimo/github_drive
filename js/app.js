@@ -708,7 +708,7 @@ class App {
             '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
             '<div style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.3);"><div style="font-size:32px;font-weight:700;">' + files.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📄 文件总数</div></div>' +
             '<div style="padding:20px;background:linear-gradient(135deg,#f093fb,#f5576c);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(240,147,251,0.3);"><div style="font-size:32px;font-weight:700;">' + folders.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📁 文件夹</div></div>' +
-            '<div style="padding:20px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(79,172,254,0.3);"><div style="font-size:28px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + ' MB</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">💾 本地缓存</div></div>' +
+            '<div style="padding:20px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(79,172,254,0.3);"><div style="font-size:28px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + ' MB</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📦 文件总大小</div></div>' +
             '<div style="padding:20px;background:linear-gradient(135deg,#43e97b,#38f9d7);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(67,233,123,0.3);"><div style="font-size:32px;font-weight:700;">' + favorites.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">⭐ 收藏</div></div></div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
             '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
@@ -1240,7 +1240,7 @@ class App {
                 '<div style="font-size:12px;color:#6b7280;">文件夹数</div></div>' +
                 '<div style="text-align:center;padding:16px;background:#fef3c7;border-radius:12px;">' +
                 '<div style="font-size:24px;font-weight:700;color:#d97706;">' + (totalSize/1024/1024).toFixed(2) + 'MB</div>' +
-                '<div style="font-size:12px;color:#6b7280;">本地缓存</div></div></div>' +
+                '<div style="font-size:12px;color:#6b7280;">文件总大小</div></div></div>' +
                 '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📦 仓库存储</div>' + repoHtml + '</div>' +
                 '<div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📊 文件类型分布</div>' +
                 (sortedTypes.length > 0 ? typeHtml : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>') +

@@ -129,21 +129,41 @@ class ShareManager {
         }
         console.log(`[Share] 展开 ${virtualPaths.length} 个路径 → ${targets.length} 个文件`);
 
+        // ── 并发取内容 ──
+        // 串行版：98 个文件 = 98 次串行往返，每次大半是固定开销。
+        // 现在按文件并发（每个文件内部的分片仍串行，避免一次撑爆内存）。
+        const CONC_FILES = 6;
+        const packed = new Array(targets.length);
+        const dlFail = [];
+        for (let s = 0; s < targets.length; s += CONC_FILES) {
+            const batch = targets.slice(s, s + CONC_FILES);
+            await Promise.all(batch.map(async (tg, k) => {
+                const gi = s + k;
+                try {
+                    const fi = this.storage.getFile(tg.virtualPath);
+                    if (!fi) { dlFail.push(tg.relPath + '（不存在）'); return; }
+                    const parts = [];
+                    for (const chunk of fi.chunks) {
+                        parts.push(await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch));
+                    }
+                    const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
+                    const merged = new Uint8Array(totalLen);
+                    let off = 0;
+                    for (const p of parts) { merged.set(p, off); off += p.length; }
+                    packed[gi] = { fi, merged };
+                } catch (e) {
+                    dlFail.push(tg.relPath + '（' + e.message + '）');
+                }
+            }));
+            if (onProgress) onProgress(10 + Math.round((s + batch.length) / targets.length * 20),
+                `读取文件 ${Math.min(s + batch.length, targets.length)}/${targets.length}`);
+        }
+
         const fileObjects = [];
         for (let ti = 0; ti < targets.length; ti++) {
             const { virtualPath: vp, relPath } = targets[ti];
-            const fileInfo = this.storage.getFile(vp);
-            if (!fileInfo) { console.warn('[Share] 文件不存在:', vp); continue; }
-            const parts = [];
-            for (const chunk of fileInfo.chunks) {
-                const c = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-                parts.push(c);
-            }
-            // 合并分片字节
-            const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
-            const merged = new Uint8Array(totalLen);
-            let off = 0;
-            for (const p of parts) { merged.set(p, off); off += p.length; }
+            if (!packed[ti]) continue;
+            const { fi: fileInfo, merged } = packed[ti];
             // 来源信息取自首个分片，供 shareFiles 兜底使用
             const src = fileInfo.chunks[0] || {};
             const meta = {
@@ -161,7 +181,14 @@ class ShareManager {
                 fileObjects.push({ ...meta, arrayBuffer: merged.buffer, isBinary: true });
             }
         }
-        if (fileObjects.length === 0) throw new Error(I18n.t('share.noFiles'));
+        if (dlFail.length) {
+            console.warn('[Share] 有 ' + dlFail.length + ' 个文件读取失败:', dlFail.slice(0, 3).join('; '));
+        }
+        if (fileObjects.length === 0) {
+            throw new Error(dlFail.length
+                ? `没有可分享的内容：${dlFail.slice(0, 3).join('；')}`
+                : I18n.t('share.noFiles'));
+        }
         return await this.shareFiles(fileObjects, shareName, description, onProgress);
     }
 
@@ -256,8 +283,56 @@ class ShareManager {
         }
         this._shareErrors = [];
 
+        // ── 2.5 压缩：可压缩的文件存成 .gz，下载页自动解压 ──
+        // 分享仓库是给访客用的，所以必须能在浏览器里还原 —— 下载页里
+        // 用 DecompressionStream 解压后再触发下载，访客拿到的是原文件。
+        // 浏览器不支持 compression stream 时整段跳过，不做任何压缩。
+        const cfg = (this.storage && this.storage.getStorageConfig)
+            ? (this.storage.getStorageConfig() || {}) : {};
+        const sysFiles = new Set(['index.html', 'README.md', 'share.json', 'status.js']);
+        let savedBytes = 0;
+        if (cfg.compression !== false && typeof CompressionStream !== 'undefined') {
+            const skipExt = new Set(['mp4','mkv','avi','mov','webm','m4v','flv','wmv','mpg','mpeg','ts',
+                'jpg','jpeg','png','gif','webp','avif','heic','bmp','tiff','ico',
+                'zip','rar','7z','gz','tgz','bz2','xz','zst','lz4','tar','iso','dmg','apk','ipa',
+                'mp3','aac','flac','ogg','opus','wma','m4a','wav','aiff',
+                'woff','woff2','ttf','otf','jar','whl','pdf']);
+            for (let i = 0; i < fileObjects.length; i++) {
+                const f = fileObjects[i];
+                if (sysFiles.has(f.path)) continue;
+                const ext = (f.path.split('.').pop() || '').toLowerCase();
+                if (skipExt.has(ext)) continue;
+                try {
+                    const bytes = f.arrayBuffer
+                        ? new Uint8Array(f.arrayBuffer)
+                        : new TextEncoder().encode(f.content || '');
+                    if (bytes.length < 1024) continue;
+                    const cs = new CompressionStream('gzip');
+                    const buf = await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer();
+                    const gz = new Uint8Array(buf);
+                    if (gz.length >= bytes.length * 0.95) continue;   // 省不到 5% 就不值
+                    savedBytes += bytes.length - gz.length;
+                    fileObjects[i] = {
+                        path: f.path + '.gz',
+                        arrayBuffer: gz,
+                        size: bytes.length,          // 显示原始大小
+                        isBinary: true,
+                        _origPath: f.path            // 下载页与元数据用原名
+                    };
+                } catch (e) {
+                    console.warn('[Share] 压缩失败，原样分享:', f.path, e.message);
+                }
+            }
+            if (savedBytes > 0) {
+                console.log(`[Share] 压缩节省 ${(savedBytes / 1048576).toFixed(1)} MB`);
+            }
+        }
+
+        // 元数据与下载页统一用"原始路径"（压缩过的去掉 .gz 后缀）
+        const displayPath = f => f._origPath || f.path;
+
         // 3. 生成下载页面
-        const downloadPage = this.generateDownloadPage(repoName, description, fileObjects, username);
+        const downloadPage = this.generateDownloadPage(repoName, description, fileObjects, username, displayPath);
         fileObjects.push({
             path: 'index.html',
             content: downloadPage
@@ -266,7 +341,7 @@ class ShareManager {
         // 添加 README
         fileObjects.push({
             path: 'README.md',
-            content: this.generateReadme(repoName, description, fileObjects, username)
+            content: this.generateReadme(repoName, description, fileObjects, username, displayPath)
         });
         // 添加标准分享元数据（用于搜索和发现）
         const shareMeta = {
@@ -277,7 +352,7 @@ class ShareManager {
             author: username,
             createdAt: new Date().toISOString(),
             fileCount: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js').length,
-            files: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js').map(f => ({ name: f.path, size: f.size || 0 }))
+            files: fileObjects.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js').map(f => ({ name: displayPath(f), size: f.size || 0, packed: f.path.endsWith('.gz') ? 'gzip' : undefined }))
         };
         fileObjects.push({
             path: 'share.json',
@@ -291,13 +366,17 @@ class ShareManager {
 
         if (onProgress) onProgress(70, I18n.t('share.uploadingFiles'));
 
-        // 4. 批量提交文件
+        // 4. 批量提交文件（并发建 blob + 内容去重）
         await this.api.batchUploadFiles(
             username,
             repoName,
             fileObjects,
-            `Shared ${fileObjects.length - 2} files`,
-            'main'
+            `Shared ${fileObjects.filter(f => !sysFiles.has(f.path)).length} files`,
+            'main',
+            (done, total) => {
+                if (onProgress) onProgress(70 + Math.round(done / total * 12), `上传 ${done}/${total}`);
+            },
+            { memoryBudget: cfg.memoryBudget, maxConcurrency: cfg.maxConcurrency }
         );
 
         if (onProgress) onProgress(85, I18n.t('share.enablingPages'));
@@ -385,14 +464,20 @@ class ShareManager {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
-    generateDownloadPage(repoName, description, files, username) {
+    generateDownloadPage(repoName, description, files, username, displayPath) {
+        const dp = displayPath || (f => f.path);
         const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js');
         // 用 Pages 相对路径，分段编码（保留 / 分隔符），国内访问更快
         // JSON 里若出现 "</script>" 会提前闭合脚本块，必须转义；
         // 同理转义 <!-- 避免进入注释解析状态
+        //
+        // ★ name 用原始文件名（去掉 .gz），packed 标记让页面知道要解压。
+        //   访客下载到的一定是原文件，不该看到 .gz 后缀。
         const filesJson = JSON.stringify(fileList.map(f => ({
-            name: f.path,
-            url: './' + f.path.split('/').map(encodeURIComponent).join('/')
+            name: dp(f),
+            url: './' + f.path.split('/').map(encodeURIComponent).join('/'),
+            packed: f.path.endsWith('.gz') ? 'gzip' : undefined,
+            size: f.size || 0
         }))).replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--');
 
         return `<!DOCTYPE html>
@@ -612,25 +697,54 @@ class ShareManager {
             });
         }
 
+        /**
+         * 下载一个文件。
+         * ★ 压缩过的必须先解压：仓库里存的是 .gz，直接打开会让访客
+         *   下载到一个名字不对、内容也打不开的压缩包。
+         */
+        async function saveFile(file) {
+            const name = file.name.split('/').pop();
+            if (!file.packed) { window.open(file.url, '_blank'); return; }
+            try {
+                const res = await fetch(file.url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                if (typeof DecompressionStream === 'undefined') {
+                    // 老浏览器解压不了 —— 直接把 .gz 给他，至少数据是完整的
+                    window.open(file.url, '_blank'); return;
+                }
+                const ds = new DecompressionStream('gzip');
+                const buf = await new Response(res.body.pipeThrough(ds)).arrayBuffer();
+                const blob = new Blob([buf]);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            } catch (e) {
+                console.error('下载失败', e);
+                window.open(file.url, '_blank');
+            }
+        }
+
         fileList.innerHTML = '';
         files.forEach(file => {
             const li = document.createElement('li');
             li.className = 'file-item';
-            li.onclick = () => window.open(file.url, '_blank');
+            li.onclick = () => saveFile(file);
             li.innerHTML = \`
                 <span class="file-icon">\${getFileIcon(file.name)}</span>
                 <div class="file-info">
                     <div class="file-name">\${escapeHtml(file.name)}</div>
                     <div class="file-size">\${file.size ? formatSize(file.size) : '<span data-i18n="clickDownload">Click to download</span>'}</div>
                 </div>
-                <button class="download-btn" onclick="event.stopPropagation(); window.open('\${escapeHtml(file.url)}', '_blank')"><span data-i18n="download">Download</span></button>
+                <button class="download-btn" onclick="event.stopPropagation(); saveFile(files[\${files.indexOf(file)}])"><span data-i18n="download">Download</span></button>
             \`;
             fileList.appendChild(li);
         });
 
         function downloadAll() {
             files.forEach((file, i) => {
-                setTimeout(() => window.open(file.url, '_blank'), i * 300);
+                setTimeout(() => saveFile(file), i * 300);
             });
         }
 
@@ -688,13 +802,14 @@ class ShareManager {
     /**
      * 生成 README
      */
-    generateReadme(repoName, description, files, username) {
+    generateReadme(repoName, description, files, username, displayPath) {
+        const dp = displayPath || (f => f.path);
         const fileList = files.filter(f => f.path !== 'index.html' && f.path !== 'README.md' && f.path !== 'status.js');
         let md = `# ${description || I18n.t('share.pageTitle')}\n\n`;
         md += `> 通过 [GitHub Drive](https://${this.escapeHtml(username)}.github.io/github_drive) 分享的文件\n\n`;
         md += `## 文件列表\n\n`;
         fileList.forEach(f => {
-            md += `- [${f.path}](./${encodeURIComponent(f.path)})\n`;
+            md += `- [${dp(f)}](./${f.path.split('/').map(encodeURIComponent).join('/')})\n`;
         });
         md += `\n---\n*由 GitHub Drive 自动生成*`;
         return md;
