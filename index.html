@@ -8,18 +8,23 @@
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
+    <script src="js/branch-guard.js?v=52"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
         var customBranch = localStorage.getItem('gd_custom_branch');
         var urlParams = new URLSearchParams(window.location.search);
         var urlBranch = urlParams.get('branch');
-        
-        if (urlBranch) {
+
+        // guard 已经处理过 ?safe=1 / ?branch=main / 非法值，
+        // 这里只需在它没动过 localStorage 时才写 URL 参数
+        if (urlBranch && window.BranchGuard && window.BranchGuard.isValidBranch(urlBranch)
+            && urlBranch !== 'main' && !window.BranchGuard.escapeHatchApplied) {
             customBranch = urlBranch;
             localStorage.setItem('gd_custom_branch', urlBranch);
         }
-        
+
         if (customBranch && customBranch !== 'main') {
             window.__CUSTOM_BRANCH__ = customBranch;
             // 使用 jsdelivr CDN，国内访问更快，支持指定分支
@@ -28,7 +33,7 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.css?v=47">');
+            document.write('<link rel="stylesheet" href="css/style.css?v=52">');
         }
     })();
     </script>
@@ -261,7 +266,7 @@
     // 根据分支动态加载 JS
     (function() {
         var base = window.__BRANCH_BASE__ || '';
-        var v = window.__BRANCH_BASE__ ? '' : '?v=47';
+        var v = window.__BRANCH_BASE__ ? '' : '?v=52';
         var files = ['bridge', 'icons', 'github-api', 'cangshu-link', 'storage', 'maintain', 'file-manager', 'share', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'app'];
         files.forEach(function(f) {
             document.write('<script src="' + base + 'js/' + f + '.js' + v + '"><\/script>');

