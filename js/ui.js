@@ -1691,7 +1691,27 @@ class UI {
 
     closeModal() {
         this._pagesMonitorStopped = true;
+        // ★ 冲突弹窗被 ESC / 点遮罩关掉时，必须给出决定 ——
+        //   否则 Promise 永远不 resolve，上传流程卡死在半路。
+        //   按"跳过"处理：宁可不传，也不能替用户覆盖已有文件。
+        if (this._conflictFallback) {
+            const fb = this._conflictFallback;
+            this._conflictFallback = null;
+            fb();
+        }
         document.getElementById('modal-container').innerHTML = '';
+    }
+
+    /** 上传列表里把某个文件标成"已跳过" */
+    markUploadSkipped(name) {
+        const el = document.querySelector(`[data-upload-name="${CSS.escape(name)}"]`);
+        if (el) {
+            el.style.opacity = '0.5';
+            const tag = document.createElement('span');
+            tag.textContent = '已跳过（同名）';
+            tag.style.cssText = 'font-size:11px;color:#92400e;margin-left:6px;';
+            el.appendChild(tag);
+        }
     }
 
     /**
@@ -1905,6 +1925,94 @@ class UI {
             this._copyTargetPath = relativePath;
             app.copyFile();
         }
+    }
+
+    /**
+     * 同名文件冲突弹窗（仿 Windows 资源管理器）
+     *
+     * @param {{name,newSize,newDate,oldSize,oldDate,remaining}} info
+     * @returns {Promise<{action:'replace'|'skip'|'rename', applyAll:boolean}>}
+     */
+    showFileConflict(info) {
+        return new Promise((resolve) => {
+            const fmt = (b) => {
+                if (!b && b !== 0) return '—';
+                const k = 1024, u = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(b) / Math.log(k));
+                return (b / Math.pow(k, i)).toFixed(1) + ' ' + u[i];
+            };
+            const dt = (d) => {
+                if (!d) return '—';
+                try {
+                    return d.toLocaleString(undefined, {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                } catch (e) { return '—'; }
+            };
+            const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+            const name = esc(info.name);
+            const body = `
+                <div style="display:flex;gap:14px;align-items:flex-start;">
+                    <div style="font-size:36px;line-height:1;">⚠️</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:14px;color:#111827;margin-bottom:12px;word-break:break-all;">
+                            此位置已存在名为 <b>「${name}」</b> 的文件
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+                                <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">目标中的文件</div>
+                                <div style="font-size:13px;font-weight:600;color:#374151;word-break:break-all;">${name}</div>
+                                <div style="font-size:12px;color:#6b7280;margin-top:6px;">${fmt(info.oldSize)}</div>
+                                <div style="font-size:12px;color:#9ca3af;margin-top:2px;">${dt(info.oldDate)}</div>
+                            </div>
+                            <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;">
+                                <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">正在上传的文件</div>
+                                <div style="font-size:13px;font-weight:600;color:#374151;word-break:break-all;">${name}</div>
+                                <div style="font-size:12px;color:#6b7280;margin-top:6px;">${fmt(info.newSize)}</div>
+                                <div style="font-size:12px;color:#9ca3af;margin-top:2px;">${dt(info.newDate)}</div>
+                            </div>
+                        </div>
+                        ${info.remaining ? `<div style="margin-top:12px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;">还有 ${info.remaining} 个同名文件待处理</div>` : ''}
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;font-size:13px;color:#374151;">
+                            <input type="checkbox" id="cf-apply-all" style="width:15px;height:15px;cursor:pointer;">
+                            <span>对之后所有冲突执行此操作</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            const finish = (action) => {
+                // ★ 必须先撤掉 fallback 再关弹窗。
+                //   closeModal() 会触发 _conflictFallback（处理 ESC/取消），
+                //   而它 resolve 的是 'skip' —— Promise 一旦落定就改不了，
+                //   于是点"替换"也变成"跳过"（实测确实如此）。
+                if (this._conflictDone) return;
+                this._conflictDone = true;
+                const applyAll = !!document.getElementById('cf-apply-all')?.checked;
+                this._conflictFallback = null;
+                this.closeModal();
+                resolve({ action, applyAll });
+            };
+            this._conflictDone = false;
+            // ★ 三个选项都要挂到 window：onclick 里访问不到闭包里的 finish
+            window.__gdConflictPick = finish;
+            const btns = `
+                <button class="btn-secondary" onclick="window.__gdConflictPick('rename')">保留两个文件</button>
+                <button class="btn-secondary" onclick="window.__gdConflictPick('skip')">跳过此文件</button>
+                <button class="btn-primary" onclick="window.__gdConflictPick('replace')">替换目标中的文件</button>
+            `;
+            this.showModal('替换或跳过文件', body, btns);
+            // 关闭弹窗（取消）时按"跳过"处理，绝不能默认覆盖
+            // 关闭弹窗（ESC / 点遮罩 / 取消）时按"跳过"处理，绝不能默认覆盖
+            this._conflictFallback = () => {
+                if (this._conflictDone) return;
+                this._conflictDone = true;
+                this._conflictFallback = null;
+                resolve({ action: 'skip', applyAll: false });
+            };
+        });
     }
 
     /**

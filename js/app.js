@@ -525,15 +525,76 @@ class App {
 
     async uploadFiles(files) {
         if (!files || files.length === 0) return;
-        this.ui.showUploadProgress?.(files);
+
+        // ── 上传前先查重（Windows 资源管理器风格）──
+        // 同名文件不直接覆盖：先问用户要替换 / 跳过 / 保留两个。
+        // 全程只弹一次，勾选"应用到全部"后按同一规则处理剩余冲突。
+        const targetPath = this.fileManager.currentPath;
+        const dupes = files.filter(f => this.storage.exists(
+            Storage.normalizePath(targetPath) + '/' + f.name));
+        let decision = { action: null, applyAll: false };
+
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const vp = Storage.normalizePath(targetPath) + '/' + f.name;
+            if (!this.storage.exists(vp)) continue;
+
+            if (!decision.applyAll) {
+                const existing = this.storage.getFile(vp);
+                const remaining = dupes.length - (decision.action ? 1 : 0);
+                const ans = await this.ui.showFileConflict({
+                    name: f.name,
+                    newSize: f.size,
+                    newDate: f.lastModified ? new Date(f.lastModified) : new Date(),
+                    oldSize: existing?.size || 0,
+                    oldDate: existing?.updatedAt ? new Date(existing.updatedAt) : null,
+                    remaining: remaining > 1 ? remaining : 0
+                });
+                decision = ans || { action: 'skip', applyAll: false };
+            }
+
+            if (decision.action === 'skip') {
+                this.ui.markUploadSkipped?.(f.name);
+                files[i]._gdAction = 'skip';
+            } else if (decision.action === 'rename') {
+                // 保留两个：自动改名 xxx (1).ext，仍可能撞就继续 +1
+                let n = 1, newName;
+                do {
+                    const dot = f.name.lastIndexOf('.');
+                    newName = dot > 0
+                        ? `${f.name.slice(0, dot)} (${n})${f.name.slice(dot)}`
+                        : `${f.name} (${n})`;
+                    n++;
+                } while (this.storage.exists(Storage.normalizePath(targetPath) + '/' + newName));
+                files[i]._gdNewName = newName;
+            } else {
+                files[i]._gdAction = 'replace';
+            }
+        }
+
+        const todo = files.filter(f => f._gdAction !== 'skip');
+        const skipped = files.length - todo.length;
+        if (todo.length === 0) {
+            this.ui.showToast(skipped ? `已跳过 ${skipped} 个同名文件` : '没有要上传的文件', 'info');
+            return;
+        }
+
+        this.ui.showUploadProgress?.(todo);
         try {
-            for (let i = 0; i < files.length; i++) {
-                await this.fileManager.uploadFile(files[i], this.fileManager.currentPath, (percent) => {
-                    this.ui.updateUploadProgress?.(i, percent, files.length);
+            for (let i = 0; i < todo.length; i++) {
+                const f = todo[i];
+                const uploadAs = f._gdNewName
+                    ? new File([f], f._gdNewName, { type: f.type, lastModified: f.lastModified })
+                    : f;
+                await this.fileManager.uploadFile(uploadAs, this.fileManager.currentPath, (percent) => {
+                    this.ui.updateUploadProgress?.(i, percent, todo.length);
                 });
                 this.ui.setUploadSuccess?.(i);
             }
-            this.ui.showToast(`成功上传 ${files.length} 个文件`, 'success');
+            const msg = skipped
+                ? `成功上传 ${todo.length} 个文件，跳过 ${skipped} 个同名文件`
+                : `成功上传 ${todo.length} 个文件`;
+            this.ui.showToast(msg, 'success');
             await this.loadFiles();
             // 显示成功状态 2 秒后自动关闭面板
             setTimeout(() => this.ui.hideUploadProgress?.(), 2000);
