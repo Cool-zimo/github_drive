@@ -1,6 +1,1 @@
-// 版本信息 - 由 release.py 自动生成
-const APP_VERSION = {
-    internalVersion: '44',
-    formalVersion: '0.0.44',
-    displayVersion: 'v0.0.44'
-};
+Ly8g54mI5pys5L+h5oGvIC0g55SxIHJlbGVhc2UucHkg6Ieq5Yqo55Sf5oiQCmNvbnN0IEFQUF9WRVJTSU9OID0gewogICAgaW50ZXJuYWxWZXJzaW9uOiAnNDUnLAogICAgZm9ybWFsVmVyc2lvbjogJzAuMC40NScsCiAgICBkaXNwbGF5VmVyc2lvbjogJ3YwLjAuNDUnCn07Cg==
