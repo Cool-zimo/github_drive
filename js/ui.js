@@ -1912,6 +1912,7 @@ class UI {
      */
     showShareModal(files) {
         const fileNames = files.map(f => f.name).join(', ');
+        const folderCount = files.filter(f => f.isFolder).length;
         this.showModal(
             I18n.t('share.title'),
             `
@@ -1925,10 +1926,11 @@ class UI {
                     <input type="text" id="share-desc" placeholder="这些是我分享的文件">
                 </div>
                 <div class="form-group">
-                    <label>要分享的文件（${files.length} 个）</label>
+                    <label>${folderCount ? `要分享的条目（${files.length} 个，含 ${folderCount} 个文件夹）` : `要分享的文件（${files.length} 个）`}</label>
                     <div style="background:#f6f8fa;padding:12px;border-radius:6px;font-size:13px;max-height:120px;overflow-y:auto;">
-                        ${files.map(f => `<div>📄 ${f.name}</div>`).join('')}
+                        ${files.map(f => `<div>${f.isFolder ? '📁' : '📄'} ${f.name}</div>`).join('')}
                     </div>
+                    ${folderCount ? `<p class="form-hint">文件夹会包含其中所有文件，并保持目录结构</p>` : ''}
                 </div>
                 <div id="share-progress" class="upload-progress hidden"></div>
             `,

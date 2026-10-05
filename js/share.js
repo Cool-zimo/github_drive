@@ -73,9 +73,65 @@ class ShareManager {
             .map(f => ({ name: f.name, size: f.size || 0 }));
     }
 
+    /**
+     * 把一个虚拟路径展开成文件列表。
+     *
+     * ★ 文件夹必须递归展开：storage.getFile() 只对文件有记录，
+     *   文件夹在 VFS 里存在 vfs.folders 而不是 vfs.files。
+     *   之前直接拿文件夹路径去 getFile()，必然返回 null，
+     *   于是"文件不存在"被跳过 —— 分享一个文件夹最后什么都没分享出去。
+     *
+     * @returns {Array<{virtualPath:string, relPath:string}>}
+     */
+    _expandPath(virtualPath) {
+        const vp = Storage.normalizePath(virtualPath);
+        if (this.storage.getFile(vp)) {
+            return [{ virtualPath: vp, relPath: vp.split('/').pop() }];
+        }
+        if (!this.storage.getFolder(vp)) return [];
+
+        const base = vp + '/';
+        const out = [];
+        // ★ 带上文件夹名做前缀：多个文件夹一起分享时不会互相覆盖，
+        //   分享仓库里也能看出原来的目录结构
+        const folderName = vp.split('/').pop() || 'files';
+        const stack = [vp];
+        const seen = new Set();
+        while (stack.length) {
+            const dir = stack.pop();
+            if (seen.has(dir)) continue;   // 防环：VFS 理论上不该有环，但自引用会死循环
+            seen.add(dir);
+            for (const item of this.storage.listDirectory(dir)) {
+                if (item.isFolder) { stack.push(item.path); continue; }
+                const rel = item.path.substring(base.length);
+                out.push({ virtualPath: item.path, relPath: folderName + '/' + rel });
+            }
+        }
+        return out;
+    }
+
     async shareByVirtualPaths(virtualPaths, shareName = '', description = '', onProgress = null) {
-        const fileObjects = [];
+        // ── 展开：文件夹递归成文件，文件保持原名 ──
+        const targets = [];
+        const missing = [];
         for (const vp of virtualPaths) {
+            const ex = this._expandPath(vp);
+            if (!ex.length) missing.push(vp);
+            else targets.push(...ex);
+        }
+        if (missing.length) {
+            console.warn('[Share] 路径不存在或为空:', missing.join(', '));
+        }
+        if (targets.length === 0) {
+            throw new Error(missing.length
+                ? `没有找到可分享的文件：${missing.map(p => p.split('/').pop()).join('、')}（文件夹为空或路径不存在）`
+                : I18n.t('share.noFiles'));
+        }
+        console.log(`[Share] 展开 ${virtualPaths.length} 个路径 → ${targets.length} 个文件`);
+
+        const fileObjects = [];
+        for (let ti = 0; ti < targets.length; ti++) {
+            const { virtualPath: vp, relPath } = targets[ti];
             const fileInfo = this.storage.getFile(vp);
             if (!fileInfo) { console.warn('[Share] 文件不存在:', vp); continue; }
             const parts = [];
@@ -91,15 +147,15 @@ class ShareManager {
             // 来源信息取自首个分片，供 shareFiles 兜底使用
             const src = fileInfo.chunks[0] || {};
             const meta = {
-                path: fileInfo.name,
-                name: fileInfo.name,
+                path: relPath,
+                name: relPath,
                 size: fileInfo.size,
                 owner: src.owner,
                 repo: src.repo,
                 branch: src.branch
             };
             // 文本文件解码为字符串，二进制文件保留原始字节
-            if (this.isTextFile(fileInfo.name)) {
+            if (this.isTextFile(relPath)) {
                 fileObjects.push({ ...meta, content: new TextDecoder('utf-8').decode(merged) });
             } else {
                 fileObjects.push({ ...meta, arrayBuffer: merged.buffer, isBinary: true });

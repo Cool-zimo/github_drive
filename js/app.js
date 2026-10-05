@@ -604,9 +604,16 @@ class App {
         const shareDesc = document.getElementById('share-desc')?.value?.trim() || '';
         try {
             this.ui.closeModal();
-            // 专用进度弹窗替代 toast 刷屏：进度条 + 步骤，一目了然
-            this.ui.showShareProgress(files.length);
             const virtualPaths = files.map(f => f.path);
+            // ★ 文件夹要先展开才知道真实文件数，否则进度条按"1 个文件夹"
+            //   显示，实际在传 98 个文件，进度永远停在奇怪的位置
+            let totalFiles = 0;
+            try {
+                totalFiles = virtualPaths.reduce(
+                    (sum, vp) => sum + (this.shareManager._expandPath?.(vp).length || 1), 0);
+            } catch (e) { totalFiles = files.length; }
+            // 专用进度弹窗替代 toast 刷屏：进度条 + 步骤，一目了然
+            this.ui.showShareProgress(totalFiles || files.length);
             const result = await this.shareManager.shareByVirtualPaths(virtualPaths, shareName, shareDesc, (percent, msg) => {
                 this.ui.updateShareProgress(percent, msg);
             });
