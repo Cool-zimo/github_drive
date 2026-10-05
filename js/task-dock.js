@@ -1,0 +1,488 @@
+/**
+ * 任务坞 —— 上传 / 下载 / 分享 的后台任务窗口
+ *
+ * 需求来源：传 98 个文件时，那个居中大弹窗把整个界面挡死了，
+ * 想看看文件列表都不行。所以任务要能"挪开"——拖到边上变成小窗口贴着，
+ * 主界面照常用。
+ *
+ * 规则：
+ *   1. 大窗口标题栏可拖，拖到左右边缘松手 → 收成小窗口贴在那条边上
+ *   2. 小窗口也能拖，拖到边上停靠，拖到中间就自由浮动
+ *   3. 点小窗口 → 展开成大窗口（原地展开，不跳回屏幕中央）
+ *   4. 多个任务可以各自占一个小窗口
+ *   5. 小窗口超过 3 个 → 合并成一张「N 个任务处理中」，
+ *      点开是全部任务的列表，再点某个任务看它的明细
+ *
+ * ★ 一个容易踩的点：容器是 pointer-events:none 的全屏覆盖层，
+ *   每个窗口自己 pointer-events:auto。不这么做的话，
+ *   坞会吃掉整个页面的点击，网盘就点不动了。
+ */
+const TaskDock = (() => {
+    const MINI_LIMIT = 3;          // 超过这个数就合并
+    const EDGE_SNAP = 90;          // 松手时距边缘多少 px 以内算"停靠"
+    const POS_KEY = 'gd_taskdock_pos';
+
+    const tasks = new Map();
+    let seq = 0;
+    let root = null;
+    let openPanelId = null;        // 当前展开的任务 id
+    let listPanelOpen = false;     // 合并列表面板是否打开
+    let focusId = null;            // 列表面板里点开的某个任务
+
+    function L(zh, en) {
+        try {
+            return (typeof I18n !== 'undefined' && String(I18n.current || '').indexOf('en') === 0) ? en : zh;
+        } catch (e) { return zh; }
+    }
+
+    // ── 位置记忆 ──
+    function loadPos() {
+        try { return JSON.parse(localStorage.getItem(POS_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function savePos(p) {
+        try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch (e) {}
+    }
+    let pos = loadPos();
+
+    // ── 容器 ──
+    function ensureRoot() {
+        if (root && document.body.contains(root)) return root;
+        const old = document.getElementById('task-dock');
+        if (old) old.remove();
+        root = document.createElement('div');
+        root.id = 'task-dock';
+        document.body.appendChild(root);
+        return root;
+    }
+
+    // ── 任务读写 ──
+    function create(opts) {
+        const id = 't' + (++seq);
+        const t = {
+            id,
+            type: opts.type || 'upload',
+            title: opts.title || '',
+            items: (opts.items || []).map(n => ({ name: n, percent: 0, status: 'pending' })),
+            percent: 0,
+            note: opts.note || '',
+            status: 'running',
+            error: null,
+            startedAt: Date.now(),
+            finishedAt: 0,
+            view: 'mini',
+            dock: { edge: opts.edge || pos.edge || 'right', x: 0, y: 0, free: false },
+            // 分享任务是单条进度，没有子项列表
+            single: !!opts.single
+        };
+        tasks.set(id, t);
+        // 默认展开：第一次总是让人看见细节，之后才收成小窗
+        if (opts.expand !== false) { openPanelId = id; t.view = 'expanded'; }
+        render();
+        return id;
+    }
+
+    function get(id) { return tasks.get(id); }
+
+    function updateItem(id, index, percent) {
+        const t = tasks.get(id); if (!t) return;
+        const it = t.items[index];
+        if (!it) return;
+        it.percent = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        it.status = it.percent >= 100 ? 'done' : 'active';
+        recompute(t);
+        render();
+    }
+
+    function setItemDone(id, index) {
+        const t = tasks.get(id); if (!t) return;
+        const it = t.items[index]; if (!it) return;
+        it.percent = 100; it.status = 'done';
+        recompute(t);
+        render();
+    }
+
+    function setNote(id, msg) {
+        const t = tasks.get(id); if (!t) return;
+        t.note = msg || '';
+        render();
+    }
+
+    function setPercent(id, percent, note) {
+        const t = tasks.get(id); if (!t) return;
+        t.percent = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        if (note !== undefined) t.note = note;
+        render();
+    }
+
+    function recompute(t) {
+        if (!t.items.length) return;
+        const sum = t.items.reduce((s, i) => s + i.percent, 0);
+        t.percent = Math.round(sum / t.items.length);
+    }
+
+    function finish(id, error) {
+        const t = tasks.get(id); if (!t) return;
+        t.status = error ? 'error' : 'done';
+        t.error = error || null;
+        t.percent = error ? t.percent : 100;
+        t.finishedAt = Date.now();
+        t.items.forEach(i => { if (!error) i.status = 'done'; });
+        render();
+        // 完成后自动收起：成功 2.5 秒、失败 8 秒（失败得多留一会儿让人看见）
+        setTimeout(() => remove(id), error ? 8000 : 2500);
+    }
+
+    function remove(id) {
+        tasks.delete(id);
+        if (openPanelId === id) openPanelId = null;
+        if (focusId === id) { focusId = null; listPanelOpen = true; }
+        render();
+    }
+
+    // ── 拖拽 ──
+    function startDrag(e, win, task) {
+        if (e.button !== undefined && e.button !== 0) return;
+        const rect = win.getBoundingClientRect();
+        const dx = e.clientX - rect.left, dy = e.clientY - rect.top;
+        win.classList.add('td-dragging');
+        document.body.classList.add('td-dragging-body');
+
+        let hint = null;
+        function move(ev) {
+            const x = ev.clientX - dx, y = ev.clientY - dy;
+            win.style.left = x + 'px';
+            win.style.top = y + 'px';
+            win.style.right = 'auto';
+            win.style.bottom = 'auto';
+            // 停靠提示
+            const nearLeft = ev.clientX < EDGE_SNAP;
+            const nearRight = ev.clientX > window.innerWidth - EDGE_SNAP;
+            const want = nearLeft ? 'left' : (nearRight ? 'right' : null);
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.className = 'td-dock-hint';
+                document.body.appendChild(hint);
+            }
+            if (want) {
+                hint.textContent = L('松手停靠到' + (want === 'left' ? '左侧' : '右侧'),
+                                     'Release to dock ' + (want === 'left' ? 'left' : 'right'));
+                hint.classList.add('show');
+                hint.style.left = (want === 'left' ? 12 : window.innerWidth - 12) + 'px';
+                hint.style.transform = want === 'left' ? 'none' : 'translateX(-100%)';
+            } else {
+                hint.classList.remove('show');
+            }
+        }
+        function up(ev) {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            win.classList.remove('td-dragging');
+            document.body.classList.remove('td-dragging-body');
+            if (hint) hint.remove();
+            const nearLeft = ev.clientX < EDGE_SNAP;
+            const nearRight = ev.clientX > window.innerWidth - EDGE_SNAP;
+            if (nearLeft || nearRight) {
+                const edge = nearLeft ? 'left' : 'right';
+                task.dock.edge = edge;
+                task.dock.free = false;
+                pos.edge = edge;
+                savePos(pos);
+                // ★ 拖到边缘 = 收成小窗：这是"把大窗口拖到一侧"的核心行为
+                if (task.view === 'expanded') { task.view = 'mini'; openPanelId = null; }
+            } else {
+                const r = win.getBoundingClientRect();
+                task.dock.free = true;
+                task.dock.x = Math.round(r.left);
+                task.dock.y = Math.round(r.top);
+            }
+            render();
+        }
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+        e.preventDefault();
+    }
+
+    /**
+     * 小窗口拖拽。
+     *
+     * ★ 必须先超过 5px 才开始动：小窗的主要交互是"点一下展开"，
+     *   如果一按下去就跟着鼠标走，单击会被误判成拖动，永远展开不了。
+     */
+    function startMiniDrag(e, el, task) {
+        if (e.button !== undefined && e.button !== 0) return;
+        const rect = el.getBoundingClientRect();
+        const dx = e.clientX - rect.left, dy = e.clientY - rect.top;
+        const sx = e.clientX, sy = e.clientY;
+        let active = false, hint = null;
+
+        function move(ev) {
+            if (!active) {
+                if (Math.abs(ev.clientX - sx) < 5 && Math.abs(ev.clientY - sy) < 5) return;
+                active = true;
+                el.classList.add('td-dragging', 'td-no-click');
+                document.body.classList.add('td-dragging-body');
+            }
+            el.style.left = (ev.clientX - dx) + 'px';
+            el.style.top = (ev.clientY - dy) + 'px';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+            const nearLeft = ev.clientX < EDGE_SNAP;
+            const nearRight = ev.clientX > window.innerWidth - EDGE_SNAP;
+            if (!hint) { hint = document.createElement('div'); hint.className = 'td-dock-hint'; document.body.appendChild(hint); }
+            if (nearLeft || nearRight) {
+                const w = nearLeft ? 'left' : 'right';
+                hint.textContent = L('松手停靠到' + (w === 'left' ? '左侧' : '右侧'),
+                                     'Release to dock ' + (w === 'left' ? 'left' : 'right'));
+                hint.classList.add('show');
+                hint.style.left = (w === 'left' ? 12 : window.innerWidth - 12) + 'px';
+                hint.style.transform = w === 'left' ? 'none' : 'translateX(-100%)';
+            } else hint.classList.remove('show');
+        }
+
+        function up(ev) {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            el.classList.remove('td-dragging');
+            document.body.classList.remove('td-dragging-body');
+            if (hint) hint.remove();
+            if (!active) return;                       // 没动 → 交给 click 展开
+            const nearLeft = ev.clientX < EDGE_SNAP;
+            const nearRight = ev.clientX > window.innerWidth - EDGE_SNAP;
+            if (nearLeft || nearRight) {
+                task.dock.edge = nearLeft ? 'left' : 'right';
+                task.dock.free = false;
+                pos.edge = task.dock.edge;
+                savePos(pos);
+            } else {
+                const r = el.getBoundingClientRect();
+                task.dock.free = true;
+                task.dock.x = Math.round(r.left);
+                task.dock.y = Math.round(r.top);
+            }
+            render();
+            setTimeout(() => el.classList.remove('td-no-click'), 0);
+        }
+
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+        e.preventDefault();
+    }
+
+    // ── 图标 ──
+    function iconOf(type) {
+        return { upload: '📤', download: '⬇️', share: '🔗' }[type] || '📋';
+    }
+
+    // ── 渲染 ──
+    function render() {
+        const list = Array.from(tasks.values());
+        const el = ensureRoot();
+        if (!list.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+        el.style.display = '';
+
+        const live = list.filter(t => t.status === 'running');
+        const merged = live.length > MINI_LIMIT;
+
+        let html = '';
+
+        if (merged) {
+            // 合并成一张卡
+            const done = list.filter(t => t.status === 'done').length;
+            const err = list.filter(t => t.status === 'error').length;
+            const avg = Math.round(live.reduce((s, t) => s + t.percent, 0) / (live.length || 1));
+            const dockEdge = pos.edge || 'right';
+            html += miniCardHTML({
+                cls: 'td-merged',
+                icon: '⚙️',
+                title: L(`${live.length} 个任务处理中`, `${live.length} tasks running`),
+                sub: (done || err) ? L(`已完成 ${done}${err ? ` · 失败 ${err}` : ''}`,
+                                       `${done} done${err ? ` · ${err} failed` : ''}`) : '',
+                percent: avg,
+                edge: dockEdge,
+                free: false,
+                id: '',
+                onclick: 'TaskDock.openList()'
+            });
+        } else {
+            // 每个任务一张小窗；展开的那个不放小窗（它自己就是大窗口）
+            let stack = 0;
+            for (const t of list) {
+                if (t.id === openPanelId) continue;
+                if (t.view === 'expanded') continue;
+                const sub = t.status === 'error' ? (t.error || L('失败', 'Failed'))
+                    : t.status === 'done' ? L('已完成', 'Done')
+                    : t.single ? (t.note || '')
+                    : L(`${t.items.filter(i => i.status === 'done').length}/${t.items.length} 个文件`,
+                         `${t.items.filter(i => i.status === 'done').length}/${t.items.length} files`);
+                html += miniCardHTML({
+                    cls: 'td-task' + (t.status === 'error' ? ' is-error' : (t.status === 'done' ? ' is-done' : '')),
+                    icon: iconOf(t.type),
+                    title: t.title,
+                    sub,
+                    percent: t.percent,
+                    id: t.id,
+                    edge: t.dock.edge,
+                    free: t.dock.free,
+                    x: t.dock.x, y: t.dock.y,
+                    idx: stack++,
+                    onclick: `TaskDock.open('${t.id}')`
+                });
+            }
+        }
+
+        // 展开的任务面板
+        for (const t of list) {
+            if (t.id === openPanelId && t.view === 'expanded') html += panelHTML(t);
+        }
+        // 合并列表面板
+        if (listPanelOpen) html += listPanelHTML(list);
+        // 列表里点开的某个任务的明细
+        if (focusId && !openPanelId) {
+            const ft = tasks.get(focusId);
+            if (ft) html += panelHTML(ft, true);
+        }
+
+        el.innerHTML = html;
+        bindAll();
+    }
+
+    function miniCardHTML(o) {
+        // ★ 自由浮动的窗口必须用自己的 x/y，否则下一次 render 会把它
+        //   弹回边缘 —— 拖了跟没拖一样。
+        const edgeStyle = o.free
+            ? `left:${o.x || 0}px;top:${o.y || 0}px;right:auto;bottom:auto;`
+            : (o.edge === 'left'
+                ? `left:12px;right:auto;` : `right:12px;left:auto;`)
+              + `bottom:${12 + (o.idx || 0) * 74}px;`;
+        return `
+        <div class="td-mini ${o.cls}" data-id="${o.id || ''}" data-edge="${o.free ? 'free' : o.edge}" style="${edgeStyle}"
+             onclick="${o.onclick}">
+            <div class="td-mini-ico">${o.icon}</div>
+            <div class="td-mini-main">
+                <div class="td-mini-title">${esc(o.title)}</div>
+                <div class="td-mini-bar"><div class="td-mini-fill" style="width:${o.percent}%"></div></div>
+                <div class="td-mini-sub">${esc(o.sub || '')}</div>
+            </div>
+            <div class="td-mini-pct">${o.percent}%</div>
+        </div>`;
+    }
+
+    function panelHTML(t, fromList) {
+        const rows = t.items.map((it, i) => `
+            <div class="td-row ${it.status}">
+                <span class="td-row-name">${esc(it.name)}</span>
+                <span class="td-row-pct">${it.status === 'done' ? L('完成', 'Done') : it.percent + '%'}</span>
+                <div class="td-row-bar"><div style="width:${it.percent}%"></div></div>
+            </div>`).join('');
+        const body = t.single ? `
+            <div class="td-note">${esc(t.note || '')}</div>
+            <div class="td-bar"><div class="td-bar-fill" style="width:${t.percent}%"></div></div>`
+            : (rows || `<div class="td-note">${esc(t.note || '')}</div>`);
+        const statusCls = t.status === 'error' ? 'is-error' : (t.status === 'done' ? 'is-done' : '');
+        const posStyle = t.dock.free
+            ? `left:${t.dock.x}px;top:${t.dock.y}px;`
+            : (t.dock.edge === 'left' ? `left:12px;` : `right:12px;`)
+              + `bottom:12px;`;
+        return `
+        <div class="td-panel ${statusCls}" data-id="${t.id}" style="${posStyle}">
+            <div class="td-head" data-id="${t.id}">
+                <span class="td-head-ico">${iconOf(t.type)}</span>
+                <span class="td-head-title">${esc(t.title)}</span>
+                <span class="td-head-pct">${t.percent}%</span>
+                <button class="td-btn" title="${L('收起到侧边', 'Dock to side')}"
+                        onclick="TaskDock.collapse('${t.id}')">─</button>
+                <button class="td-btn" title="${L('关闭', 'Close')}"
+                        onclick="TaskDock.dismiss('${t.id}')">✕</button>
+            </div>
+            <div class="td-body">${body}</div>
+            ${t.status === 'error' && t.error ? `<div class="td-err">${esc(t.error)}</div>` : ''}
+            <div class="td-foot">${L('拖动标题栏可停靠到侧边', 'Drag the title bar to dock')}</div>
+        </div>`;
+    }
+
+    function listPanelHTML(list) {
+        const rows = list.map(t => {
+            const st = t.status === 'error' ? L('失败', 'Failed')
+                : t.status === 'done' ? L('完成', 'Done')
+                : t.percent + '%';
+            return `
+            <div class="td-list-row ${t.status}" onclick="TaskDock.focus('${t.id}')">
+                <span class="td-list-ico">${iconOf(t.type)}</span>
+                <span class="td-list-title">${esc(t.title)}</span>
+                <span class="td-list-st">${st}</span>
+            </div>`;
+        }).join('');
+        const edge = pos.edge || 'right';
+        return `
+        <div class="td-panel td-list-panel" style="${edge === 'left' ? 'left:12px;' : 'right:12px;'}bottom:12px;">
+            <div class="td-head">
+                <span class="td-head-ico">⚙️</span>
+                <span class="td-head-title">${L('全部任务', 'All tasks')}（${list.length}）</span>
+                <button class="td-btn" onclick="TaskDock.closeList()">✕</button>
+            </div>
+            <div class="td-body">${rows}</div>
+        </div>`;
+    }
+
+    function bindAll() {
+        const el = root; if (!el) return;
+        // 大窗口标题栏拖动
+        el.querySelectorAll('.td-panel > .td-head').forEach(h => {
+            const id = h.getAttribute('data-id');
+            if (!id) return;
+            const t = tasks.get(id); if (!t) return;
+            h.addEventListener('pointerdown', e => {
+                if (e.target.classList.contains('td-btn')) return;
+                startDrag(e, h.parentElement, t);
+            });
+        });
+        // 小窗口拖动：超过 5px 才算拖，否则当点击处理
+        el.querySelectorAll('.td-mini').forEach(m => {
+            const id = m.getAttribute('data-id');
+            const t = id ? tasks.get(id) : null;
+            if (!t) return;                      // 合并卡靠点击，不拖
+            m.addEventListener('pointerdown', e => startMiniDrag(e, m, t));
+        });
+    }
+
+    // 点击小窗：如果被判定为拖动过，就不算点击
+    document.addEventListener('click', e => {
+        const m = e.target.closest && e.target.closest('.td-mini');
+        if (m && m.classList.contains('td-no-click')) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function open(id) {
+        const t = tasks.get(id); if (!t) return;
+        t.view = 'expanded';
+        openPanelId = id;
+        listPanelOpen = false;
+        focusId = null;
+        render();
+    }
+    function collapse(id) {
+        const t = tasks.get(id); if (!t) return;
+        t.view = 'mini';
+        if (openPanelId === id) openPanelId = null;
+        render();
+    }
+    function dismiss(id) {
+        // 用户主动关：跑完的直接清掉，还在跑的也清掉（任务本身继续，只是不看）
+        remove(id);
+    }
+    function openList() { listPanelOpen = true; focusId = null; render(); }
+    function closeList() { listPanelOpen = false; focusId = null; render(); }
+    function focus(id) { focusId = id; render(); }
+    function backToList() { focusId = null; render(); }
+
+    return {
+        create, updateItem, setItemDone, setPercent, setNote, finish, remove,
+        open, collapse, dismiss, openList, closeList, focus, backToList, get,
+        get count() { return tasks.size; }
+    };
+})();

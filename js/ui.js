@@ -1959,6 +1959,18 @@ class UI {
 
     /** 打开分享进度弹窗 */
     showShareProgress(fileCount) {
+        if (typeof TaskDock !== 'undefined') {
+            this._shareTaskId = TaskDock.create({
+                type: 'share',
+                title: `正在分享 ${fileCount} 个文件`,
+                single: true,
+                items: [],
+                note: '准备中…',
+                expand: true
+            });
+            this._shareProgressOpen = true;
+            return;
+        }
         const steps = this.shareSteps;
         const body = `
             <div class="share-prog">
@@ -1989,6 +2001,10 @@ class UI {
      * @param {string} msg 当前步骤描述
      */
     updateShareProgress(percent, msg) {
+        if (typeof TaskDock !== 'undefined' && this._shareTaskId) {
+            TaskDock.setPercent(this._shareTaskId, percent, msg);
+            return;
+        }
         if (!this._shareProgressOpen) return;
         const pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
 
@@ -2020,7 +2036,13 @@ class UI {
     }
 
     /** 关闭进度弹窗（成功或失败都要调，否则弹窗会一直挂着） */
-    closeShareProgress() {
+    closeShareProgress(failed, msg) {
+        if (typeof TaskDock !== 'undefined' && this._shareTaskId) {
+            TaskDock.finish(this._shareTaskId, failed ? (msg || '分享失败') : null);
+            this._shareTaskId = null;
+            this._shareProgressOpen = false;
+            return;
+        }
         this._shareProgressOpen = false;
         // closeModal 会清掉 modal-container，进度弹窗也在一起
         if (document.getElementById('sp-fill')) this.closeModal();
@@ -2697,11 +2719,22 @@ window.I18n = {
      * 上传进度弹窗
      */
     showUploadProgress(files) {
-        // 移除已有弹窗
+        const fileList = Array.isArray(files) ? files : [files];
+        // ★ 改走任务坞：居中大弹窗会挡住整个界面，98 个文件的时候根本没法
+        //   同时看文件列表。任务坞可以拖到侧边变成小窗。
+        if (typeof TaskDock !== 'undefined') {
+            this._uploadTaskId = TaskDock.create({
+                type: 'upload',
+                title: `正在上传（${fileList.length} 个文件）`,
+                items: fileList.map(f => f.name || f.webkitRelativePath || '文件'),
+                expand: true
+            });
+            this._uploadTotalFiles = fileList.length;
+            return;
+        }
+        // 兜底：TaskDock 没加载出来时退回原来的弹窗
         const existing = document.getElementById('upload-progress-modal');
         if (existing) existing.remove();
-
-        const fileList = Array.isArray(files) ? files : [files];
         const filesHtml = fileList.map((f, i) => {
             const name = f.name || f.webkitRelativePath || '文件';
             return `
@@ -2739,6 +2772,10 @@ window.I18n = {
     }
 
     updateUploadProgress(index, percent) {
+        if (typeof TaskDock !== 'undefined' && this._uploadTaskId) {
+            TaskDock.updateItem(this._uploadTaskId, index, percent);
+            return;
+        }
         const bar = document.getElementById(`upload-bar-${index}`);
         const percentEl = document.getElementById(`upload-percent-${index}`);
         if (bar) bar.style.width = percent + '%';
@@ -2758,6 +2795,10 @@ window.I18n = {
     }
 
     setUploadSuccess(index) {
+        if (typeof TaskDock !== 'undefined' && this._uploadTaskId) {
+            TaskDock.setItemDone(this._uploadTaskId, index);
+            return;
+        }
         const item = document.getElementById(`upload-item-${index}`);
         const percentEl = document.getElementById(`upload-percent-${index}`);
         const bar = document.getElementById(`upload-bar-${index}`);
@@ -2772,7 +2813,12 @@ window.I18n = {
         if (overallEl) overallEl.textContent = `总进度：${overall}%（${this._uploadCompletedFiles}/${total}）`;
     }
 
-    hideUploadProgress() {
+    hideUploadProgress(failed, msg) {
+        if (typeof TaskDock !== 'undefined' && this._uploadTaskId) {
+            TaskDock.finish(this._uploadTaskId, failed ? (msg || '上传失败') : null);
+            this._uploadTaskId = null;
+            return;
+        }
         const modal = document.getElementById('upload-progress-modal');
         if (!modal) return;
         modal.classList.add('closing');
@@ -2781,6 +2827,15 @@ window.I18n = {
     
     // 显示下载进度
     showDownloadProgress(fileName) {
+        if (typeof TaskDock !== 'undefined') {
+            this._downloadTaskId = TaskDock.create({
+                type: 'download',
+                title: fileName,
+                items: [fileName],
+                expand: true
+            });
+            return;
+        }
         const existing = document.getElementById('download-progress-modal');
         if (existing) existing.remove();
         
@@ -2810,6 +2865,11 @@ window.I18n = {
     }
     
     updateDownloadProgress(percent, current, total) {
+        if (typeof TaskDock !== 'undefined' && this._downloadTaskId) {
+            TaskDock.updateItem(this._downloadTaskId, 0, percent);
+            if (current && total) TaskDock.setNote(this._downloadTaskId, `分片 ${current}/${total}`);
+            return;
+        }
         const bar = document.getElementById('download-bar');
         const percentEl = document.getElementById('download-percent');
         const chunkInfo = document.getElementById('download-chunk-info');
@@ -2818,7 +2878,12 @@ window.I18n = {
         if (chunkInfo) chunkInfo.textContent = `分片 ${current}/${total}`;
     }
     
-    hideDownloadProgress() {
+    hideDownloadProgress(failed, msg) {
+        if (typeof TaskDock !== 'undefined' && this._downloadTaskId) {
+            TaskDock.finish(this._downloadTaskId, failed ? (msg || '下载失败') : null);
+            this._downloadTaskId = null;
+            return;
+        }
         const modal = document.getElementById('download-progress-modal');
         if (!modal) return;
         modal.classList.add('closing');

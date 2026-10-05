@@ -652,6 +652,12 @@ class Storage {
      * minChunkSize:  单片**下限**，默认 1MB
      * directMaxSize: ≤ 此值走 contents API 直传不切分，默认 1MB
      *
+     * ── 传输压缩 ──
+     * compression:      是否开启，默认 true
+     * compressMinSize:  小于此值不压（压了也不省），默认 1KB
+     * compressMaxSize:  大于此值不压（内存吃不消），默认 128MB
+     * compressMinRatio: 压完/原大小低于此值才算有效，默认 0.95（省不到 5% 就放弃）
+     *
      * 为什么改成动态计算：实测发现每片都有 1~2 秒固定开销（HTTPS 握手 +
      * API 往返），而 commit 固定约 5.7 秒、与文件数无关。所以最优解是
      * 「片数 ≈ 并发数、单片尽量大、所有片挤进一次 tree + commit」。
@@ -671,6 +677,10 @@ class Storage {
             directMaxSize: 1 * 1024 * 1024,
             maxConcurrency: 16,
             memoryBudget: 512 * 1024 * 1024,
+            compression: true,
+            compressMinSize: 1024,
+            compressMaxSize: 128 * 1024 * 1024,
+            compressMinRatio: 0.95,
             configVersion: 3
         };
         const saved = this.get(this.keys.STORAGE_CONFIG, null);

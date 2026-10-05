@@ -376,7 +376,7 @@ class App {
             this.ui.hideDownloadProgress();
             this.ui.showToast('下载完成', 'success');
         } catch (e) {
-            this.ui.hideDownloadProgress();
+            this.ui.hideDownloadProgress(true, e.message);
             this.ui.showToast(I18n.t('file.downloadFailed') + ': ' + e.message, 'error');
         }
     }
@@ -539,7 +539,7 @@ class App {
             setTimeout(() => this.ui.hideUploadProgress?.(), 2000);
         } catch (e) {
             this.ui.showToast(I18n.t('file.uploadFailed') + ': ' + e.message, 'error');
-            setTimeout(() => this.ui.hideUploadProgress?.(), 3000);
+            setTimeout(() => this.ui.hideUploadProgress?.(true, e.message), 3000);
         }
     }
 

@@ -1,4 +1,91 @@
 /**
+ * 传输压缩
+ *
+ * 为什么做：实测发现吞吐瓶颈不在并发，而在"要传多少字节"。
+ * 文档、代码、日志、JSON 这类文本通常能压到 1/3 —— 传 1/3 的数据
+ * 就是凭空快 3 倍，而且内存占用反而更小。
+ *
+ * ★ 关键判断：只对"压得动"的文件做。
+ *   mp4/jpg/zip 这类已经是压缩格式，再 gzip 一遍几乎不变小，
+ *   白白多花一次编码时间和一倍内存。所以先按扩展名黑名单过滤。
+ *
+ * ★ 第二个判断：压完必须真的变小才用。
+ *   压缩率低于阈值（默认省不到 5%）就放弃，存原样。
+ *   否则下载端还要多一道解压，纯亏。
+ */
+const TransferCompression = {
+    // 已经是压缩格式 / 压不动的，直接跳过
+    SKIP_EXT: new Set([
+        // 视频
+        'mp4','mkv','avi','mov','webm','m4v','flv','wmv','mpg','mpeg','ts','m2ts',
+        // 图片
+        'jpg','jpeg','png','gif','webp','avif','heic','heif','bmp','tiff','ico',
+        // 压缩包
+        'zip','rar','7z','gz','tgz','bz2','xz','zst','lz4','tar','iso','dmg','apk','ipa',
+        // 音频（已编码）
+        'mp3','aac','flac','ogg','oga','opus','wma','m4a','wav','aiff',
+        // 字体与其他已压缩容器
+        'woff','woff2','ttf','otf','eot','jar','whl','deb','rpm','msi','exe','dll','so','dylib','pdf'
+    ]),
+
+    supported() {
+        return typeof CompressionStream !== 'undefined'
+            && typeof DecompressionStream !== 'undefined';
+    },
+
+    extOf(name) {
+        const i = String(name || '').lastIndexOf('.');
+        return i < 0 ? '' : String(name).slice(i + 1).toLowerCase();
+    },
+
+    /** 是否值得一试：扩展名不在黑名单里，且大小在合理区间 */
+    worthTrying(name, size, cfg) {
+        if (!cfg.compression) return false;
+        if (!this.supported()) return false;
+        if (this.SKIP_EXT.has(this.extOf(name))) return false;
+        const min = cfg.compressMinSize || 1024;
+        const max = cfg.compressMaxSize || 128 * 1024 * 1024;
+        return size >= min && size <= max;
+    },
+
+    async compress(bytes) {
+        const cs = new CompressionStream('gzip');
+        const buf = await new Response(
+            new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer();
+        return new Uint8Array(buf);
+    },
+
+    async decompress(bytes) {
+        const ds = new DecompressionStream('gzip');
+        const buf = await new Response(
+            new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+        return new Uint8Array(buf);
+    }
+};
+
+/**
+ * 字节源：把"压缩后的字节"包装成 File 的形状，
+ * 好让 uploadFile 里那些 file.name / file.size / file.slice() 不用改。
+ *
+ * ★ name 必须是原始文件名 —— 虚拟路径靠它拼，
+ *   压成 xxx.gz 存进去的话下载下来名字就错了。
+ */
+class ByteSource {
+    constructor(name, bytes) {
+        this.name = name;
+        this._bytes = bytes;
+        this.size = bytes.length;
+        this.type = '';
+    }
+    slice(start, end) {
+        return new Blob([this._bytes.subarray(start, end)]);
+    }
+    async arrayBuffer() {
+        return this._bytes.slice().buffer;
+    }
+}
+
+/**
  * 文件管理器 v2
  * 核心抽象：用户只看到 /drive_home 下的统一文件系统
  * 实际文件可能拆分后散落在多个 GitHub 仓库中
@@ -189,7 +276,37 @@ class FileManager {
     async uploadFile(file, targetPath = this.currentPath, onProgress = null) {
         const config = this.storage.getStorageConfig();
         const virtualPath = Storage.normalizePath(targetPath) + '/' + file.name;
-        const totalSize = file.size;
+        const origSize = file.size;
+
+        // ── 压缩：只压"压得动"的，且压完必须真变小 ──
+        // 失败就原样传，绝不能因为压缩出错导致文件传不上去。
+        let src = file;
+        let compressed = null;
+        let totalSize = origSize;
+        try {
+            if (TransferCompression.worthTrying(file.name, origSize, config)) {
+                const raw = new Uint8Array(await file.arrayBuffer());
+                const packed = await TransferCompression.compress(raw);
+                const ratio = packed.length / origSize;
+                const threshold = config.compressMinRatio || 0.95;
+                if (packed.length < origSize && ratio < threshold) {
+                    src = new ByteSource(file.name, packed);
+                    compressed = 'gzip';
+                    totalSize = packed.length;
+                    console.log(`[FileManager] 压缩 ${file.name}: ` +
+                        `${Storage.formatBytes(origSize)} → ${Storage.formatBytes(packed.length)} ` +
+                        `(省 ${Math.round((1 - ratio) * 100)}%)`);
+                } else {
+                    console.log(`[FileManager] ${file.name} 压缩收益不足 ` +
+                        `(${Math.round((1 - ratio) * 100)}%)，原样上传`);
+                }
+            }
+        } catch (e) {
+            console.warn(`[FileManager] 压缩失败，改为原样上传:`, e.message);
+            src = file;
+            compressed = null;
+            totalSize = origSize;
+        }
 
         // ★ 覆盖上传会泄漏旧分片（线上实测：56.2MB / 45 个文件因此丢失）
         //   成因：每次上传都新建随机目录 `mtrand/filename`，VFS 只指向最新那份，
@@ -210,7 +327,10 @@ class FileManager {
                 // ── 小文件：一次 contents API 直传，不建 blob 不建 tree ──
                 const repo = await this.autoSelectRepo(totalSize);
                 const chunkPath = `${Date.now().toString(36)}/${file.name}`;
-                const arrayBuffer = await file.arrayBuffer();
+                // ★ 必须是 src 不是 file：压缩后 totalSize 已变小，
+                //   读 file 会把整个原始文件读进来（64MB→0.2MB 的场景下
+                //   就直接把 85MB 的 base64 送进 API，报"文件过大"）。
+                const arrayBuffer = await src.arrayBuffer();
                 const base64 = this.arrayBufferToBase64(arrayBuffer);
                 const res = await this.api.createOrUpdateFileBinary(
                     repo.owner, repo.repo, chunkPath, base64,
@@ -258,7 +378,7 @@ class FileManager {
                 for (let s = 0; s < tasks.length; s += plan.concurrency) {
                     const batch = tasks.slice(s, s + plan.concurrency);
                     const results = await Promise.all(batch.map(async (t) => {
-                        const arrayBuffer = await file.slice(t.start, t.end).arrayBuffer();
+                        const arrayBuffer = await src.slice(t.start, t.end).arrayBuffer();
                         const blob = await this.api.createBlobFromArrayBuffer(
                             t.repo.owner, t.repo.repo, arrayBuffer);
                         return { task: t, sha: blob.sha };
@@ -365,9 +485,13 @@ class FileManager {
             throw uploadError;
         }
 
+        // ★ size 存原始大小：列表里显示的应该是文件真实大小，
+        //   不是它在仓库里占了多少。chunks 里的 size 才是实际占用（压缩后）。
         const fileInfo = this.storage.putFile(virtualPath, {
             name: file.name,
-            size: totalSize,
+            size: origSize,
+            storedSize: totalSize,
+            compressed: compressed,
             chunks: chunks
         });
 
@@ -392,6 +516,27 @@ class FileManager {
     }
 
     // ==================== 文件下载（自动合并分片） ====================
+    /**
+     * 按记录还原：压缩过的解压回来，没压缩的原样返回。
+     *
+     * ★ 老文件没有 compressed 字段（undefined），走 else 分支原样返回 ——
+     *   这就是向后兼容：开启压缩之前传的文件照样能下。
+     * ★ 解压失败不能直接抛：文件还在仓库里，抛了用户就永远拿不回来。
+     *   退化成返回原始字节，至少能下载（虽然内容是 gzip 的）。
+     */
+    async _inflate(bytes, fileInfo) {
+        if (!fileInfo || fileInfo.compressed !== 'gzip') return bytes;
+        try {
+            const out = await TransferCompression.decompress(bytes);
+            console.log(`[FileManager] 解压 ${fileInfo.name}: ` +
+                `${Storage.formatBytes(bytes.length)} → ${Storage.formatBytes(out.length)}`);
+            return out;
+        } catch (e) {
+            console.error(`[FileManager] 解压失败，返回原始字节:`, e.message);
+            return bytes;
+        }
+    }
+
     async downloadFile(virtualPath, onProgress = null) {
         virtualPath = Storage.normalizePath(virtualPath);
         const fileInfo = this.storage.getFile(virtualPath);
@@ -418,7 +563,8 @@ class FileManager {
         const merged = new Uint8Array(totalLen);
         let offset = 0;
         for (const p of parts) { merged.set(p, offset); offset += p.length; }
-        const mergedBlob = new Blob([merged], { type: 'application/octet-stream' });
+        const final = await this._inflate(merged, fileInfo);
+        const mergedBlob = new Blob([final], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(mergedBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -487,7 +633,7 @@ class FileManager {
             merged.set(p, offset);
             offset += p.length;
         }
-        return new TextDecoder('utf-8').decode(merged);
+        return new TextDecoder('utf-8').decode(await this._inflate(merged, fileInfo));
     }
 
     /**
@@ -532,7 +678,8 @@ class FileManager {
             merged.set(p, offset);
             offset += p.length;
         }
-        return new Blob([merged], { type: this.guessMimeType(fileInfo.name) });
+        const final = await this._inflate(merged, fileInfo);
+        return new Blob([final], { type: this.guessMimeType(fileInfo.name) });
     }
 
     /**
