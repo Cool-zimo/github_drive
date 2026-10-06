@@ -181,6 +181,94 @@ class Maintain {
     }
 
     /**
+     * 校准用量登记值。
+     *
+     * ★ 这才是"存储满了"最常见的真正原因，而不是孤儿。
+     *
+     *   repoUsage 是每次上传时**累加**出来的（addToRepoUsage）。
+     *   覆盖上传、失败重试、并发回滚不完整都会让它只增不减，
+     *   长期下来明显高于仓库里真实存在的字节数。
+     *
+     *   而 maxRepoSize / getRepoRemaining / 选仓库 全部读的是这个登记值 ——
+     *   于是仓库明明还有空间，系统却判定它满了，不肯再往里写，
+     *   表现出来就是"传不进去 / 一直在建新仓库"。
+     *
+     *   实测（Cool-zimo）：
+     *     主仓登记 996.8 MB，实际内容只有 806.1 MB，虚高 190 MB，
+     *     直接把 900 MB 的 maxRepoSize 顶穿了。
+     *
+     *   校准用扫描已经算出的 usage_actual（tree 逐 blob 求和，最准）覆盖登记值。
+     *
+     * @param {Object} report - scan() 的返回值
+     * @returns {{fixed:Array, beforeBytes:number, afterBytes:number, freedBytes:number}}
+     */
+    async recalibrateUsage(report) {
+        const actual = (report && report.usage_actual) || {};
+        const before = this.storage.getRepoUsage();
+        const fixed = [];
+        let beforeBytes = 0;
+        let afterBytes = 0;
+
+        for (const key of Object.keys(actual)) {
+            const idx = key.indexOf('/');
+            if (idx < 0) continue;
+            const owner = key.slice(0, idx);
+            const repo = key.slice(idx + 1);
+            const oldSize = (before[key] && before[key].size) || 0;
+            // ★ 必须四舍五入，不能用 parseInt ——
+            //   parseInt(46766489.6) 会截成 46766489，
+            //   于是"本来就没偏差"的仓库也被判定需要改写，
+            //   白白触发一次全量配置同步，还引入 1 字节以内的误差。
+            const newSize = Math.round(actual[key]) || 0;
+            beforeBytes += oldSize;
+            afterBytes += newSize;
+            // 偏差小于 1MB 不动：浮点噪声不值得触发一次全量同步
+            if (Math.abs(oldSize - newSize) >= 1048576) {
+                this.storage.setRepoUsage(owner, repo, newSize);
+                fixed.push({ key: key, before: oldSize, after: newSize, delta: newSize - oldSize });
+            }
+        }
+        return {
+            fixed: fixed,
+            beforeBytes: beforeBytes,
+            afterBytes: afterBytes,
+            freedBytes: Math.max(0, beforeBytes - afterBytes)
+        };
+    }
+
+    /**
+     * 移除幽灵记录。
+     *
+     * 幽灵 = VFS 里有记录、仓库里文件已不存在（下载必失败）。
+     * 数据其实已经丢了，留着这条记录只会让人一点就报错，
+     * 而且它还算在"已用容量"里。这里把整条文件记录删掉，让界面干净。
+     *
+     * ★ 只删 VFS 记录，不动仓库任何东西（本来也没东西可动）。
+     *
+     * @param {Array} ghosts - scan() 返回的 ghosts
+     * @param {Object} opts - { dryRun }
+     */
+    async dropGhosts(ghosts, opts) {
+        const o = opts || {};
+        const list = (ghosts || []).filter(g => g && g.vpath);
+        // 同一个虚拟路径可能缺多个分片，去重后再删
+        const paths = Array.from(new Set(list.map(g => g.vpath)));
+        if (!paths.length) return { would_remove: 0, removed: [], dryRun: !!o.dryRun };
+        if (o.dryRun) return { would_remove: paths.length, removed: [], dryRun: true };
+
+        const vfs = this.storage.getVFS();
+        const removed = [];
+        for (const p of paths) {
+            if (vfs.files && vfs.files[p]) {
+                delete vfs.files[p];
+                removed.push(p);
+            }
+        }
+        if (removed.length) this.storage.setVFS(vfs);
+        return { would_remove: paths.length, removed: removed, dryRun: false };
+    }
+
+    /**
      * 系统文件：仓库自建时 GitHub 生成的、以及 Drive 自己的元数据。
      *
      * ★ 必须过滤。否则扫一遍就会把 README.md / .gitignore 报成"孤儿"，

@@ -1290,6 +1290,7 @@ class UI {
 
             {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
             {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
+            {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记', action:'ui.closeModal();ui.showStorageManager();'},
             {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
             {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
             {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
@@ -1311,6 +1312,15 @@ class UI {
             body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
         }
         this.showModal(I18n.t('settings.title'), body, '', true);
+    }
+
+    /** 存储仓库管理（内容由 app.showStorageManager 填充） */
+    showStorageManager() {
+        const body = '<div id="storage-mgr-body" style="padding:8px 0;">'
+                   + '<div style="font-size:13px;color:#6b7280;">正在读取仓库体积…</div></div>';
+        this.showModal('🗂️ 存储仓库管理', body, '', true);
+        // 弹窗已插入 DOM 后再异步填充
+        setTimeout(() => this.app?.showStorageManager?.(), 50);
     }
 
     /**

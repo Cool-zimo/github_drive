@@ -774,7 +774,7 @@ class App {
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
             '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">📦 GitHub 仓库存储</div>' +
-            (repoInfo ? '<div style="font-size:14px;color:#6b7280;line-height:1.8;">仓库: ' + repoInfo.name + '<br>大小: ' + repoInfo.sizeMB + ' MB<br>分支: main</div>' : '<div style="font-size:14px;color:#9ca3af;">加载中...</div>') +
+            (repoInfo ? '<div style="font-size:13px;color:#6b7280;line-height:1.7;">共 ' + repoInfo.repoCount + ' 个仓库 · 合计 <b>' + repoInfo.sizeMB + ' MB</b><div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin:8px 0;"><div style="height:100%;width:' + Math.min(100, repoInfo.largestMB / (repoInfo.warnMB || 900) * 100).toFixed(1) + '%;background:' + (repoInfo.overRepos && repoInfo.overRepos.length ? '#dc2626' : '#2563eb') + ';"></div></div><div style="font-size:12px;">最大：<b>' + repoInfo.largestName + '</b> ' + repoInfo.largestMB + ' MB（单仓建议 &lt; ' + Math.round(repoInfo.warnMB || 900) + ' MB）</div></div>' : '<div style="font-size:14px;color:#9ca3af;">加载中...</div>') +
             '</div>' +
             '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">📊 文件类型分布</div>' +
@@ -1250,37 +1250,73 @@ class App {
     // ==================== 后端服务配置 ====================
     // ==================== 仓库体积监控 ====================
     
+    /**
+     * 仓库体积统计。
+     *
+     * ★ 必须逐仓返回，不能只给一个总数 ——
+     *
+     *   之前把 5 个仓库的体积**相加**，再拿这个总数去跟"单仓 1GB"比：
+     *     5 个仓加起来 1040 MB → 弹"仓库体积已达 1040MB，接近 1GB 上限"
+     *   但 1GB 是 GitHub 的**单仓**建议值，最大的那个仓也才 806MB，
+     *   根本没有哪个仓接近上限。于是警告和真实容量状况互相矛盾：
+     *   界面喊满了，自动建仓却正确地认为自己不该建。
+     *
+     * ★ 还有一个更隐蔽的点：GitHub 的 repo.size 是**磁盘占用**，
+     *   包含全部 git 历史对象。覆盖上传、删孤儿都是靠新提交实现的，
+     *   旧 blob 仍留在历史里 —— 实测某仓当前文件 806MB，repo.size 却是 996MB，
+     *   多出来的 190MB 就是历史。所以它不能当作"还能不能往里写"的依据，
+     *   那个判断必须看 repoUsage（Drive 自己记的当前内容量）。
+     *
+     * @returns {{repos:Array, repoCount:number, sizeMB:string, largestMB:number, largestName:string, overRepos:Array}}
+     */
     async getRepoSize() {
         // 如果之前已经失败过，直接返回，避免重复请求
         if (this._repoSizeFailed) return null;
         try {
             const owner = this.storage.getUser()?.login;
             if (!owner) return null;
-            
+
             // 优先访问存储仓库（drive-storage-*），而不是默认的 github_drive
             const repos = this.storage.getRepos();
             if (repos.length === 0) return null;
-            
-            // 计算所有存储仓库的总体积
+
+            const list = [];
             let totalSize = 0;
-            let repoCount = 0;
             for (const repo of repos) {
                 try {
                     const repoInfo = await this.api.getRepository(repo.owner, repo.repo);
-                    totalSize += repoInfo.size || 0;
-                    repoCount++;
+                    const kb = repoInfo.size || 0;
+                    totalSize += kb;
+                    list.push({
+                        owner: repo.owner,
+                        repo: repo.repo,
+                        sizeKB: kb,
+                        sizeMB: kb / 1024,
+                        isDefault: !!repo.isDefault
+                    });
                 } catch (e) {
                     console.debug('获取仓库体积失败:', repo.repo, e.message);
                 }
             }
-            
-            if (repoCount === 0) return null;
-            
+
+            if (list.length === 0) return null;
+            list.sort((a, b) => b.sizeKB - a.sizeKB);
+            const largest = list[0];
+            // 单仓预警线：GitHub 建议 1GB，Drive 自己的 maxRepoSize 默认 900MB
+            const cfg = this.storage.getStorageConfig();
+            const warnMB = (cfg && cfg.maxRepoSize ? cfg.maxRepoSize / 1048576 : 900);
+            const over = list.filter(r => r.sizeMB >= warnMB);
+
             return {
+                repos: list,
+                overRepos: over,
+                warnMB: warnMB,
+                largestMB: parseFloat(largest.sizeMB.toFixed(1)),
+                largestName: largest.repo,
                 size: totalSize, // KB
                 sizeMB: (totalSize / 1024).toFixed(1),
                 sizeGB: (totalSize / (1024 * 1024)).toFixed(2),
-                name: `${repoCount} 个存储仓库`,
+                name: `${list.length} 个存储仓库`,
                 full_name: `${owner}/drive-storage-*`
             };
         } catch (e) {
@@ -1367,26 +1403,148 @@ class App {
         }
     }
 
+    /**
+     * 顶部仓库体积显示。
+     *
+     * ★ 判断基准是**单个仓库**，不是所有仓库之和 ——
+     *   1GB 是 GitHub 的单仓建议值。以前拿总数去比，5 个仓一共 1040MB
+     *   就弹红字"接近 1GB 上限"，可实际上没有一个仓真的满了。
+     *
+     * ★ 显示的是合计、预警的是单仓，两个数都要给，否则用户还是看不懂。
+     */
     async updateRepoSizeDisplay() {
         const info = await this.getRepoSize();
         const el = document.getElementById('repo-size-display');
         if (!el || !info) return;
-        const sizeMB = parseFloat(info.sizeMB);
+
+        const warnMB = info.warnMB || 900;
+        const maxMB = info.largestMB || 0;
         let color = '#6b7280';
         let warning = '';
-        if (sizeMB > 900) {
+        if (info.overRepos && info.overRepos.length) {
             color = '#dc2626';
-            warning = ' ⚠️ 接近上限';
-        } else if (sizeMB > 500) {
+            warning = ' ⚠️ 有仓库接近上限';
+        } else if (maxMB > warnMB * 0.6) {
             color = '#f59e0b';
             warning = ' ⚠️';
         }
         el.innerHTML = `<span style="color:${color};">📦 ${info.sizeMB} MB${warning}</span>`;
-        el.title = `仓库：${info.full_name}
-体积：${info.sizeMB} MB (${info.sizeGB} GB)
-GitHub 建议不超过 1 GB`;
-        if (sizeMB > 900) {
-            this.ui?.showToast(`⚠️ 仓库体积已达 ${info.sizeMB} MB，接近 1 GB 上限！建议清理历史记录或迁移部分文件`, 'error');
+        el.title =
+            `${info.repoCount} 个存储仓库，合计 ${info.sizeMB} MB（含 git 历史）\n` +
+            `最大的一个：${info.largestName} = ${info.largestMB} MB\n` +
+            `单仓建议不超过 ${Math.round(warnMB)} MB\n\n` +
+            `注：合计是所有仓库相加，不代表某个仓库快满了。`;
+
+        if (info.overRepos && info.overRepos.length) {
+            const names = info.overRepos.map(r => `${r.repo} (${r.sizeMB.toFixed(0)} MB)`).join('、');
+            this.ui?.showToast(
+                `⚠️ ${names} 体积接近 ${Math.round(warnMB)} MB，新文件会自动写到别的仓库`, 'error');
+        }
+    }
+
+    // ==================== 存储仓库管理 ====================
+    /**
+     * 存储仓库管理。
+     *
+     * 用户看到"仓库快 1GB 了"却找不到任何能操作的地方 ——
+     *   没有逐仓用量、没有新建仓库按钮、没有校准入口，
+     *   连那句"建议清理或迁移"也只是句话，点了没反应。
+     * 这里补上：逐仓用量条 + 新建 / 设为默认 / 校准。
+     */
+    async showStorageManager() {
+        const box = document.getElementById('storage-mgr-body');
+        if (!box) return;
+        box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在读取仓库体积…</div>';
+        const info = await this.getRepoSize();
+        if (!info) {
+            box.innerHTML = '<div style="font-size:13px;color:#dc2626;">读取失败，请稍后重试</div>';
+            return;
+        }
+        this._storageInfo = info;
+        const warnMB = info.warnMB || 900;
+        const cfg = this.storage.getStorageConfig();
+
+        let h = '<div style="font-size:13px;line-height:1.7;">';
+        h += `<div style="color:#6b7280;margin-bottom:10px;">
+                ${info.repoCount} 个存储仓库，合计 <b>${info.sizeMB} MB</b>（该数字含 git 历史）。
+                <div style="font-size:12px;margin-top:4px;">
+                单仓建议不超过 <b>${Math.round(warnMB)} MB</b>；超过的仓库不再写入，新文件会自动落到别的仓库。</div>
+              </div>`;
+
+        for (const r of info.repos) {
+            const pct = Math.min(100, r.sizeMB / warnMB * 100);
+            const over = r.sizeMB >= warnMB;
+            const color = over ? '#dc2626' : (pct > 60 ? '#f59e0b' : '#2563eb');
+            h += `<div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:13px;font-weight:600;color:#1f2937;">${r.repo}</span>
+                    ${r.isDefault ? '<span style="font-size:11px;background:#eef2ff;color:#4338ca;padding:1px 7px;border-radius:999px;">默认</span>' : ''}
+                    <span style="margin-left:auto;font-size:12px;color:${color};font-weight:600;">${r.sizeMB.toFixed(1)} MB</span>
+                </div>
+                <div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin:6px 0;">
+                    <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};"></div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${r.isDefault ? '' : `<button class="btn-secondary btn-sm" onclick="app.setDefaultStorageRepo('${r.owner}','${r.repo}')">设为默认</button>`}
+                    <button class="btn-secondary btn-sm" onclick="app.openRepoOnGithub('${r.owner}','${r.repo}')">在 GitHub 打开</button>
+                </div>
+              </div>`;
+        }
+
+        h += `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-primary btn-sm" onclick="app.createStorageRepoNow()">➕ 新建存储仓库</button>
+                <button class="btn-secondary btn-sm" onclick="app.quickRecalibrate()">🔧 校准用量登记</button>
+                <button class="btn-secondary btn-sm" onclick="ui.closeModal();ui.showStorageOptimizer();">⚡ 清理孤儿</button>
+              </div>`;
+        h += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;line-height:1.6;">
+                自动建仓：<b>${cfg.autoCreateRepo ? '已开启' : '已关闭'}</b>，单仓上限 ${Math.round(warnMB)} MB。
+                仓库满了会自动建新的，不需要手动操作。</div>`;
+        h += '</div>';
+        box.innerHTML = h;
+    }
+
+    /** 手动新建一个存储仓库 */
+    async createStorageRepoNow() {
+        try {
+            const repo = await this.fileManager.autoCreateStorageRepo();
+            this.ui?.showToast(`已创建存储仓库 ${repo.repo}`, 'success');
+            await this.showStorageManager();
+        } catch (e) {
+            this.ui?.showToast('创建失败: ' + e.message, 'error');
+        }
+    }
+
+    /** 设置默认写入仓库 */
+    setDefaultStorageRepo(owner, repo) {
+        const repos = this.storage.getRepos();
+        repos.forEach(r => { r.isDefault = (r.owner === owner && r.repo === repo); });
+        this.storage.setRepos(repos);
+        this.ui?.showToast(`已把 ${repo} 设为默认写入仓库`, 'success');
+        this.showStorageManager();
+    }
+
+    openRepoOnGithub(owner, repo) {
+        window.open(`https://github.com/${owner}/${repo}`, '_blank');
+    }
+
+    /**
+     * 用仓库真实内容量校准登记的用量。
+     *
+     * ★ 必须用 tree 逐 blob 求和（maintain.scan 的做法），不能用 GitHub 的
+     *   repo.size —— 后者含 git 历史，实测某仓当前内容 806MB、repo.size 996MB。
+     *   拿 996MB 去校准，等于把历史当成已用容量，仓库会一直被判定为满。
+     */
+    async quickRecalibrate() {
+        const box = document.getElementById('storage-mgr-body');
+        try {
+            if (box) box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在扫描仓库文件树…</div>';
+            if (!this.maintain) this.maintain = new Maintain(this.api, this.storage);
+            const rep = await this.maintain.scan();
+            const r = await this.maintain.recalibrateUsage(rep);
+            this.ui?.showToast(`已校准，找回 ${(r.freedBytes / 1048576).toFixed(1)} MB 虚假占用`, 'success');
+            await this.showStorageManager();
+        } catch (e) {
+            if (box) box.innerHTML = '<div style="font-size:13px;color:#dc2626;">校准失败：' + e.message + '</div>';
         }
     }
 
