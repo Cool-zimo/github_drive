@@ -467,14 +467,15 @@ class ShareManager {
      * 页面就永远停在 "Loading files..."，用户一个文件都下不了。
      * 静态渲染后即使脚本全挂，下载依然可用。
      */
-    _staticFileItem(f) {
+    _staticFileItem(f, dp) {
+        const nameFn = dp || (x => x.path);
+        const name = nameFn(f);
         const url = './' + f.path.split('/').map(encodeURIComponent).join('/');
-        const size = f.size ? this.formatSize(f.size) : '';
         return `<li class="file-item" onclick="window.open('${url}', '_blank')">
-                            <span class="file-icon">${this.getFileIcon(f.name || f.path)}</span>
+                            <span class="file-icon">${this.getFileIcon(name)}</span>
                             <div class="file-info">
-                                <div class="file-name">${this.escapeHtml(f.name || f.path)}</div>
-                                <div class="file-size">${size}</div>
+                                <div class="file-name">${this.escapeHtml(name)}</div>
+                                <div class="file-size">${f.size ? this.formatSize(f.size) : ''}</div>
                             </div>
                             <button class="download-btn" onclick="event.stopPropagation(); window.open('${url}', '_blank')"><span data-i18n="download">Download</span></button>
                         </li>`;
@@ -687,9 +688,15 @@ class ShareManager {
         </div>
         <div class="content">
             <ul class="file-list" id="fileList">
-                ${fileList.map(f => this._staticFileItem(f)).join('')}
+                ${fileList.map(f => this._staticFileItem(f, dp)).join('')}
             </ul>
-            <button class="download-all" onclick="downloadAll()"><span data-i18n="downloadAll">⬇️ Download All</span></button>
+            <button class="download-all" id="dlAllBtn" onclick="downloadAll()"><span data-i18n="downloadAll">⬇️ 打包下载全部 (ZIP)</span></button>
+            <div id="dlProgress" style="display:none;margin-top:10px;">
+                <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
+                    <div id="dlBar" style="height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);transition:width .2s;"></div>
+                </div>
+                <div class="dl-text" style="font-size:12px;color:#6b7280;margin-top:6px;">准备中…</div>
+            </div>
             
             <div class="promo-card">
                 <div class="promo-icon">📁✨</div>
@@ -704,6 +711,8 @@ class ShareManager {
     </div>
     <script>
         const files = ${filesJson};
+        // ZIP 文件名用仓库名；去掉不能出现在文件名里的字符
+        const zipMeta = ${JSON.stringify({ name: (repoName || 'share').replace(/[\\/:*?"<>|]/g, '_') }).replace(/<\/script/gi, '<\\/script')};
         const fileList = document.getElementById('fileList');
 
         function getFileIcon(name) {
@@ -735,35 +744,146 @@ class ShareManager {
             });
         }
 
+        /** 触发浏览器下载（不是打开预览）。 */
+        function triggerDownload(blob, name) {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        }
+
+        /** 取回文件字节，必要时解压。 */
+        async function fetchBytes(file) {
+            const res = await fetch(file.url);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            if (!file.packed) return new Uint8Array(await res.arrayBuffer());
+            if (typeof DecompressionStream === 'undefined') {
+                // 老浏览器解压不了 —— 原样给他，至少数据是完整的
+                return new Uint8Array(await res.arrayBuffer());
+            }
+            const ds = new DecompressionStream('gzip');
+            const buf = await new Response(res.body.pipeThrough(ds)).arrayBuffer();
+            return new Uint8Array(buf);
+        }
+
         /**
          * 下载一个文件。
-         * ★ 压缩过的必须先解压：仓库里存的是 .gz，直接打开会让访客
-         *   下载到一个名字不对、内容也打不开的压缩包。
+         *
+         * ★ 旧实现用 window.open(url) 打开 —— 那是「预览」不是「下载」。
+         *   PDF / 图片 / txt / md 这类浏览器能直接渲染的格式会被打开，
+         *   点了「Download」却跳到一个预览页，看着像没反应。
+         *   现在一律 fetch → Blob → a.download，所有格式都真下载。
+         *
+         * ★ 压缩过的必须先解压：仓库里存的是 .gz，直接给会让访客
+         *   拿到一个名字不对、内容也打不开的压缩包。
          */
         async function saveFile(file) {
             const name = file.name.split('/').pop();
-            if (!file.packed) { window.open(file.url, '_blank'); return; }
             try {
-                const res = await fetch(file.url);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                if (typeof DecompressionStream === 'undefined') {
-                    // 老浏览器解压不了 —— 直接把 .gz 给他，至少数据是完整的
-                    window.open(file.url, '_blank'); return;
-                }
-                const ds = new DecompressionStream('gzip');
-                const buf = await new Response(res.body.pipeThrough(ds)).arrayBuffer();
-                const blob = new Blob([buf]);
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = name;
-                document.body.appendChild(a); a.click(); a.remove();
-                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+                const bytes = await fetchBytes(file);
+                triggerDownload(new Blob([bytes]), name);
             } catch (e) {
                 console.error('下载失败', e);
                 window.open(file.url, '_blank');
             }
         }
 
+        // ── ZIP 打包（store，不压缩）──
+        // 分享里的文件大多已经是压缩格式（mp4/jpg/zip…），再压一遍纯属浪费，
+        // 所以只用 store 方式打包，重点是「一个包」而不是「更小」。
+        let CRC_TABLE = null;
+        function crc32(u8) {
+            if (!CRC_TABLE) {
+                CRC_TABLE = new Uint32Array(256);
+                for (let n = 0; n < 256; n++) {
+                    let c = n;
+                    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                    CRC_TABLE[n] = c >>> 0;
+                }
+            }
+            let c = 0xFFFFFFFF;
+            for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+            return (c ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        function dosDateTime(d) {
+            const year = Math.max(1980, d.getFullYear());
+            return {
+                time: ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF,
+                date: (((year - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF
+            };
+        }
+
+        function buildZip(entries) {
+            const enc = new TextEncoder();
+            const { time, date } = dosDateTime(new Date());
+            const parts = [];
+            const central = [];
+            let offset = 0;
+            for (const e of entries) {
+                const nb = enc.encode(e.name);
+                const data = e.data;
+                const crc = crc32(data);
+                const lh = new Uint8Array(30 + nb.length);
+                const lv = new DataView(lh.buffer);
+                lv.setUint32(0, 0x04034b50, true);
+                lv.setUint16(4, 20, true);
+                lv.setUint16(6, 0x0800, true);   // UTF-8 文件名
+                lv.setUint16(8, 0, true);        // store
+                lv.setUint16(10, time, true);
+                lv.setUint16(12, date, true);
+                lv.setUint32(14, crc, true);
+                lv.setUint32(18, data.length, true);
+                lv.setUint32(22, data.length, true);
+                lv.setUint16(26, nb.length, true);
+                lv.setUint16(28, 0, true);
+                lh.set(nb, 30);
+
+                const cd = new Uint8Array(46 + nb.length);
+                const cv = new DataView(cd.buffer);
+                cv.setUint32(0, 0x02014b50, true);
+                cv.setUint16(4, 20, true);
+                cv.setUint16(6, 20, true);
+                cv.setUint16(8, 0x0800, true);
+                cv.setUint16(10, 0, true);
+                cv.setUint16(12, time, true);
+                cv.setUint16(14, date, true);
+                cv.setUint32(16, crc, true);
+                cv.setUint32(20, data.length, true);
+                cv.setUint32(24, data.length, true);
+                cv.setUint16(28, nb.length, true);
+                cv.setUint16(30, 0, true);
+                cv.setUint16(32, 0, true);
+                cv.setUint16(34, 0, true);
+                cv.setUint16(36, 0, true);
+                cv.setUint32(38, 0, true);
+                cv.setUint32(42, offset, true);
+                cd.set(nb, 46);
+
+                parts.push(lh, data);
+                central.push(cd);
+                offset += lh.length + data.length;
+            }
+            const cdStart = offset;
+            const cdSize = central.reduce((a, b) => a + b.length, 0);
+            const eocd = new Uint8Array(22);
+            const ev = new DataView(eocd.buffer);
+            ev.setUint32(0, 0x06054b50, true);
+            ev.setUint16(4, 0, true);
+            ev.setUint16(6, 0, true);
+            ev.setUint16(8, entries.length, true);
+            ev.setUint16(10, entries.length, true);
+            ev.setUint32(12, cdSize, true);
+            ev.setUint32(16, cdStart, true);
+            ev.setUint16(20, 0, true);
+            return new Blob(parts.concat(central, [eocd]), { type: 'application/zip' });
+        }
+
+        /** 单个文件也走 Blob 下载，绝不 window.open 预览 */
         fileList.innerHTML = '';
         files.forEach(file => {
             const li = document.createElement('li');
@@ -780,11 +900,63 @@ class ShareManager {
             fileList.appendChild(li);
         });
 
-        function downloadAll() {
-            files.forEach((file, i) => {
-                setTimeout(() => saveFile(file), i * 300);
-            });
+        /**
+         * 打包下载全部。
+         *
+         * ★ 旧实现是 files.forEach(f => setTimeout(() => saveFile(f), i*300)) ——
+         *   98 个文件就开 98 个标签页，浏览器直接卡死或被弹窗拦截拦掉。
+         *   现在打成一个 ZIP，只下载一次。
+         */
+        async function downloadAll() {
+            const btn = document.getElementById('dlAllBtn');
+            const prog = document.getElementById('dlProgress');
+            const bar = document.getElementById('dlBar');
+            if (btn) btn.disabled = true;
+            if (prog) prog.style.display = 'block';
+
+            const entries = [];
+            const errors = [];
+            let done = 0;
+            let bytes = 0;
+
+            const queue = files.slice();
+            async function worker() {
+                while (queue.length) {
+                    const f = queue.shift();
+                    try {
+                        const data = await fetchBytes(f);
+                        entries.push({ name: f.name, data });
+                        bytes += data.length;
+                    } catch (e) {
+                        errors.push(f.name);
+                    }
+                    done++;
+                    if (bar) bar.style.width = Math.round(done / files.length * 100) + '%';
+                    if (prog) prog.querySelector('.dl-text').textContent =
+                        '打包中 ' + done + '/' + files.length + '（' + formatSize(bytes) + '）';
+                }
+            }
+            // 并发 4：串行太慢，再多会撞 Pages 的频率限制
+            await Promise.all([0, 1, 2, 3].map(worker));
+
+            if (!entries.length) {
+                if (prog) prog.querySelector('.dl-text').textContent = '全部下载失败，请重试';
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            if (prog) prog.querySelector('.dl-text').textContent = '正在生成 ZIP…';
+            const zipName = (zipMeta.name || 'github-drive-share') + '.zip';
+            triggerDownload(buildZip(entries), zipName);
+
+            if (prog) {
+                prog.querySelector('.dl-text').textContent =
+                    '已打包 ' + entries.length + ' 个文件（' + formatSize(bytes) + '）' +
+                    (errors.length ? '，' + errors.length + ' 个失败' : '');
+            }
+            if (btn) btn.disabled = false;
         }
+
 
         // 语言切换
         const translations = {
@@ -794,7 +966,7 @@ class ShareManager {
                 'footer.powered': 'Powered by',
                 'footer.stored': 'Stored on GitHub',
                 'loading': 'Loading files...',
-                'downloadAll': '⬇️ Download All',
+                'downloadAll': '⬇️ Download All as ZIP',
                 'download': 'Download',
                 'clickDownload': 'Click to download',
                 'promo.title': 'Want unlimited cloud storage with GitHub?',
@@ -806,7 +978,7 @@ class ShareManager {
                 'footer.powered': '由',
                 'footer.stored': '存储于 GitHub',
                 'loading': '加载文件中...',
-                'downloadAll': '⬇️ 下载全部文件',
+                'downloadAll': '⬇️ 打包下载全部 (ZIP)',
                 'download': '下载',
                 'clickDownload': '点击下载',
                 'promo.title': '也想用 GitHub 当无限云盘？',
