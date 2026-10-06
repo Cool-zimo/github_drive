@@ -1135,7 +1135,7 @@ class App {
         const suspects = (local || []).filter(l => l.repoName && !remoteNames.has(l.repoName));
         if (!suspects.length) return;
         try {
-            const username = await this.githubApi.getUsername();
+            const username = await this.api.getUsername();
             const dead = [];
             // 并发 4，避免分享多时打爆限流
             const queue = suspects.slice();
@@ -1145,7 +1145,7 @@ class App {
                     try {
                         // 404 会抛错，所以正常返回就说明仓库还在
                         // （只是列表接口暂时没返回它，不能删）
-                        await this.githubApi.request(`/repos/${username}/${s.repoName}`, { retry: 1 });
+                        await this.api.request(`/repos/${username}/${s.repoName}`, { retry: 1 });
                     } catch (e) {
                         if (e.status === 404 || /404|Not Found/i.test(String(e.message))) dead.push(s);
                     }

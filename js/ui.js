@@ -1326,8 +1326,10 @@ class UI {
         const body = `
             <div style="padding:8px 0;">
                 <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:14px;">
-                    删除所有<b>孤儿分片</b>——覆盖上传留下的旧数据。<br>
-                    它们界面里看不见，却一直占着仓库容量，是"存储满了"的主因。
+                    扫描仓库，找出三类问题：<br>
+                    · <b>用量登记虚高</b>——"存储满了"最常见的真因，校准即可找回<br>
+                    · <b>孤儿分片</b>——覆盖上传留下的旧数据，可删除释放<br>
+                    · <b>幽灵记录</b>——文件已丢失但记录还在，点了就报错
                 </div>
                 <div id="opt-result" style="display:none;margin-bottom:14px;"></div>
                 <button id="opt-scan-btn" class="btn-primary btn-sm"
@@ -1375,6 +1377,9 @@ class UI {
             return;
         }
 
+        if (stage === 'recalibrate') { await this.runRecalibrate(); return; }
+        if (stage === 'dropGhosts') { await this.runDropGhosts(); return; }
+
         if (stage === 'purge') {
             const rep = this._optReport;
             if (!rep || !rep.orphans || !rep.orphans.length) return;
@@ -1417,30 +1422,124 @@ class UI {
         }
     }
 
+    /**
+     * 渲染优化报告。
+     *
+     * ★ 关键改动：以前只看孤儿，没有孤儿就报"无需清理" ——
+     *   但用户遇到的"存储满了"往往根本不是孤儿造成的，
+     *   而是**用量登记值虚高**（recalibrate 能解决）。
+     *   所以这里必须同时给出登记值 vs 实际值的偏差，并提供校准入口。
+     */
     _renderOptimizeReport(rep) {
         const fmt = this._optFmt;
         let h = '<div style="font-size:13px;line-height:1.7;">';
         h += '记录占用 <b>' + fmt(rep.recorded_bytes) + '</b>　' +
              '仓库实际 <b>' + fmt(rep.actual_bytes) + '</b><br>';
 
-        if (!rep.orphans.length && !rep.ghosts.length) {
-            h += '<div style="color:#059669;margin-top:8px;">✓ 没有孤儿，无需清理</div>';
-            return h + '</div>';
+        // ── ① 用量登记偏差（最常见的"满了"真因）──
+        const usage = rep.usage_actual || {};
+        const reg = (this.app && this.app.storage) ? this.app.storage.getRepoUsage() : {};
+        let regTotal = 0, actTotal = 0;
+        const drift = [];
+        for (const key of Object.keys(usage)) {
+            const a = parseInt(usage[key], 10) || 0;
+            const r = (reg[key] && reg[key].size) || 0;
+            regTotal += r; actTotal += a;
+            if (r - a > 1048576) drift.push({ key: key, before: r, after: a });
         }
+        const driftBytes = Math.max(0, regTotal - actTotal);
+        if (drift.length) {
+            const pct = regTotal ? (driftBytes / regTotal * 100).toFixed(0) : 0;
+            h += '<div style="color:#dc2626;margin-top:10px;">' +
+                 '★ 用量登记虚高 <b>' + fmt(driftBytes) + '</b>（' + pct + '%）' +
+                 '<div style="font-size:12px;color:#6b7280;margin-top:4px;line-height:1.5;">' +
+                 '登记 ' + fmt(regTotal) + '，仓库实际只有 ' + fmt(actTotal) + '。<br>' +
+                 '选仓库和"是否已满"看的是登记值 —— 这就是为什么明明有空间却传不进去。</div></div>';
+            h += '<button class="btn-primary btn-sm" style="margin-top:10px;" ' +
+                 'onclick="ui.runStorageOptimize(\'recalibrate\')">🔧 校准用量（不删任何文件）</button>';
+        }
+
+        // ── ② 孤儿 ──
         if (rep.orphans.length) {
             const pct = rep.actual_bytes
                 ? (rep.orphan_bytes / rep.actual_bytes * 100).toFixed(0) : 0;
-            h += '<div style="color:#d97706;margin-top:8px;">' +
+            h += '<div style="color:#d97706;margin-top:10px;">' +
                  '孤儿 <b>' + rep.orphans.length + '</b> 个 · 可释放 <b>' + fmt(rep.orphan_bytes) + '</b>' +
                  '（占仓库 ' + pct + '%）</div>';
-            h += '<button class="btn-primary btn-sm" style="margin-top:12px;" ' +
+            h += '<button class="btn-primary btn-sm" style="margin-top:10px;" ' +
                  'onclick="ui.runStorageOptimize(\'purge\')">⚡ 立即清理</button>';
         }
+
+        // ── ③ 幽灵 ──
         if (rep.ghosts.length) {
-            h += '<div style="color:#dc2626;margin-top:8px;">' +
-                 '⚠ 幽灵 <b>' + rep.ghosts.length + '</b> 个（下载必失败，清理解决不了）</div>';
+            h += '<div style="color:#dc2626;margin-top:10px;">' +
+                 '⚠ 幽灵 <b>' + rep.ghosts.length + '</b> 个：文件已不在仓库，下载必失败' +
+                 '<div style="font-size:12px;color:#6b7280;margin-top:4px;">' +
+                 '数据已经丢了，但记录还占着容量、点了就报错。</div></div>';
+            h += '<button class="btn-danger btn-sm" style="margin-top:10px;" ' +
+                 'onclick="ui.runStorageOptimize(\'dropGhosts\')">🗑 移除这些失效记录</button>';
+        }
+
+        if (!drift.length && !rep.orphans.length && !rep.ghosts.length) {
+            h += '<div style="color:#059669;margin-top:10px;">✓ 仓库是干净的，没有孤儿也没有虚高</div>';
         }
         return h + '</div>';
+    }
+
+    async runRecalibrate() {
+        const box = document.getElementById('opt-result');
+        if (!box) return;
+        const rep = this._optReport;
+        if (!rep) return;
+        const app = this.app;
+        box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在校准…</div>';
+        try {
+            const r = await app.maintain.recalibrateUsage(rep);
+            let h = '<div style="font-size:13px;line-height:1.7;">';
+            h += '<div style="color:#059669;">✓ 已校准，找回 <b>' + this._optFmt(r.freedBytes) + '</b> 虚假占用</div>';
+            h += '<div style="font-size:12px;color:#6b7280;">' +
+                 '登记 ' + this._optFmt(r.beforeBytes) + ' → ' + this._optFmt(r.afterBytes) +
+                 '（修正 ' + r.fixed.length + ' 个仓库，未删除任何文件）</div>';
+            for (const f of r.fixed.slice(0, 5)) {
+                h += '<div style="font-size:12px;color:#6b7280;">· ' + f.key.split('/')[1] +
+                     '：' + this._optFmt(f.before) + ' → ' + this._optFmt(f.after) + '</div>';
+            }
+            h += '</div>';
+            box.innerHTML = h;
+            if (app.loadFiles) app.loadFiles();
+        } catch (e) {
+            box.innerHTML = '<div style="color:#dc2626;font-size:13px;">校准失败：' + (e && e.message || e) + '</div>';
+        }
+    }
+
+    async runDropGhosts() {
+        const box = document.getElementById('opt-result');
+        if (!box) return;
+        const rep = this._optReport;
+        if (!rep || !rep.ghosts || !rep.ghosts.length) return;
+        const app = this.app;
+        const dry = await app.maintain.dropGhosts(rep.ghosts, { dryRun: true });
+        const paths = Array.from(new Set(rep.ghosts.map(g => g.vpath)));
+        const answer = prompt(
+            '将移除 ' + dry.would_remove + ' 条失效的文件记录：\n\n' +
+            paths.slice(0, 5).join('\n') + (paths.length > 5 ? '\n…' : '') + '\n\n' +
+            '这些文件的分片在仓库里已经不存在，本来也下不下来。\n' +
+            '此操作只删 Drive 里的记录，不会删除仓库中任何文件。\n\n' +
+            '确认请输入数字 ' + dry.would_remove + ' ：');
+        if (answer === null) { box.innerHTML = '<div style="font-size:13px;color:#6b7280;">已取消</div>'; return; }
+        if (String(answer).trim() !== String(dry.would_remove)) {
+            box.innerHTML = '<div style="color:#dc2626;font-size:13px;">数字不一致，已取消</div>';
+            return;
+        }
+        try {
+            const res = await app.maintain.dropGhosts(rep.ghosts, {});
+            box.innerHTML = '<div style="color:#059669;font-size:13px;">✓ 已移除 ' +
+                res.removed.length + ' 条失效记录</div>';
+            this._optReport = null;
+            if (app.loadFiles) app.loadFiles();
+        } catch (e) {
+            box.innerHTML = '<div style="color:#dc2626;font-size:13px;">移除失败：' + (e && e.message || e) + '</div>';
+        }
     }
 
     /**
@@ -2563,6 +2662,11 @@ class UI {
     showShareList(shares, opts) {
         const container = document.getElementById('file-list');
         if (!container) return;
+        // ★ switchView 对非文件视图会设置 fileList.style.display='none'（内联样式，
+        //   优先级高于 CSS 类）。分享列表复用的是同一个容器，不把内联样式清掉的话，
+        //   数据全都渲染好了却一个字都看不见 —— 表现就是"我的分享一直是空的"。
+        //   实测：容器里有 12 张卡片、宽高却是 0×0。
+        container.style.display = '';
         const o = opts || {};
 
         if (o.loading && (!shares || shares.length === 0)) {
@@ -2654,6 +2758,8 @@ class UI {
     renderExploreShares(shares, hasMore) {
         const container = document.getElementById('file-list');
         if (!container) return;
+        // 同上：switchView 隐藏了容器，这里必须恢复，否则发现分享也是空白
+        container.style.display = '';
         container.className = 'explore-list';
 
         // 按 repoName 去重（分页加载可能重复）
