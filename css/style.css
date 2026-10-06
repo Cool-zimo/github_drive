@@ -2735,3 +2735,167 @@ body.dark .td-foot { background: #111827; border-color: #374151; }
     .td-mini { width: calc(100vw - 24px); }
     .td-panel { width: calc(100vw - 24px); max-height: 50vh; }
 }
+
+/* ==================== 插件窗口（任务坞同款） ====================
+   插件窗口是常驻 DOM 节点，收起/展开只切 class，绝不重建或移动：
+   移动 <iframe> 会触发重新加载，插件内部状态会丢。
+   ================================================================ */
+#plugin-dock {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    pointer-events: none;
+}
+#plugin-dock > * { pointer-events: auto; }
+
+.tp-win {
+    position: absolute;
+    width: 460px;
+    height: 380px;
+    min-width: 240px;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(17, 24, 39, .22);
+    overflow: hidden;
+    resize: both;
+    animation: tp-in .18s ease-out;
+}
+@keyframes tp-in { from { opacity: 0; transform: translateY(8px); } }
+
+.tp-win.is-full {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    resize: none;
+}
+
+.tp-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    cursor: grab;
+    user-select: none;
+    flex-shrink: 0;
+}
+.tp-win.tp-dragging .tp-head { cursor: grabbing; }
+.tp-ico { font-size: 15px; line-height: 1; }
+.tp-title {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+.tp-spacer { flex: 1; }
+.tp-btn {
+    border: none;
+    background: rgba(255, 255, 255, .18);
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tp-btn:hover { background: rgba(255, 255, 255, .32); }
+
+.tp-body { flex: 1; min-height: 0; display: flex; background: #fff; }
+.tp-body > iframe { flex: 1; width: 100%; height: 100%; border: none; display: block; }
+
+/* ── 收起成小窗：只隐藏内容区，节点不动 ── */
+.tp-win.is-mini {
+    width: 230px;
+    height: 62px;
+    /* 展开态的 min-width:240 会把小窗顶宽，这里必须归零，
+       否则小窗和合并卡宽度不一致，堆叠时看着参差 */
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border-radius: 10px;
+}
+.tp-win.is-mini .tp-body { display: none; }
+.tp-win.is-mini .tp-head { height: 100%; border-radius: 10px 10px 0 0; cursor: pointer; }
+
+/* ── 合并卡 ── */
+.tp-merged {
+    position: absolute;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    width: 230px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(17, 24, 39, .16);
+    cursor: pointer;
+}
+.tp-merged.show { display: flex; }
+.tp-merged:hover { transform: translateY(-2px); }
+.tp-merged-ico { font-size: 20px; }
+.tp-merged-title { font-size: 13px; font-weight: 600; color: #1f2937; }
+
+/* ── 全部插件列表面板 ── */
+.tp-list {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 300px;
+    max-height: 60vh;
+    display: none;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(17, 24, 39, .22);
+    overflow: hidden;
+}
+.tp-list.show { display: flex; }
+.tp-list-body { overflow-y: auto; }
+.tp-list-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+}
+.tp-list-row:hover { background: #f8f7ff; }
+.tp-list-ico { font-size: 16px; }
+.tp-list-name {
+    flex: 1;
+    font-size: 13px;
+    color: #1f2937;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tp-list-st { font-size: 11px; color: #6b7280; }
+
+body.dark .tp-win,
+body.dark .tp-merged,
+body.dark .tp-list { background: #1f2937; border-color: #374151; }
+body.dark .tp-list-name { color: #e5e7eb; }
+body.dark .tp-list-row { border-color: #374151; }
+body.dark .tp-list-row:hover { background: #374151; }
+
+@media (max-width: 520px) {
+    .tp-win { width: calc(100vw - 24px); }
+    .tp-win.is-mini { width: calc(100vw - 24px); }
+    .tp-list { width: calc(100vw - 24px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tp-win { animation: none; }
+}

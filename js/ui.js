@@ -3032,16 +3032,20 @@ class UI {
      *      导致先开的插件再也收不到宿主响应，且关闭时泄漏监听。
      * 统一走全屏后 ② 自动消失。
      */
+    /**
+     * 打开插件。
+     *
+     * 以前是全屏覆盖层（.plugin-overlay），一开就把网盘整个挡住，
+     * 想一边跑插件一边翻文件根本不行。现在改成和上传/分享同款的可拖动窗口：
+     * 拖到侧边收成小窗，点开继续，多个插件各占一个窗口，还能全屏。
+     *
+     * ★ iframe 创建后交给 TaskDock，之后**不再移动**——
+     *   移动 iframe 会导致它重新加载，插件里填了一半的东西会全丢。
+     */
     showPluginRunner(plugin) {
         // 加随机后缀：同一毫秒内连开两个插件时，
         // 纯 Date.now() 会生成相同 id，后开的顶掉先开的记录
-        const modalId = 'plugin-runner-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-
-        // 外部 URL 插件：直接用 iframe 加载，无 blob 需要回收
-        if (plugin.externalUrl) {
-            this._mountPluginOverlay(modalId, plugin, plugin.externalUrl, null);
-            return;
-        }
+        const id = 'plugin-runner-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
 
         // 注入 I18n 支持，让插件可以使用 window.I18n.t() 做双语
         const i18nScript = `
@@ -3060,15 +3064,51 @@ window.I18n = {
     }
 };
 </script>`;
-        const htmlWithI18n = plugin.html.replace('<head>', '<head>' + i18nScript).replace('<body>', i18nScript + '<body>');
-        const finalHtml = htmlWithI18n === plugin.html ? i18nScript + plugin.html : htmlWithI18n;
-        const blob = new Blob([finalHtml], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        this._mountPluginOverlay(modalId, plugin, url, url);
+
+        let src = plugin.externalUrl || null;
+        let blobUrl = null;
+        if (!src) {
+            const htmlWithI18n = plugin.html.replace('<head>', '<head>' + i18nScript).replace('<body>', i18nScript + '<body>');
+            const finalHtml = htmlWithI18n === plugin.html ? i18nScript + plugin.html : htmlWithI18n;
+            const blob = new Blob([finalHtml], { type: 'text/html' });
+            blobUrl = URL.createObjectURL(blob);
+            src = blobUrl;
+        }
+
+        const frame = document.createElement('iframe');
+        frame.className = 'plugin-frame';
+        frame.setAttribute('allow', 'clipboard-read; clipboard-write');
+        frame.src = src;
+
+        // 每个插件层独立持有 handler，互不覆盖
+        const messageHandler = (event) => {
+            if (event.data && event.data.type === 'gd-api') {
+                this.app.handlePluginMessage(event, plugin.id);
+            }
+        };
+        window.addEventListener('message', messageHandler);
+
+        this._pluginRunners = this._pluginRunners || {};
+        this._pluginRunners[id] = { messageHandler, url: blobUrl, pluginId: plugin.id };
+
+        // 交给任务坞托管：窗口由它创建，iframe 只是被挂进去
+        const winId = (typeof TaskDock !== 'undefined' && TaskDock.openPlugin)
+            ? TaskDock.openPlugin({
+                title: plugin.name,
+                icon: plugin.icon || (plugin.type === 'game' ? '🎮' : '🔌'),
+                mount: frame,
+                onClose: () => this.closePluginRunner(id, blobUrl)
+            })
+            : null;
+        this._pluginRunners[id].winId = winId;
+
+        // 任务坞缺失时兜底：退回原来的全屏层，保证插件至少能开
+        if (!winId) this._mountPluginOverlay(id, plugin, src, blobUrl);
+        return id;
     }
 
     /**
-     * 挂载全屏插件层（供 showPluginRunner 复用）
+     * 挂载全屏插件层（兜底路径，任务坞不可用时才走这里）
      * @param {string} modalId 唯一 id
      * @param {Object} plugin 插件信息
      * @param {string} src iframe 地址
@@ -3082,7 +3122,7 @@ window.I18n = {
         // 锁定页面滚动：全屏覆盖时背景不该跟着滚。
         // 只在第一个插件层打开时记录原值，避免多层嵌套时恢复到错误状态。
         this._pluginRunners = this._pluginRunners || {};
-        if (Object.keys(this._pluginRunners).length === 0) {
+        if (Object.keys(this._pluginRunners).length <= 1) {
             this._prevBodyOverflow = document.body.style.overflow;
             document.body.style.overflow = 'hidden';
         }
@@ -3105,46 +3145,37 @@ window.I18n = {
             <iframe class="plugin-frame" src="${src}" allow="clipboard-read; clipboard-write"></iframe>
         `;
         document.body.appendChild(overlay);
-
-        // 每个插件层独立持有 handler，互不覆盖
-        const messageHandler = (event) => {
-            if (event.data && event.data.type === 'gd-api') {
-                this.app.handlePluginMessage(event, plugin.id);
-            }
-        };
-        window.addEventListener('message', messageHandler);
+        this._pluginRunners[modalId].overlay = overlay;
 
         // ESC 关闭：全屏层最自然的退出方式
         const keyHandler = (e) => {
             if (e.key === 'Escape') this.closePluginRunner(modalId, blobUrl || '');
         };
         document.addEventListener('keydown', keyHandler);
-
-        this._pluginRunners[modalId] = { url: blobUrl, messageHandler, keyHandler };
+        this._pluginRunners[modalId].keyHandler = keyHandler;
     }
 
     /**
-     * 关闭插件层
-     * @param {string} modalId
+     * 关闭插件
+     * @param {string} id 插件运行 id
      * @param {string} url blob 地址（可空；外部 URL 插件没有）
      */
-    closePluginRunner(modalId, url) {
-        const overlay = document.getElementById(modalId);
-        if (overlay) overlay.remove();
-
-        const rec = this._pluginRunners && this._pluginRunners[modalId];
+    closePluginRunner(id, url) {
+        const rec = this._pluginRunners && this._pluginRunners[id];
         if (rec) {
             window.removeEventListener('message', rec.messageHandler);
-            document.removeEventListener('keydown', rec.keyHandler);
-            delete this._pluginRunners[modalId];
+            if (rec.keyHandler) document.removeEventListener('keydown', rec.keyHandler);
+            if (rec.overlay && rec.overlay.parentNode) rec.overlay.parentNode.removeChild(rec.overlay);
+            delete this._pluginRunners[id];
+            url = url || rec.url;
         }
-
         // blob URL 在所有路径下都要回收，否则内存泄漏
-        const blobUrl = url || (rec && rec.url);
-        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        if (url) URL.revokeObjectURL(url);
 
-        // 所有插件层都关完了才恢复滚动
-        if (this._pluginRunners && Object.keys(this._pluginRunners).length === 0) {
+        // 兜底层的滚动锁要恢复；窗口模式本来就没锁，这里会被自然跳过
+        const anyOverlay = this._pluginRunners &&
+            Object.values(this._pluginRunners).some(r => r.overlay);
+        if (!anyOverlay && this._prevBodyOverflow !== null && this._prevBodyOverflow !== undefined) {
             document.body.style.overflow = this._prevBodyOverflow || '';
             this._prevBodyOverflow = null;
         }

@@ -480,9 +480,346 @@ const TaskDock = (() => {
     function focus(id) { focusId = id; render(); }
     function backToList() { focusId = null; render(); }
 
+
+    /* =====================================================================
+       插件窗口
+       ---------------------------------------------------------------------
+       插件原来是全屏覆盖层（.plugin-overlay），一打开就把网盘整个挡死，
+       想一边跑插件一边翻文件根本不可能。现在改成和上传/分享同一套：
+       可拖动的窗口，拖到侧边收成小窗，点开继续，多个插件各占一个窗口。
+
+       ★ 和上传任务最不一样的地方：上传任务的窗口是 innerHTML 重绘的，
+         但插件窗口里装的是 <iframe> —— 而 **移动 iframe 会导致它重新加载**，
+         插件内部状态（比如游戏进度、填了一半的表单）会全部丢失。
+
+         所以插件窗口绝对不能走 render() 的 innerHTML 重绘：
+           1. 每个窗口是独立的 DOM 节点，创建后不再重建
+           2. 收起/展开只切 class，不移动节点
+           3. 拖动只改 left/top，节点始终待在同一个父容器里
+         这样 iframe 从头到尾没有离开过文档流，插件也就不会重载。
+       ===================================================================== */
+    const pwins = new Map();          // id -> win
+    let pwRoot = null;
+    let pwSeq = 0;
+    let pwZ = 9500;
+    const PW_KEY = 'gd_plugindock_pos';
+
+    function pwLoad() {
+        try { return JSON.parse(localStorage.getItem(PW_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function pwSave(p) { try { localStorage.setItem(PW_KEY, JSON.stringify(p)); } catch (e) {} }
+    let pwPos = pwLoad();
+
+    function pwEnsureRoot() {
+        if (pwRoot && document.body.contains(pwRoot)) return pwRoot;
+        const old = document.getElementById('plugin-dock');
+        if (old) old.remove();
+        pwRoot = document.createElement('div');
+        pwRoot.id = 'plugin-dock';
+        document.body.appendChild(pwRoot);
+        return pwRoot;
+    }
+
+    function pwEsc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /**
+     * 开一个插件窗口
+     * @param {Object} o
+     * @param {string} o.title  窗口标题
+     * @param {string} o.icon   图标
+     * @param {HTMLElement} o.mount 插件内容（通常是 iframe）
+     * @param {Function} [o.onClose] 关闭回调（回收 blob URL 用）
+     * @returns {string} 窗口 id
+     */
+    function openPlugin(o) {
+        const root = pwEnsureRoot();
+        const id = 'pw' + (++pwSeq);
+        const w = {
+            id,
+            title: o.title || L('插件', 'Plugin'),
+            icon: o.icon || '🔌',
+            mount: o.mount || null,
+            onClose: o.onClose || null,
+            view: 'expanded',                 // expanded | mini
+            full: false,
+            dock: { edge: pwPos.edge || 'right', x: 0, y: 0, free: false },
+            el: null,
+            z: ++pwZ
+        };
+        pwins.set(id, w);
+
+        const el = document.createElement('div');
+        el.className = 'tp-win';
+        el.dataset.id = id;
+        el.innerHTML = `
+            <div class="tp-head">
+                <span class="tp-ico">${pwEsc(w.icon)}</span>
+                <span class="tp-title">${pwEsc(w.title)}</span>
+                <span class="tp-spacer"></span>
+                <button class="tp-btn" data-act="mini" title="${L('收起到侧边', 'Dock to side')}">─</button>
+                <button class="tp-btn" data-act="full" title="${L('全屏', 'Fullscreen')}">⤢</button>
+                <button class="tp-btn" data-act="close" title="${L('关闭', 'Close')}">✕</button>
+            </div>
+            <div class="tp-body"></div>`;
+        if (w.mount) el.querySelector('.tp-body').appendChild(w.mount);
+        root.appendChild(el);
+        w.el = el;
+
+        // 按钮
+        el.querySelectorAll('.tp-btn').forEach(b => {
+            b.addEventListener('click', ev => {
+                ev.stopPropagation();
+                const a = b.getAttribute('data-act');
+                if (a === 'mini') pwCollapse(id);
+                else if (a === 'full') pwToggleFull(id);
+                else if (a === 'close') pwClose(id);
+            });
+        });
+        // 标题栏拖动
+        const head = el.querySelector('.tp-head');
+        head.addEventListener('pointerdown', e => {
+            if (e.target.closest('.tp-btn')) return;
+            pwBring(id);
+            pwStartDrag(e, el, w);
+        });
+        // 点窗口本体也置顶
+        el.addEventListener('pointerdown', () => pwBring(id));
+
+        pwLayout();
+        return id;
+    }
+
+    function pwBring(id) {
+        const w = pwins.get(id); if (!w || !w.el) return;
+        w.z = ++pwZ;
+        w.el.style.zIndex = w.z;
+    }
+
+    function pwCollapse(id) {
+        const w = pwins.get(id); if (!w) return;
+        w.view = 'mini';
+        w.full = false;
+        pwLayout();
+    }
+    function pwExpand(id) {
+        const w = pwins.get(id); if (!w) return;
+        w.view = 'expanded';
+        pwBring(id);
+        pwLayout();
+    }
+    function pwToggleFull(id) {
+        const w = pwins.get(id); if (!w) return;
+        w.full = !w.full;
+        if (w.full) w.view = 'expanded';
+        pwBring(id);
+        pwLayout();
+    }
+    function pwClose(id) {
+        const w = pwins.get(id); if (!w) return;
+        try { if (w.onClose) w.onClose(); } catch (e) { console.warn(e); }
+        if (w.el && w.el.parentNode) w.el.parentNode.removeChild(w.el);
+        pwins.delete(id);
+        pwLayout();
+    }
+
+    /** 拖动：只改 left/top，绝不移动节点（移动 iframe 会重载插件） */
+    function pwStartDrag(e, el, w) {
+        if (e.button !== undefined && e.button !== 0) return;
+        const r = el.getBoundingClientRect();
+        const dx = e.clientX - r.left, dy = e.clientY - r.top;
+        el.classList.add('tp-dragging');
+        document.body.classList.add('td-dragging-body');
+        let hint = null;
+        function move(ev) {
+            const nearL = ev.clientX < EDGE_SNAP;
+            const nearR = ev.clientX > window.innerWidth - EDGE_SNAP;
+            const want = nearL ? 'left' : (nearR ? 'right' : null);
+            if (!hint) { hint = document.createElement('div'); hint.className = 'td-dock-hint'; document.body.appendChild(hint); }
+            if (want) {
+                hint.textContent = L('松手停靠到' + (want === 'left' ? '左侧' : '右侧'),
+                                     'Release to dock ' + (want === 'left' ? 'left' : 'right'));
+                hint.classList.add('show');
+                hint.style.left = (want === 'left' ? 12 : window.innerWidth - 12) + 'px';
+                hint.style.transform = want === 'left' ? 'none' : 'translateX(-100%)';
+            } else hint.classList.remove('show');
+
+            el.style.left = (ev.clientX - dx) + 'px';
+            el.style.top = (ev.clientY - dy) + 'px';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+        }
+        function up(ev) {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            el.classList.remove('tp-dragging');
+            document.body.classList.remove('td-dragging-body');
+            if (hint) hint.remove();
+            const nearL = ev.clientX < EDGE_SNAP;
+            const nearR = ev.clientX > window.innerWidth - EDGE_SNAP;
+            if (nearL || nearR) {
+                w.dock.edge = nearL ? 'left' : 'right';
+                w.dock.free = false;
+                pwPos.edge = w.dock.edge; pwSave(pwPos);
+                w.view = 'mini';                    // 拖到边缘 = 收成小窗
+            } else {
+                const rr = el.getBoundingClientRect();
+                w.dock.free = true;
+                w.dock.x = Math.round(rr.left);
+                w.dock.y = Math.round(rr.top);
+            }
+            pwLayout();
+        }
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+        e.preventDefault();
+    }
+
+    /** 合并卡 / 列表（同样是常驻节点，只切换显示） */
+    function pwEnsureMerged() {
+        const root = pwEnsureRoot();
+        let m = root.querySelector('.tp-merged');
+        if (!m) {
+            m = document.createElement('div');
+            m.className = 'tp-merged';
+            m.innerHTML = `<div class="tp-merged-ico">🧩</div>
+                           <div class="tp-merged-main"><div class="tp-merged-title"></div></div>`;
+            m.addEventListener('click', () => pwOpenList());
+            root.appendChild(m);
+        }
+        return m;
+    }
+    function pwEnsureList() {
+        const root = pwEnsureRoot();
+        let p = root.querySelector('.tp-list');
+        if (!p) {
+            p = document.createElement('div');
+            p.className = 'tp-list';
+            p.innerHTML = `<div class="tp-head">
+                    <span class="tp-ico">🧩</span>
+                    <span class="tp-title tp-list-title"></span>
+                    <span class="tp-spacer"></span>
+                    <button class="tp-btn" data-act="close">✕</button>
+                </div>
+                <div class="tp-list-body"></div>`;
+            p.querySelector('.tp-btn').addEventListener('click', e => { e.stopPropagation(); pwCloseList(); });
+            root.appendChild(p);
+        }
+        return p;
+    }
+    function pwOpenList() {
+        const p = pwEnsureList();
+        p.classList.add('show');
+        p.style.zIndex = ++pwZ;
+        pwRenderList();
+    }
+    function pwCloseList() { const p = pwEnsureList(); p.classList.remove('show'); }
+    function pwRenderList() {
+        const p = pwEnsureList();
+        p.querySelector('.tp-list-title').textContent = L('运行中的插件', 'Running plugins') + `（${pwins.size}）`;
+        const body = p.querySelector('.tp-list-body');
+        body.innerHTML = '';
+        for (const w of pwins.values()) {
+            const row = document.createElement('div');
+            row.className = 'tp-list-row';
+            row.innerHTML = `<span class="tp-list-ico">${pwEsc(w.icon)}</span>
+                             <span class="tp-list-name">${pwEsc(w.title)}</span>
+                             <span class="tp-list-st">${w.view === 'mini' ? L('已收起', 'Docked') : L('运行中', 'Running')}</span>`;
+            row.addEventListener('click', () => { pwExpand(w.id); pwCloseList(); });
+            body.appendChild(row);
+        }
+    }
+
+    /**
+     * 布局：不给节点搬家，只改 style 和 class。
+     * 小窗超过 3 个就合并成一张卡 —— 4 个小窗竖着排会占掉半屏。
+     */
+    function pwLayout() {
+        const root = pwEnsureRoot();
+        const list = Array.from(pwins.values());
+        if (!list.length) {
+            const m = root.querySelector('.tp-merged'); if (m) m.classList.remove('show');
+            pwCloseList();
+            return;
+        }
+        const minis = list.filter(w => w.view === 'mini');
+        const merged = minis.length > MINI_LIMIT;
+
+        let stack = 0;
+        for (const w of list) {
+            const el = w.el; if (!el) continue;
+            el.style.zIndex = w.z;
+            el.classList.toggle('is-mini', w.view === 'mini');
+            el.classList.toggle('is-full', !!w.full);
+
+            if (w.full) {
+                el.style.left = '0px'; el.style.top = '0px';
+                el.style.right = 'auto'; el.style.bottom = 'auto';
+                el.style.width = '100vw'; el.style.height = '100vh';
+                continue;
+            }
+            el.style.width = ''; el.style.height = '';
+
+            if (w.view === 'mini') {
+                // 合并时单独的小窗隐藏，只留一张合并卡
+                el.style.display = merged ? 'none' : '';
+                if (merged) continue;
+                const idx = stack++;
+                el.style.top = 'auto';
+                if (w.dock.free) {
+                    el.style.left = w.dock.x + 'px';
+                    el.style.bottom = 'auto';
+                    el.style.top = w.dock.y + 'px';
+                } else {
+                    el.style.left = w.dock.edge === 'left' ? '12px' : 'auto';
+                    el.style.right = w.dock.edge === 'right' ? '12px' : 'auto';
+                    el.style.bottom = (12 + idx * 74) + 'px';
+                }
+            } else {
+                el.style.display = '';
+                if (w.dock.free) {
+                    el.style.left = w.dock.x + 'px';
+                    el.style.top = w.dock.y + 'px';
+                    el.style.right = 'auto'; el.style.bottom = 'auto';
+                } else {
+                    el.style.top = 'auto';
+                    el.style.left = w.dock.edge === 'left' ? '12px' : 'auto';
+                    el.style.right = w.dock.edge === 'right' ? '12px' : 'auto';
+                    el.style.bottom = '12px';
+                }
+            }
+        }
+
+        const m = pwEnsureMerged();
+        if (merged) {
+            m.classList.add('show');
+            m.style.zIndex = ++pwZ;
+            const edge = pwPos.edge || 'right';
+            m.style.left = edge === 'left' ? '12px' : 'auto';
+            m.style.right = edge === 'right' ? '12px' : 'auto';
+            m.style.bottom = '12px';
+            m.querySelector('.tp-merged-title').textContent =
+                L(`${minis.length} 个插件在后台运行`, `${minis.length} plugins running`);
+        } else {
+            m.classList.remove('show');
+            pwCloseList();
+        }
+        // 列表开着时同步内容
+        const lp = root.querySelector('.tp-list');
+        if (lp && lp.classList.contains('show')) pwRenderList();
+    }
+
+    // 窗口尺寸随视口变化时保持贴边（小窗堆叠位置重算）
+    window.addEventListener('resize', () => { if (pwins.size) pwLayout(); });
+
     return {
         create, updateItem, setItemDone, setPercent, setNote, finish, remove,
         open, collapse, dismiss, openList, closeList, focus, backToList, get,
+        openPlugin, closePlugin: pwClose, expandPlugin: pwExpand, collapsePlugin: pwCollapse,
+        togglePluginFull: pwToggleFull, closePluginList: pwCloseList,
+        get pluginCount() { return pwins.size; },
         get count() { return tasks.size; }
     };
 })();
