@@ -1111,10 +1111,57 @@ class App {
         try {
             const remote = await this.shareManager.listMyShares();
             this.ui.showShareList?.(this._mergeShares(local, remote));
+            // 远端已被删掉的分享，本地记录会变成点不开的"鬼影"，顺手清掉
+            this._pruneDeadShares(local, remote);
         } catch (e) {
             console.warn('拉取远程分享失败:', e.message);
             // 远程失败就只用本地，不打断用户
             this.ui.showShareList?.(local);
+        }
+    }
+
+    /**
+     * 清理本地已失效的分享记录。
+     *
+     * 分享仓库在 GitHub 上被删掉后，localStorage 里的记录还在，
+     * 于是"我的分享"会一直显示一堆点不开的卡片（标着已丢失）。
+     *
+     * ★ 必须先确认仓库是真的不存在，不能因为远程列表没返回就删 ——
+     *   GitHub 搜索/列表接口有延迟，刚分享完的仓库可能暂时查不到，
+     *   那种情况删掉本地记录等于把用户刚做的分享抹了。
+     */
+    async _pruneDeadShares(local, remote) {
+        const remoteNames = new Set((remote || []).map(r => r.repoName));
+        const suspects = (local || []).filter(l => l.repoName && !remoteNames.has(l.repoName));
+        if (!suspects.length) return;
+        try {
+            const username = await this.githubApi.getUsername();
+            const dead = [];
+            // 并发 4，避免分享多时打爆限流
+            const queue = suspects.slice();
+            const worker = async () => {
+                while (queue.length) {
+                    const s = queue.shift();
+                    try {
+                        // 404 会抛错，所以正常返回就说明仓库还在
+                        // （只是列表接口暂时没返回它，不能删）
+                        await this.githubApi.request(`/repos/${username}/${s.repoName}`, { retry: 1 });
+                    } catch (e) {
+                        if (e.status === 404 || /404|Not Found/i.test(String(e.message))) dead.push(s);
+                    }
+                }
+            };
+            await Promise.all([0, 1, 2, 3].map(worker));
+            if (!dead.length) return;
+            for (const s of dead) {
+                if (s.id) this.storage.removeShare(s.id);
+            }
+            console.log(`[Share] 已清理 ${dead.length} 条失效的本地分享记录`);
+            // 用清理后的数据重渲染
+            const fresh = this.storage.getShares() || [];
+            this.ui.showShareList?.(this._mergeShares(fresh, remote));
+        } catch (e) {
+            console.warn('清理失效分享记录失败:', e.message);
         }
     }
 
