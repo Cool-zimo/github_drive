@@ -471,8 +471,18 @@ class ShareManager {
         const nameFn = dp || (x => x.path);
         const name = nameFn(f);
         const url = './' + f.path.split('/').map(encodeURIComponent).join('/');
+        /**
+         * 静态列表是 JS 挂掉时的兜底，此时 lightbox 也用不了，
+         * 所以这里只把缩略图渲染出来（点了仍是打开原图）。
+         * ★ 万一图片是压缩过的（.gz），src 会裂 —— 但图片本来就跳过压缩，
+         *   而这是兜底路径，不值得为它再写一套异步解压。
+         */
+        const isImg = /\.(jpe?g|png|gif|webp|bmp|avif|ico|svg|jfif)$/i.test(name);
+        const thumb = isImg
+            ? `<img class="file-thumb" src="${url}" loading="lazy" alt="">`
+            : `<span class="file-icon">${this.getFileIcon(name)}</span>`;
         return `<li class="file-item" onclick="window.open('${url}', '_blank')">
-                            <span class="file-icon">${this.getFileIcon(name)}</span>
+                            ${thumb}
                             <div class="file-info">
                                 <div class="file-name">${this.escapeHtml(name)}</div>
                                 <div class="file-size">${f.size ? this.formatSize(f.size) : ''}</div>
@@ -676,6 +686,95 @@ class ShareManager {
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── 图片缩略图 ──
+           ★ 分享页没有后端，做不出真正的缩略图，只能用原图 + object-fit 裁。
+             所以必须 loading="lazy" + 进视口才加载：98 张图一次性全请求会把浏览器拖死。 */
+        .file-thumb {
+            width: 44px; height: 44px; margin-right: 14px; flex-shrink: 0;
+            border-radius: 8px; object-fit: cover;
+            background: #f3f4f6; border: 1px solid #e5e7eb; display: block;
+        }
+        .file-item.is-img { cursor: zoom-in; }
+        .file-item.is-img:hover { border-color: #667eea; background: #f8f7ff; }
+        .thumb-wrap { position: relative; flex-shrink: 0; margin-right: 14px; }
+        .thumb-zoom {
+            position: absolute; right: -3px; bottom: -3px;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: #667eea; color: #fff; font-size: 10px;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid #fff; pointer-events: none;
+        }
+        .img-count {
+            font-size: 12px; color: #6b7280; text-align: center;
+            margin-bottom: 10px;
+        }
+
+        /* ── 一键预览：全屏看图 ── */
+        .preview-all {
+            width: 100%; margin-bottom: 10px; padding: 12px;
+            background: #fff; color: #4338ca;
+            border: 1px solid #c7d2fe; border-radius: 10px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: background .2s;
+        }
+        .preview-all:hover { background: #eef2ff; }
+
+        .lightbox {
+            position: fixed; inset: 0; z-index: 9999; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(12,14,20,.95); backdrop-filter: blur(8px);
+            touch-action: none;
+        }
+        .lightbox.show { display: flex; }
+        .lb-top {
+            position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+            padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+            color: #fff; background: linear-gradient(rgba(0,0,0,.5), transparent);
+        }
+        .lb-name {
+            flex: 1; min-width: 0; font-size: 13px; font-weight: 600;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .lb-count { font-size: 12px; opacity: .75; flex-shrink: 0; }
+        .lb-btn {
+            background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.2);
+            padding: 7px 13px; border-radius: 8px; font-size: 13px; cursor: pointer;
+            flex-shrink: 0;
+        }
+        .lb-btn:hover { background: rgba(255,255,255,.26); }
+        .lb-stage {
+            flex: 1; width: 100%; display: flex; align-items: center; justify-content: center;
+            padding: 56px 12px 12px; overflow: hidden;
+        }
+        .lb-img {
+            max-width: 96vw; max-height: 100%; object-fit: contain;
+            border-radius: 6px; box-shadow: 0 12px 48px rgba(0,0,0,.6);
+        }
+        .lb-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 42px; height: 42px; border-radius: 50%;
+            background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.2);
+            font-size: 20px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; z-index: 2;
+        }
+        .lb-nav:hover { background: rgba(255,255,255,.28); }
+        .lb-prev { left: 10px; }
+        .lb-next { right: 10px; }
+        .lb-hint {
+            position: absolute; bottom: 14px; left: 0; right: 0; text-align: center;
+            color: rgba(255,255,255,.5); font-size: 12px; pointer-events: none;
+        }
+        .lb-loading { color: rgba(255,255,255,.6); font-size: 13px; }
+
+        /* 手机：箭头挪到底部，避免挡住图 */
+        @media (max-width: 480px) {
+            .lb-nav { top: auto; bottom: 44px; transform: none; width: 48px; height: 48px; }
+            .lb-prev { left: 18px; }
+            .lb-next { right: 18px; }
+            .lb-hint { bottom: 12px; }
+            .lb-stage { padding: 52px 8px 96px; }
+        }
     </style>
 </head>
 <body>
@@ -690,6 +789,7 @@ class ShareManager {
             <ul class="file-list" id="fileList">
                 ${fileList.map(f => this._staticFileItem(f, dp)).join('')}
             </ul>
+            <button class="preview-all" id="previewAllBtn" style="display:none" onclick="openLightbox(0)"></button>
             <button class="download-all" id="dlAllBtn" onclick="downloadAll()"><span data-i18n="downloadAll">⬇️ 打包下载全部 (ZIP)</span></button>
             <div id="dlProgress" style="display:none;margin-top:10px;">
                 <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
@@ -708,6 +808,22 @@ class ShareManager {
         <div class="footer">
             <span data-i18n="footer.powered">Powered by</span> <a href="https://${this.escapeHtml(username)}.github.io/github_drive" target="_blank">GitHub Drive</a> · <span data-i18n="footer.stored">Stored on GitHub</span>
         </div>
+    </div>
+
+    <div class="lightbox" id="lightbox">
+        <div class="lb-top">
+            <div class="lb-name" id="lbName"></div>
+            <div class="lb-count" id="lbCount"></div>
+            <button class="lb-btn" id="lbDl">⬇️ <span data-i18n="download">Download</span></button>
+            <button class="lb-btn" onclick="closeLightbox()">✕</button>
+        </div>
+        <div class="lb-stage" id="lbStage">
+            <div class="lb-loading" id="lbLoading">…</div>
+            <img class="lb-img" id="lbImg" style="display:none" alt="">
+        </div>
+        <button class="lb-nav lb-prev" id="lbPrev" onclick="lbNav(-1)">‹</button>
+        <button class="lb-nav lb-next" id="lbNext" onclick="lbNav(1)">›</button>
+        <div class="lb-hint" data-i18n="lb.hint">← → 切换 · Esc 关闭</div>
     </div>
     <script>
         const files = ${filesJson};
@@ -791,6 +907,111 @@ class ShareManager {
                 window.open(file.url, '_blank');
             }
         }
+
+        /* ── 图片预览 ────────────────────────────────────────── */
+
+        /**
+         * 哪些算图片。svg 也列进来 —— 但 svg 可能是 XML，只有真图片才渲染得了，
+         * 加载失败会自动退回图标，所以直接试就行。
+         */
+        const IMG_EXT = new Set(['jpg','jpeg','png','gif','webp','bmp','avif','ico','svg','jfif','pjpeg']);
+        function isImage(name) {
+            const ext = String(name || '').split('.').pop().toLowerCase();
+            return IMG_EXT.has(ext);
+        }
+
+        /**
+         * 图片的真实 URL。
+         *
+         * ★ 压缩过的（packed:'gzip'）不能直接给 <img src> —— 仓库里存的是 .gz，
+         *   浏览器认不出，只会显示一个裂图。必须先取回来解压再转 blob URL。
+         *   （实际分享里 jpg/png 通常不会被压缩，因为已压缩格式会自动跳过；
+         *    但老数据可能有，这里一律处理。）
+         */
+        const _imgCache = new Map();
+        async function imgURL(file) {
+            if (!file.packed) return file.url;
+            if (_imgCache.has(file.name)) return _imgCache.get(file.name);
+            const bytes = await fetchBytes(file);
+            const u = URL.createObjectURL(new Blob([bytes]));
+            _imgCache.set(file.name, u);
+            return u;
+        }
+
+        const imageFiles = files.filter(f => isImage(f.name));
+        let lbIndex = -1;
+
+        async function openLightbox(i) {
+            if (!imageFiles.length || i < 0 || i >= imageFiles.length) return;
+            lbIndex = i;
+            const f = imageFiles[i];
+            const box = document.getElementById('lightbox');
+            const img = document.getElementById('lbImg');
+            const load = document.getElementById('lbLoading');
+
+            box.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('lbName').textContent = f.name.split('/').pop();
+            document.getElementById('lbCount').textContent =
+                (i + 1) + ' / ' + imageFiles.length + (f.size ? ' · ' + formatSize(f.size) : '');
+            document.getElementById('lbDl').onclick = () => saveFile(f);
+
+            // 只有一张就藏掉左右箭头 —— 两个箭头点了没反应很怪
+            const many = imageFiles.length > 1;
+            document.getElementById('lbPrev').style.display = many ? '' : 'none';
+            document.getElementById('lbNext').style.display = many ? '' : 'none';
+
+            img.style.display = 'none';
+            img.src = '';
+            load.style.display = '';
+            load.textContent = '…';
+            try {
+                img.src = await imgURL(f);
+                img.style.display = '';
+                load.style.display = 'none';
+            } catch (e) {
+                load.textContent = '这张图加载失败了';
+            }
+        }
+
+        function closeLightbox() {
+            const box = document.getElementById('lightbox');
+            box.classList.remove('show');
+            document.body.style.overflow = '';
+            // 清掉 src，否则大图一直占着内存
+            document.getElementById('lbImg').src = '';
+            lbIndex = -1;
+        }
+
+        function lbNav(d) {
+            if (lbIndex < 0) return;
+            const n = imageFiles.length;
+            openLightbox((lbIndex + d + n) % n);
+        }
+
+        // 点遮罩空白处关闭（点图片本身不关）
+        document.getElementById('lightbox').addEventListener('click', function (e) {
+            if (e.target === this || e.target.id === 'lbStage') closeLightbox();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (lbIndex < 0) return;
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowLeft') lbNav(-1);
+            else if (e.key === 'ArrowRight') lbNav(1);
+        });
+
+        // 手机上左右滑动翻页
+        let touchX = null;
+        document.getElementById('lbStage').addEventListener('touchstart', function (e) {
+            touchX = e.changedTouches[0].clientX;
+        }, { passive: true });
+        document.getElementById('lbStage').addEventListener('touchend', function (e) {
+            if (touchX === null) return;
+            const dx = e.changedTouches[0].clientX - touchX;
+            if (Math.abs(dx) > 45) lbNav(dx < 0 ? 1 : -1);
+            touchX = null;
+        }, { passive: true });
 
         // ── ZIP 打包（store，不压缩）──
         // 分享里的文件大多已经是压缩格式（mp4/jpg/zip…），再压一遍纯属浪费，
@@ -883,22 +1104,86 @@ class ShareManager {
             return new Blob(parts.concat(central, [eocd]), { type: 'application/zip' });
         }
 
-        /** 单个文件也走 Blob 下载，绝不 window.open 预览 */
+        /**
+         * 渲染列表。
+         *
+         * ★ 图片文件：整行点击 = 放大预览（不是下载），缩略图直接渲染出来。
+         *   非图片：整行点击 = 下载，和以前一样。
+         *   两种都保留独立的 Download 按钮，不会让人点错。
+         */
         fileList.innerHTML = '';
         files.forEach(file => {
+            const idx = files.indexOf(file);
+            const isImg = isImage(file.name);
             const li = document.createElement('li');
-            li.className = 'file-item';
-            li.onclick = () => saveFile(file);
+            li.className = 'file-item' + (isImg ? ' is-img' : '');
+            // 图片行点的是"放大"，非图片行点的是"下载"
+            li.onclick = () => isImg ? openLightbox(imageFiles.indexOf(file)) : saveFile(file);
+
+            const thumb = isImg
+                ? \`<div class="thumb-wrap">
+                       <img class="file-thumb" alt="" data-fi="\${idx}">
+                       <span class="thumb-zoom">🔍</span>
+                   </div>\`
+                : \`<span class="file-icon">\${getFileIcon(file.name)}</span>\`;
+
             li.innerHTML = \`
-                <span class="file-icon">\${getFileIcon(file.name)}</span>
+                \${thumb}
                 <div class="file-info">
                     <div class="file-name">\${escapeHtml(file.name)}</div>
                     <div class="file-size">\${file.size ? formatSize(file.size) : '<span data-i18n="clickDownload">Click to download</span>'}</div>
                 </div>
-                <button class="download-btn" onclick="event.stopPropagation(); saveFile(files[\${files.indexOf(file)}])"><span data-i18n="download">Download</span></button>
+                <button class="download-btn" onclick="event.stopPropagation(); saveFile(files[\${idx}])"><span data-i18n="download">Download</span></button>
             \`;
             fileList.appendChild(li);
         });
+
+        /**
+         * 缩略图懒加载。
+         * ★ 不能给每个 <img> 直接写 src —— 98 张原图一起请求，浏览器直接卡死。
+         *   进视口（提前 250px）才真正加载。没有 IntersectionObserver 就退回全加载。
+         *   加载失败的（比如 svg 其实是 XML）隐藏缩略图，回退成 emoji 图标。
+         */
+        (function initThumbs() {
+            const imgs = Array.prototype.slice.call(document.querySelectorAll('.file-thumb'));
+            if (!imgs.length) return;
+            const load = (el) => {
+                const f = files[+el.dataset.fi];
+                imgURL(f).then(u => { el.src = u; })
+                    .catch(() => { el.style.visibility = 'hidden'; });
+            };
+            if (!('IntersectionObserver' in window)) { imgs.forEach(load); return; }
+            const io = new IntersectionObserver((entries) => {
+                for (const en of entries) {
+                    if (!en.isIntersecting) continue;
+                    io.unobserve(en.target);
+                    load(en.target);
+                }
+            }, { rootMargin: '250px' });
+            imgs.forEach(el => io.observe(el));
+        })();
+
+        /**
+         * 有图片才显示"一键预览"按钮。
+         *
+         * ★ 这里不能读 translations —— 它定义在脚本靠后，
+         *   而 const 有暂时性死区（TDZ），提前引用会直接抛 ReferenceError
+         *   把整段脚本停摆（实测：按钮文案空、提示元素不见了）。
+         *   所以这段只负责"显示/隐藏 + 建元素"，文案交给末尾的 applyLang 填。
+         */
+        (function initPreviewBtn() {
+            const btn = document.getElementById('previewAllBtn');
+            if (!btn) return;
+            if (!imageFiles.length) { btn.style.display = 'none'; return; }
+            btn.style.display = '';
+            let tip = document.getElementById('imgCountTip');
+            if (!tip) {
+                tip = document.createElement('div');
+                tip.className = 'img-count';
+                tip.id = 'imgCountTip';
+                btn.parentNode.insertBefore(tip, btn.nextSibling);
+            }
+        })();
 
         /**
          * 打包下载全部。
@@ -970,7 +1255,10 @@ class ShareManager {
                 'download': 'Download',
                 'clickDownload': 'Click to download',
                 'promo.title': 'Want unlimited cloud storage with GitHub?',
-                'promo.btn': '🚀 Use GitHub Drive Now'
+                'promo.btn': '🚀 Use GitHub Drive Now',
+                'previewAll': 'Preview all images',
+                'imgCount': '{n} images can be previewed directly',
+                'lb.hint': '← → switch · Esc close'
             },
             zh: {
                 'page.title': '文件分享',
@@ -982,7 +1270,10 @@ class ShareManager {
                 'download': '下载',
                 'clickDownload': '点击下载',
                 'promo.title': '也想用 GitHub 当无限云盘？',
-                'promo.btn': '🚀 立即使用 GitHub Drive'
+                'promo.btn': '🚀 立即使用 GitHub Drive',
+                'previewAll': '一键预览全部图片',
+                'imgCount': '共 {n} 张图片可直接预览',
+                'lb.hint': '← → 切换 · Esc 关闭'
             }
         };
         // localStorage 在隐私模式/第三方上下文会抛异常，必须包起来，
@@ -998,6 +1289,13 @@ class ShareManager {
                 if (translations[lang][key]) el.innerHTML = translations[lang][key];
             });
             document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+            // 预览按钮文案带数量，是 JS 拼的，没有 data-i18n —— 得手动刷
+            const pb = document.getElementById('previewAllBtn');
+            if (pb && pb.style.display !== 'none') {
+                pb.textContent = '🖼️ ' + translations[lang].previewAll + ' (' + imageFiles.length + ')';
+            }
+            const tip = document.getElementById('imgCountTip');
+            if (tip) tip.textContent = translations[lang].imgCount.replace('{n}', imageFiles.length);
         }
         function toggleLang() {
             applyLang(currentLang === 'en' ? 'zh' : 'en');
