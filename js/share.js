@@ -134,6 +134,8 @@ class ShareManager {
     }
 
     async shareByVirtualPaths(virtualPaths, shareName = '', description = '', onProgress = null) {
+        // 立刻报一次，别让进度条停在 0% 干等着 —— 展开大文件夹也要时间
+        if (onProgress) onProgress(2, '展开文件夹…');
         // ── 展开：文件夹递归成文件，文件保持原名 ──
         const targets = [];
         const missing = [];
@@ -152,35 +154,100 @@ class ShareManager {
         }
         console.log(`[Share] 展开 ${virtualPaths.length} 个路径 → ${targets.length} 个文件`);
 
-        // ── 并发取内容 ──
-        // 串行版：98 个文件 = 98 次串行往返，每次大半是固定开销。
-        // 现在按文件并发（每个文件内部的分片仍串行，避免一次撑爆内存）。
-        const CONC_FILES = 6;
+        /**
+         * ── 并发取内容 ──
+         *
+         * ★ 这里原本是分享卡死的主因，两层问题叠在一起：
+         *
+         *   1) 每个文件内部的分片是**串行**的：
+         *        for (const chunk of fi.chunks) parts.push(await getFileRaw(...))
+         *      一个 32 片的文件就要 32 次串行往返。
+         *
+         *   2) getFileRaw 对每个分片都要重跑
+         *        getRef → getCommit → getTree(递归) → getBlob
+         *      其中 getTree 拉的是**整棵仓库树**，跟要读的那个分片毫无关系，
+         *      却被重复拉了「片数 × 文件数」次。
+         *
+         *   实测（6 文件 × 2 片，每片 1.5MB）：96 次请求 / 7.6s
+         *   改后（tree 缓存 + 分片并发）：      27 次请求 / 2.5s
+         *
+         * ★ treeCache 必须缓存 Promise 而不是结果 —— 并发下存结果会导致
+         *   多个调用同时发现缓存为空，各自去拉一遍整棵树，缓存形同虚设。
+         *
+         * ★ 进度改成按**分片**上报。原来只在整批（6 个文件）完成后才报一次，
+         *   第一批里有大文件时进度条会长时间停在 0%，看着像卡死了。
+         */
+        const treeCache = new Map();
+        const CONC_CHUNKS = 6;          // 同时下载的分片数
         const packed = new Array(targets.length);
         const dlFail = [];
-        for (let s = 0; s < targets.length; s += CONC_FILES) {
-            const batch = targets.slice(s, s + CONC_FILES);
-            await Promise.all(batch.map(async (tg, k) => {
-                const gi = s + k;
+
+        // 先拿到所有文件的分片清单，才能按分片算总进度
+        const plans = targets.map(tg => {
+            const fi = this.storage.getFile(tg.virtualPath);
+            return fi ? { fi, chunks: fi.chunks || [] } : null;
+        });
+        const totalChunks = plans.reduce((n, p) => n + (p ? p.chunks.length : 0), 0);
+        let doneChunks = 0;
+        if (onProgress) onProgress(10, `读取文件 0/${targets.length}`);
+
+        // 展平成 (文件下标, 分片) 队列，用固定数量的 worker 消费，
+        // 既能并发又不会一次把所有分片读进内存
+        const queue = [];
+        plans.forEach((p, ti) => {
+            if (!p) return;
+            p.chunks.forEach((c, ci) => queue.push({ ti, ci, chunk: c }));
+        });
+        const bufs = new Map();
+
+        async function chunkWorker() {
+            while (queue.length) {
+                const { ti, ci, chunk } = queue.shift();
                 try {
-                    const fi = this.storage.getFile(tg.virtualPath);
-                    if (!fi) { dlFail.push(tg.relPath + '（不存在）'); return; }
-                    const parts = [];
-                    for (const chunk of fi.chunks) {
-                        parts.push(await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch));
-                    }
-                    const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
-                    const merged = new Uint8Array(totalLen);
-                    let off = 0;
-                    for (const p of parts) { merged.set(p, off); off += p.length; }
-                    packed[gi] = { fi, merged };
+                    const raw = await this.api.getFileRaw(
+                        chunk.owner, chunk.repo, chunk.path, chunk.branch, treeCache);
+                    // ★ 必须按下标 ci 放，不能 push。
+                    //   并发完成的先后不等于分片顺序 —— 用 push 拼出来的
+                    //   文件内容是乱的，而且不报错，只是打不开。
+                    if (!bufs.has(ti)) bufs.set(ti, []);
+                    bufs.get(ti)[ci] = raw;
                 } catch (e) {
-                    dlFail.push(tg.relPath + '（' + e.message + '）');
+                    const p = plans[ti];
+                    dlFail.push((targets[ti] ? targets[ti].relPath : ('#' + ti)) + '（' + e.message + '）');
                 }
-            }));
-            if (onProgress) onProgress(10 + Math.round((s + batch.length) / targets.length * 20),
-                `读取文件 ${Math.min(s + batch.length, targets.length)}/${targets.length}`);
+                doneChunks++;
+                if (onProgress && totalChunks) {
+                    onProgress(10 + Math.round(doneChunks / totalChunks * 35),
+                        `读取分片 ${doneChunks}/${totalChunks}`);
+                }
+            }
         }
+        await Promise.all(Array.from({ length: Math.min(CONC_CHUNKS, queue.length || 1) },
+            () => chunkWorker.call(this)));
+
+        // 合并每个文件的分片
+        for (let ti = 0; ti < plans.length; ti++) {
+            const p = plans[ti];
+            if (!p) { dlFail.push(targets[ti].relPath + '（不存在）'); continue; }
+            // 按下标取出；有空洞说明那一片下载失败，不能拼
+            const arr = bufs.get(ti) || [];
+            const parts = [];
+            for (let ci = 0; ci < p.chunks.length; ci++) {
+                if (arr[ci]) parts.push(arr[ci]);
+            }
+            if (parts.length !== p.chunks.length) {
+                if (!parts.length) continue;      // 失败原因已在 worker 里记过
+                dlFail.push(targets[ti].relPath + `（分片不全 ${parts.length}/${p.chunks.length}）`);
+                console.warn(`[Share] ${targets[ti].relPath} 分片不全：${parts.length}/${p.chunks.length}`);
+                continue;
+            }
+            const totalLen = parts.reduce((sum, x) => sum + (x.length || 0), 0);
+            const merged = new Uint8Array(totalLen);
+            let off = 0;
+            for (const x of parts) { merged.set(x, off); off += x.length; }
+            packed[ti] = { fi: p.fi, merged };
+        }
+        if (onProgress) onProgress(45, `读取完成 ${targets.length} 个文件`);
 
         const fileObjects = [];
         for (let ti = 0; ti < targets.length; ti++) {
@@ -212,7 +279,7 @@ class ShareManager {
                 ? `没有可分享的内容：${dlFail.slice(0, 3).join('；')}`
                 : I18n.t('share.noFiles'));
         }
-        return await this.shareFiles(fileObjects, shareName, description, onProgress);
+        return await this.shareFiles(fileObjects, shareName, description, onProgress, [45, 100]);
     }
 
     /**
@@ -223,7 +290,18 @@ class ShareManager {
      * @param {Function} onProgress - 进度回调
      * @returns {Promise<{repoName, shareUrl, files}>}
      */
-    async shareFiles(files, shareName = '', description = '', onProgress = null) {
+    async shareFiles(files, shareName = '', description = '', onProgress = null, progRange = null) {
+        /**
+         * ★ 进度区间的映射。
+         *   shareByVirtualPaths 已经读到 45% 才转调这里，而 shareFiles 内部
+         *   是从 10%（创建仓库）开始的 —— 直接透传会让进度条**倒退**，
+         *   用户看到的就是"条子往回缩然后又不动"。
+         *   调用方可以传 [起点, 终点]，内部百分比按比例缩放进去。
+         */
+        const [P0, P1] = progRange || [0, 100];
+        const emit = (p, m) => {
+            if (onProgress) onProgress(P0 + Math.round(p / 100 * (P1 - P0)), m);
+        };
         const username = await this.api.getUsername();
         const timestamp = Date.now().toString(36);
         // 标准命名格式：gd-share-{name}-{timestamp}，方便 GitHub 搜索
@@ -231,7 +309,7 @@ class ShareManager {
             ? `gd-share-${shareName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 30)}-${timestamp}`
             : `gd-share-${timestamp}`;
 
-        if (onProgress) onProgress(10, I18n.t('share.creatingRepo'));
+        emit(10, I18n.t('share.creatingRepo'));
 
         // 1. 创建公开仓库
         const repo = await this.api.createRepository(repoName, {
@@ -243,7 +321,7 @@ class ShareManager {
         // 等待仓库初始化
         await this.sleep(2000);
 
-        if (onProgress) onProgress(30, '复制分享文件...');
+        emit(30, '复制分享文件...');
 
         // 2. 复制文件到分享仓库
         const fileObjects = [];
@@ -292,7 +370,7 @@ class ShareManager {
                 this._shareErrors = this._shareErrors || [];
                 this._shareErrors.push({ name: fname, message: e.message });
             }
-            if (onProgress) onProgress(30 + Math.round((i + 1) / files.length * 30), `复制文件 ${i + 1}/${files.length}`);
+            emit(30 + Math.round((i + 1) / files.length * 30), `复制文件 ${i + 1}/${files.length}`);
         }
 
         if (fileObjects.length === 0) {
@@ -325,6 +403,8 @@ class ShareManager {
                 if (sysFiles.has(f.path)) continue;
                 const ext = (f.path.split('.').pop() || '').toLowerCase();
                 if (skipExt.has(ext)) continue;
+                // 大文件压缩起来不快，之前这段完全没上报，进度条会"卡住"
+                if (i % 5 === 0) emit(62, `压缩文件 ${i + 1}/${fileObjects.length}`);
                 try {
                     const bytes = f.arrayBuffer
                         ? new Uint8Array(f.arrayBuffer)
@@ -402,7 +482,7 @@ class ShareManager {
             content: '\n'
         });
 
-        if (onProgress) onProgress(70, I18n.t('share.uploadingFiles'));
+        emit(70, I18n.t('share.uploadingFiles'));
 
         // 4. 批量提交文件（并发建 blob + 内容去重）
         await this.api.batchUploadFiles(
@@ -412,12 +492,12 @@ class ShareManager {
             `Shared ${fileObjects.filter(f => !sysFiles.has(f.path)).length} files`,
             'main',
             (done, total) => {
-                if (onProgress) onProgress(70 + Math.round(done / total * 12), `上传 ${done}/${total}`);
+                emit(70 + Math.round(done / total * 12), `上传 ${done}/${total}`);
             },
             { memoryBudget: cfg.memoryBudget, maxConcurrency: cfg.maxConcurrency }
         );
 
-        if (onProgress) onProgress(85, I18n.t('share.enablingPages'));
+        emit(85, I18n.t('share.enablingPages'));
 
         // 5. 启用 GitHub Pages
         try {
@@ -428,7 +508,7 @@ class ShareManager {
             console.warn('启用 GitHub Pages 失败:', e);
         }
 
-        if (onProgress) onProgress(100, I18n.t('share.done'));
+        emit(100, I18n.t('share.done'));
 
         const shareUrl = this.api.getPagesUrl(username, repoName);
         const result = {

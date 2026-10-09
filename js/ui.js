@@ -2498,6 +2498,7 @@ class UI {
 
     /** 打开分享进度弹窗 */
     showShareProgress(fileCount) {
+        this._lastSharePct = 0;
         if (typeof TaskDock !== 'undefined') {
             this._shareTaskId = TaskDock.create({
                 type: 'share',
@@ -2545,7 +2546,16 @@ class UI {
             return;
         }
         if (!this._shareProgressOpen) return;
-        const pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        let pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        /**
+         * ★ 进度只增不减。
+         *   分享是多阶段流程，各阶段自己算百分比，一旦某个阶段从较小的值
+         *   起步（例如读取刚结束 32%，转去上传又从 10% 报），进度条会往回缩，
+         *   看着就像卡住甚至坏了。这里兜底保证单调。
+         */
+        this._lastSharePct = this._lastSharePct || 0;
+        if (pct < this._lastSharePct) pct = this._lastSharePct;
+        this._lastSharePct = pct;
 
         const fill = document.getElementById('sp-fill');
         const pctEl = document.getElementById('sp-pct');

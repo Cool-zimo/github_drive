@@ -109,7 +109,11 @@ const TaskDock = (() => {
 
     function setPercent(id, percent, note) {
         const t = tasks.get(id); if (!t) return;
-        t.percent = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        let pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        // ★ 只增不减：分享是多阶段流程，各阶段独立算百分比，
+        //   阶段切换时若新阶段从较小值起步，进度条会往回缩看着像卡住。
+        if (t.status === 'running' && pct < (t.percent || 0)) pct = t.percent;
+        t.percent = pct;
         if (note !== undefined) t.note = note;
         render();
     }

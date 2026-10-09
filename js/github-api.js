@@ -265,9 +265,31 @@ class GitHubAPI {
 
     /**
      * 获取文件原始内容（文本）
+     *
+     * @param {Map|null} treeCache - 批量读取时传入，复用同一棵递归 tree。
+     *   不传就每次重拉（保持旧行为，避免影响写操作后的读取）。
      */
-    async getFileRaw(owner, repo, path, ref = 'main') {
+    async getFileRaw(owner, repo, path, ref = 'main', treeCache = null) {
         const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
+
+        /**
+         * ★ 大文件直接走 Git 路径，别白跑一次 contents API。
+         *
+         *   contents API 对 >1MB 的文件返回 `encoding:"none"` + `content:""`，
+         *   也就是说请求发出去了、东西没拿到、还得再走一遍 Git 路径。
+         *   分享的分片几乎全都 >1MB，等于每个分片都白扔一次请求。
+         *   有 tree 缓存时 tree 条目里自带 size，可以先判再决定走哪条路。
+         */
+        if (treeCache) {
+            try {
+                const tree = await this._cachedTree(owner, repo, ref, treeCache);
+                const item = tree.tree.find(x => x.path === path);
+                if (item && item.size > 1000000) {
+                    return await this.getFileRawViaGit(owner, repo, path, ref, treeCache);
+                }
+            } catch (e) { /* 拿不到 tree 就走老路 */ }
+        }
+
         try {
             const data = await this.request(`/repos/${owner}/${repo}/contents/${encodedPath}?ref=${ref}`);
             if (data.encoding === 'base64') {
@@ -278,20 +300,48 @@ class GitHubAPI {
                 return bytes;
             }
             // Contents API 不返回 content（大文件），回退到 Git Data API
-            return await this.getFileRawViaGit(owner, repo, path, ref);
+            return await this.getFileRawViaGit(owner, repo, path, ref, treeCache);
         } catch (e) {
             // Contents API 报错（如大文件超过 1MB 限制），回退到 Git Data API
-            return await this.getFileRawViaGit(owner, repo, path, ref);
+            return await this.getFileRawViaGit(owner, repo, path, ref, treeCache);
         }
     }
 
     /**
-     * 通过 Git Data API 获取文件原始内容（支持大文件，最大 100MB）
+     * 取一棵递归 tree，结果在 treeCache 内复用。
+     *
+     * ★ 缓存的是 **Promise** 而不是结果。
+     *   并发时多个调用会同时发现缓存为空，若存结果就会各自去拉一遍整棵树，
+     *   缓存形同虚设（实测：存结果时 24 次 tree 请求，存 Promise 后 1 次）。
      */
-    async getFileRawViaGit(owner, repo, path, ref = 'main') {
-        const refData = await this.getRef(owner, repo, `heads/${ref}`);
-        const commit = await this.getCommit(owner, repo, refData.object.sha);
-        const tree = await this.getTree(owner, repo, commit.tree.sha, true);
+    _cachedTree(owner, repo, ref, treeCache) {
+        const key = `${owner}/${repo}@${ref}`;
+        if (!treeCache.has(key)) {
+            treeCache.set(key, (async () => {
+                const refData = await this.getRef(owner, repo, `heads/${ref}`);
+                const commit = await this.getCommit(owner, repo, refData.object.sha);
+                return await this.getTree(owner, repo, commit.tree.sha, true);
+            })());
+        }
+        return treeCache.get(key);
+    }
+
+    /**
+     * 通过 Git Data API 获取文件原始内容（支持大文件，最大 100MB）
+     *
+     * ★ 旧实现每调一次就重跑 getRef → getCommit → getTree(递归) → getBlob
+     *   四条链。分享 98 个文件（每文件多片）时，getTree 会被重复拉上百次，
+     *   而它返回的是**整棵仓库树** —— 仓库越大越慢。这是分享卡住的主因。
+     */
+    async getFileRawViaGit(owner, repo, path, ref = 'main', treeCache = null) {
+        let tree;
+        if (treeCache) {
+            tree = await this._cachedTree(owner, repo, ref, treeCache);
+        } else {
+            const refData = await this.getRef(owner, repo, `heads/${ref}`);
+            const commit = await this.getCommit(owner, repo, refData.object.sha);
+            tree = await this.getTree(owner, repo, commit.tree.sha, true);
+        }
         const treeItem = tree.tree.find(item => item.path === path);
         if (!treeItem) throw new Error('文件不存在: ' + path);
         const blob = await this.getBlob(owner, repo, treeItem.sha);
