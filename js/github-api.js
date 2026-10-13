@@ -221,6 +221,22 @@ class GitHubAPI {
     }
 
     /**
+     * 设置仓库 topics（用于精确检索分享仓库）
+     *
+     * ★ 为什么需要它：用名字搜 `gd-share in:name` 会命中上百个无关仓库
+     *   （gd-sharer / GDA_Capstone / GDPR / gdrive-share…），真分享被淹在
+     *   第 80 多位，一页 30 条根本翻不到。topic 是精确匹配，没有噪音。
+     *
+     *   创建仓库时 API **不支持**直接带 topics，必须建完再单独 PUT。
+     */
+    async setTopics(owner, repo, names) {
+        return await this.request(`/repos/${owner}/${repo}/topics`, {
+            method: 'PUT',
+            body: { names: Array.isArray(names) ? names : [names] }
+        });
+    }
+
+    /**
      * 删除仓库（需要确认）
      */
     async deleteRepository(owner, repo) {

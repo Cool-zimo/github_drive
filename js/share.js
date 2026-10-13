@@ -324,6 +324,15 @@ class ShareManager {
         // 等待仓库初始化
         await this.sleep(2000);
 
+        // 1.5 打 topic，让"发现分享"能精确搜到（名字搜索会被上百个无关仓库淹没）
+        //     失败无所谓：不影响分享本身，发现列表还会兜底并入自己的分享
+        try {
+            const ownerLogin = (repo && repo.owner && repo.owner.login) || username;
+            await this.api.setTopics(ownerLogin, repoName, ['gd-share', 'github-drive']);
+        } catch (e) {
+            console.warn('[Share] 设置 topic 失败（不影响分享）:', e.message);
+        }
+
         emit(30, '复制分享文件...');
 
         // 2. 复制文件到分享仓库
@@ -1431,49 +1440,143 @@ class ShareManager {
     }
 
     /**
-     * 搜索公开分享（通过标准命名格式 gd-share- 搜索）
-     * @param {number} page - 页码
-     * @param {number} perPage - 每页数量
-     * @returns {Promise<{shares: Array, total: number, hasMore: boolean}>}
+     * 搜索公开分享
+     *
+     * ★ 以前只搜 `gd-share in:name`，导致**自己的分享一条都看不到**。
+     *   实测：这个查询命中 105 个仓库，绝大多数是无关项目
+     *   （gd-sharer / GDA_Capstone_Project_Cyclistic_Bike-share / GDPR /
+     *   gdrive-share / gd_share_client…），用户自己的分享排在第 84、85、89 位。
+     *   而 perPage 只有 30 —— 一页根本装不到，页面就显示"暂无公开分享"。
+     *
+     *   更糟的是那 30 个无关仓库还要逐个去读 share.json 验证，
+     *   全是无效请求，所以列表不但空、还很慢。
+     *
+     *   两个毛病叠在一起：
+     *     1) 查询太宽（105 个里 102 个是噪音）
+     *     2) 自己的分享不保证在榜
+     *
+     *   改法：
+     *     a) 改用 topic:gd-share 精确检索（实测 total: 105 → 1，全是真分享）
+     *        创建分享时会打 topic；历史仓库补一次即可。
+     *     b) 自己的分享直接并入，不依赖搜索索引
+     *        （GitHub 搜索索引有延迟，刚分享的可能几分钟内搜不到 ——
+     *         那时就算查询再准也照样是空的）
+     *     c) share.json 校验并发化，不再逐条串行等待
      */
     async searchShares(page = 1, perPage = 30) {
-        const result = await this.api.searchRepositories('gd-share in:name', page, perPage);
-        const repos = result.items || [];
-        const shares = [];
+        const TOPIC_Q = 'topic:gd-share';
+        const NAME_Q = 'gd-share- in:name';
 
-        for (const repo of repos) {
+        let result;
+        try {
+            result = await this.api.searchRepositories(TOPIC_Q, page, perPage);
+        } catch (e) {
+            console.warn('[Share] topic 搜索失败，退回名字搜索:', e.message);
+            result = { items: [], total_count: 0 };
+        }
+        let repos = result.items || [];
+
+        // topic 还没被索引到（老仓库没打过 topic）时退回名字搜索，
+        // 至少让广场不是空的
+        if ((!repos.length) && page === 1) {
             try {
-                // 尝试读取 share.json 验证是否是标准分享
-                const meta = await this.api.getFileRaw(repo.owner.login, repo.name, 'share.json', repo.default_branch || 'main');
-                const metaText = new TextDecoder('utf-8').decode(meta);
-                const metaJson = JSON.parse(metaText);
-                if (metaJson.type === 'github-drive-share') {
-                    shares.push({
-                        repoName: repo.name,
-                        owner: repo.owner.login,
-                        name: metaJson.name || repo.name,
-                        description: metaJson.description || repo.description || '',
-                        author: metaJson.author || repo.owner.login,
-                        avatar: repo.owner.avatar_url,
-                        fileCount: metaJson.fileCount || 0,
-                        files: metaJson.files || [],
-                        createdAt: metaJson.createdAt || repo.created_at,
-                        updatedAt: repo.updated_at,
-                        stars: repo.stargazers_count,
-                        pagesUrl: `https://${repo.owner.login}.github.io/${repo.name}/`,
-                        repoUrl: repo.html_url
+                const fb = await this.api.searchRepositories(NAME_Q, page, perPage);
+                repos = fb.items || [];
+                result = { items: repos, total_count: fb.total_count || repos.length };
+            } catch (e) {
+                console.warn('[Share] 名字搜索也失败:', e.message);
+            }
+        }
+
+        const shares = await this._verifyShares(repos);
+
+        // ★ 自己的分享并入（仅首页），保证"刚分享完就能在广场看到"
+        if (page === 1) {
+            try {
+                const mine = await this.listMyShares();
+                const seen = new Set(shares.map(s => `${s.owner}/${s.repoName}`.toLowerCase()));
+                for (const m of mine) {
+                    // ★ listMyShares 的返回里**没有 owner 字段**，只有 fullName。
+                    //   写成 m.owner 的话 key 会变成 "/仓库名"，跟上面 seen 里的
+                    //   "用户名/仓库名" 永远对不上 —— 去重失效，同一个分享出现两次。
+                    const ownerLogin = m.owner || (m.fullName || '').split('/')[0] || '';
+                    const key = `${ownerLogin}/${m.repoName}`.toLowerCase();
+                    if (seen.has(key)) continue;
+                    const built = await this._buildShareFromRepo({
+                        name: m.repoName,
+                        owner: { login: ownerLogin },
+                        description: m.description,
+                        created_at: m.createdAt,
+                        updated_at: m.updatedAt,
+                        stargazers_count: 0,
+                        default_branch: 'main',
+                        html_url: m.repoUrl
                     });
+                    if (built) { built.isMine = true; shares.unshift(built); seen.add(key); }
                 }
             } catch (e) {
-                // 没有 share.json 或格式不对，跳过
-                console.debug('[Share] 跳过非标准分享仓库:', repo.name, e.message);
+                console.warn('[Share] 并入自己的分享失败（不影响广场）:', e.message);
             }
         }
 
         return {
             shares,
-            total: result.total_count || 0,
+            total: result.total_count || shares.length,
             hasMore: page * perPage < (result.total_count || 0)
+        };
+    }
+
+    /**
+     * 并发校验一批候选仓库是不是真的分享（有合法的 share.json）
+     * @private
+     */
+    async _verifyShares(repos, concurrency = 6) {
+        const shares = [];
+        const queue = repos.slice();
+        async function worker() {
+            while (queue.length) {
+                const repo = queue.shift();
+                try {
+                    const built = await this._buildShareFromRepo(repo);
+                    if (built) shares.push(built);
+                } catch (e) {
+                    console.debug('[Share] 跳过非标准分享仓库:', repo.name, e.message);
+                }
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(concurrency, queue.length || 1) },
+            () => worker.call(this)));
+        // 并发完成后顺序会乱，按更新时间倒序稳定下来
+        shares.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+        return shares;
+    }
+
+    /**
+     * 读一个仓库的 share.json 并组装成分享卡片；不合法返回 null
+     * @private
+     */
+    async _buildShareFromRepo(repo) {
+        const ownerLogin = repo.owner?.login || (repo.full_name || '').split('/')[0] || '';
+        if (!ownerLogin || !repo.name) return null;
+        const meta = await this.api.getFileRaw(
+            ownerLogin, repo.name, 'share.json', repo.default_branch || 'main');
+        const metaText = new TextDecoder('utf-8').decode(meta);
+        const metaJson = JSON.parse(metaText);
+        if (metaJson.type !== 'github-drive-share') return null;
+        return {
+            repoName: repo.name,
+            owner: ownerLogin,
+            name: metaJson.name || repo.name,
+            description: metaJson.description || repo.description || '',
+            author: metaJson.author || ownerLogin,
+            avatar: repo.owner?.avatar_url || '',
+            fileCount: metaJson.fileCount || 0,
+            files: metaJson.files || [],
+            createdAt: metaJson.createdAt || repo.created_at,
+            updatedAt: repo.updated_at,
+            stars: repo.stargazers_count || 0,
+            pagesUrl: `https://${ownerLogin}.github.io/${repo.name}/`,
+            repoUrl: repo.html_url || `https://github.com/${ownerLogin}/${repo.name}`
         };
     }
 
