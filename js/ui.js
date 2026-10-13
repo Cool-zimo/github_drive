@@ -1290,7 +1290,8 @@ class UI {
 
             {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
             {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
-            {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记', action:'ui.closeModal();ui.showStorageManager();'},
+            {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
+            {icon:'🤖', title:'自动整理设置', desc:'后台自动把零散小仓并进大仓，不用手动操作', action:'ui.closeModal();ui.showAutoCompactSettings();'},
             {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
             {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
             {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
@@ -1312,6 +1313,104 @@ class UI {
             body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
         }
         this.showModal(I18n.t('settings.title'), body, '', true);
+    }
+
+    /**
+     * 自动整理设置
+     *
+     * 默认行为说明要写清楚：**只迁移，不删仓**。
+     * 迁移是可控的（数据还在源仓），删仓不可逆 ——
+     * 后台默默删仓库这件事，默认开太危险了。
+     */
+    showAutoCompactSettings() {
+        const cfg = (this.app && this.app.storage && this.app.storage.getStorageConfig()) || {};
+        const on = cfg.autoCompact !== false;
+        const del = cfg.autoCompactDelete === true;
+        const maxMB = cfg.autoCompactMaxMoveMB || 300;
+        const coolH = cfg.autoCompactCooldownHours || 24;
+
+        let last = '从未运行';
+        if (cfg.lastAutoCompactAt) {
+            const h = Math.floor((Date.now() - cfg.lastAutoCompactAt) / 3600000);
+            last = h < 1 ? '刚刚' : (h < 24 ? `${h} 小时前` : `${Math.floor(h / 24)} 天前`);
+        }
+
+        const row = (label, desc, ctl) =>
+            `<div style="padding:12px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:200px;">
+                        <div style="font-size:13px;font-weight:600;color:#1f2937;">${label}</div>
+                        <div style="font-size:12px;color:#6b7280;line-height:1.5;margin-top:2px;">${desc}</div>
+                    </div>
+                    ${ctl}
+                </div>
+             </div>`;
+
+        const toggle = (act, cur, onT, offT) =>
+            `<button onclick="ui.toggleAutoCompact('${act}')"
+                style="min-width:64px;padding:6px 12px;border-radius:999px;border:1px solid #d1d5db;
+                       background:${cur ? '#2563eb' : '#f3f4f6'};color:${cur ? '#fff' : '#6b7280'};
+                       font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                ${cur ? onT : offT}</button>`;
+
+        const body = `
+        <div style="padding:8px 0;font-size:13px;line-height:1.7;">
+            <div style="padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;font-size:12px;color:#6b7280;">
+                空闲时自动把零散的小仓并进大仓，减少仓库数量、集中可用空间。<br>
+                在后台跑，收成小窗，不打断你当前的操作。<br>
+                <b>默认只迁移、不删仓</b> —— 迁移后数据仍在源仓，随时可以验证。
+            </div>
+
+            ${row('自动整理', '满足条件时后台自动执行', toggle('autoCompact', on, '已开启', '已关闭'))}
+            ${row('自动删除腾空的仓', '迁移完成后把空仓删掉（<b>不可恢复</b>）', toggle('autoCompactDelete', del, '会删除', '保留'))}
+            ${row('单次迁移上限', `超过这个量就不在后台默默搬（当前 ${maxMB} MB）`,
+                `<input id="ac-maxmb" type="number" value="${maxMB}" min="10" max="2000" step="50"
+                    style="width:84px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;">
+                 <span style="font-size:12px;color:#9ca3af;">MB</span>`)}
+            ${row('冷却时间', `两次整理之间至少间隔（当前 ${coolH} 小时）`,
+                `<input id="ac-coolh" type="number" value="${coolH}" min="1" max="720" step="1"
+                    style="width:84px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;">
+                 <span style="font-size:12px;color:#9ca3af;">小时</span>`)}
+
+            <div style="font-size:12px;color:#9ca3af;margin:10px 0;">
+                上次整理：${last}
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-primary btn-sm" onclick="ui.saveAutoCompact()">保存并立即评估</button>
+                <button class="btn-secondary btn-sm" onclick="ui.closeModal();ui.showStorageManager();">手动整理</button>
+            </div>
+        </div>`;
+        this.showModal('🤖 自动整理设置', body, '', true);
+    }
+
+    /** 切换自动整理的某个开关 */
+    toggleAutoCompact(key) {
+        if (!this.app || !this.app.storage) return;
+        const cfg = this.app.storage.getStorageConfig() || {};
+        if (key === 'autoCompact') cfg.autoCompact = cfg.autoCompact === false;
+        if (key === 'autoCompactDelete') cfg.autoCompactDelete = cfg.autoCompactDelete !== true;
+        this.app.storage.updateStorageConfig?.(cfg);
+        this.app.configSync?.scheduleSync?.();
+        this.showAutoCompactSettings();
+    }
+
+    /** 保存数值设置，并立刻评估一次 */
+    saveAutoCompact() {
+        if (!this.app || !this.app.storage) return;
+        const cfg = this.app.storage.getStorageConfig() || {};
+        const mb = parseInt((document.getElementById('ac-maxmb') || {}).value, 10);
+        const ch = parseInt((document.getElementById('ac-coolh') || {}).value, 10);
+        if (mb >= 10 && mb <= 2000) cfg.autoCompactMaxMoveMB = mb;
+        if (ch >= 1 && ch <= 720) cfg.autoCompactCooldownHours = ch;
+        this.app.storage.updateStorageConfig?.(cfg);
+        this.app.configSync?.scheduleSync?.();
+        this.closeModal();
+        // 清掉冷却，让用户能立刻看到评估结果
+        const c = this.app.storage.getStorageConfig() || {};
+        delete c.lastAutoCompactAt;
+        this.app.storage.updateStorageConfig?.(c);
+        setTimeout(() => this.app.maybeAutoCompact?.('手动触发'), 300);
     }
 
     /** 存储仓库管理（内容由 app.showStorageManager 填充） */

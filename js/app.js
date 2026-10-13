@@ -167,6 +167,10 @@ class App {
         this.showApp();
         // 更新仓库体积显示
         setTimeout(() => this.updateRepoSizeDisplay(), 1500);
+        // 启动后台整理的低频检查（每小时一次，配合事件触发的防抖调度）
+        this.startAutoCompactWatch?.();
+        // 登录后延迟评估一次：刚打开页面不太可能有正在跑的任务
+        setTimeout(() => { try { this.maybeAutoCompact('登录'); } catch (e) {} }, 20000);
 
         // 验证 token 有效性（401 说明 token 无效/过期，回登录页）
         try {
@@ -598,6 +602,8 @@ class App {
             await this.loadFiles();
             // 显示成功状态 2 秒后自动关闭面板
             setTimeout(() => this.ui.hideUploadProgress?.(), 2000);
+            // 上传后可能新增了仓，顺带评估一次要不要后台整理（防抖 + 冷却，不会每次都跑）
+            this.scheduleAutoCompact();
         } catch (e) {
             this.ui.showToast(I18n.t('file.uploadFailed') + ': ' + e.message, 'error');
             setTimeout(() => this.ui.hideUploadProgress?.(true, e.message), 3000);
@@ -1443,6 +1449,131 @@ class App {
             const names = info.overRepos.map(r => `${r.repo} (${r.sizeMB.toFixed(0)} MB)`).join('、');
             this.ui?.showToast(
                 `⚠️ ${names} 体积接近 ${Math.round(warnMB)} MB，新文件会自动写到别的仓库`, 'error');
+        }
+    }
+
+    // ==================== 自动整理（后台，无需手动） ====================
+    /**
+     * 自动整理调度：空闲时默默把零散的小仓并进大仓。
+     *
+     * 用户原话："不能自动定时后台转移吗，让我手动转移这很费脑子"。
+     * 确实 —— 整理是个"什么时候做都行、但没人愿意惦记"的事。
+     *
+     * ★ 触发条件必须严格，否则会变成骚扰：
+     *     1) 开关打开（默认开）
+     *     2) 仓数 ≥ 3（2 个仓没什么好整的）
+     *     3) 整理后确实能少一个仓
+     *     4) 迁移量 ≤ 阈值（默认 300MB）—— 大了就别在后台默默搬
+     *     5) 距上次 ≥ 24 小时（同一天反复触发说明条件没变，做了也白做）
+     *     6) 当前没有正在跑的上传/下载/分享
+     *
+     * ★ 为什么不用 setInterval 硬轮询：
+     *   页面可能挂一整天，硬轮询会一直消耗配额。
+     *   这里用「事件触发 + 防抖 + 冷却」：上传/删除之后才评估，
+     *   外加一个低频的兜底检查（页面开着时每小时一次）。
+     */
+    scheduleAutoCompact() {
+        clearTimeout(this._autoCompactTimer);
+        // 防抖 8 秒：连续上传 10 个文件只评估一次，不是每个都评估
+        this._autoCompactTimer = setTimeout(() => {
+            this.maybeAutoCompact('自动');
+        }, 8000);
+    }
+
+    /** 页面开着时的低频兜底检查（每小时一次） */
+    startAutoCompactWatch() {
+        if (this._autoCompactWatch) return;
+        this._autoCompactWatch = setInterval(() => {
+            try { this.maybeAutoCompact('定时'); } catch (e) { /* 后台任务不打扰用户 */ }
+        }, 60 * 60 * 1000);
+    }
+
+    /**
+     * 评估并执行自动整理。
+     * @param {string} reason - 触发原因（写进任务标题，方便回溯）
+     */
+    async maybeAutoCompact(reason = '自动') {
+        if (this._compactRunning) return null;
+        const cfg = this.storage.getStorageConfig() || {};
+        if (cfg.autoCompact === false) return null;
+
+        // 冷却
+        const HOUR = 3600 * 1000;
+        const coolH = cfg.autoCompactCooldownHours || 24;
+        if (cfg.lastAutoCompactAt && (Date.now() - cfg.lastAutoCompactAt) < coolH * HOUR) {
+            return null;
+        }
+        // 忙的时候不添乱
+        if (this._busyCount && this._busyCount > 0) return null;
+
+        let plan;
+        try {
+            plan = this.fileManager.planRepoCompaction();
+        } catch (e) {
+            return null;
+        }
+        if (!plan || !plan.moves.length) return null;
+        if (plan.beforeCount < 3) return null;
+        if (plan.beforeCount - plan.afterCount < 1) return null;
+
+        const maxMoveMB = cfg.autoCompactMaxMoveMB || 300;
+        if (plan.moveBytes > maxMoveMB * 1048576) {
+            console.log(`[AutoCompact] 迁移量 ${(plan.moveBytes/1048576).toFixed(0)}MB 超过 ${maxMoveMB}MB，跳过`);
+            return null;
+        }
+
+        return await this.runAutoCompact(plan, reason);
+    }
+
+    /** 执行自动整理（接进任务坞，让用户看得见但不是必须盯着） */
+    async runAutoCompact(plan, reason = '自动') {
+        this._compactRunning = true;
+        const MB = n => (n / 1048576).toFixed(1);
+        const cfg = this.storage.getStorageConfig() || {};
+        // ★ 自动整理默认**不删仓库**，只迁移。
+        //   迁移是可控的（数据还在源仓），删仓不可逆。
+        //   腾空的仓会在下次手动整理时列出，或者用户打开开关才自动删。
+        const doDelete = cfg.autoCompactDelete === true;
+
+        let taskId = null;
+        if (typeof TaskDock !== 'undefined' && TaskDock.create) {
+            const t = TaskDock.create({
+                type: 'compact',
+                title: `🧹 整理仓库（${reason}）`,
+                items: plan.moves.map(m => `${m.from.repo} → ${m.to.repo}`),
+                note: `${plan.beforeCount} 个仓 → ${plan.afterCount} 个 · ${MB(plan.moveBytes)} MB`,
+                expand: false   // ★ 后台任务默认收成小窗，不打断当前操作
+            });
+            taskId = t && t.id;
+        }
+
+        try {
+            const res = await this.fileManager.compactRepos(plan, (stage, done, total, msg) => {
+                if (taskId && TaskDock.setPercent) {
+                    const pct = total ? Math.round(done / total * 100) : 0;
+                    TaskDock.setPercent(taskId, pct);
+                    TaskDock.setNote?.(taskId, `${msg}（${done}/${total}）`);
+                }
+            }, doDelete);
+
+            // 记时间，避免同一天反复跑
+            const c = this.storage.getStorageConfig() || {};
+            c.lastAutoCompactAt = Date.now();
+            this.storage.updateStorageConfig?.(c);
+            try { await this.configSync?.pushConfig?.(); } catch (e) { /* 稍后自动同步 */ }
+
+            if (taskId && TaskDock.finish) {
+                TaskDock.finish(taskId, true,
+                    `迁移 ${res.moved} 片` + (res.deleted.length ? `，删除 ${res.deleted.length} 个空仓` : '（源仓保留）'));
+            }
+            if (res.moved) await this.loadFiles?.();
+            return res;
+        } catch (e) {
+            if (taskId && TaskDock.finish) TaskDock.finish(taskId, false, e.message);
+            console.warn('[AutoCompact] 整理失败（源数据未受影响）:', e.message);
+            return null;
+        } finally {
+            this._compactRunning = false;
         }
     }
 

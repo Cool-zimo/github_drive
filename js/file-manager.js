@@ -740,21 +740,77 @@ class FileManager {
         }
 
         // ⑤ 删源仓（只有到这一步才不可逆）
+        //
+        // ★ 删除前必须**重新读一遍源仓**，确认里面确实没有 VFS 还在用的分片。
+        //   为什么不能只信 plan：plan 是几分钟前算的，这期间用户可能又传了东西、
+        //   也可能有别的设备往里写。拿陈旧的结论去删仓库 = 删掉还在用的数据。
+        //   这是唯一不可逆的一步，所以宁可多花一次请求。
         const deleted = [];
+        const skipped = [];
         if (deleteSources) {
             for (const key of plan.deletable) {
                 const mv = plan.moves.find(m => m.from.key === key);
                 try {
+                    const empty = await this._isRepoUnused(mv.from);
+                    if (!empty.ok) {
+                        skipped.push({ key, reason: empty.reason });
+                        console.warn(`[FileManager] 跳过删除 ${key}：${empty.reason}`);
+                        continue;
+                    }
                     await this.api.deleteRepository(mv.from.owner, mv.from.repo);
                     deleted.push(key);
                 } catch (e) {
                     console.warn('[FileManager] 删除源仓失败（数据已迁移，不影响）:', key, e.message);
+                    skipped.push({ key, reason: e.message });
                 }
             }
         }
 
+        // 从本地仓库列表移除已删的
+        if (deleted.length && this.storage.setRepos) {
+            const gone = new Set(deleted);
+            this.storage.setRepos(
+                this.storage.getRepos().filter(r => !gone.has(`${r.owner}/${r.repo}`)));
+        }
+
         console.log(`[FileManager] 整理完成：迁移 ${migrated.length} 片，删除 ${deleted.length} 个空仓`);
         return { moved: migrated.length, deleted, totalItems };
+    }
+
+    /**
+     * 判断一个仓库是不是真的可以删了。
+     *
+     * 判据不是"我刚把它的东西搬走了"，而是"现在还有没有 VFS 记录指向它"。
+     * 只要还有一个 chunk 住在里面，就不能删 ——
+     * 哪怕那个 chunk 是我以为已经搬走的（可能中途又写了新的）。
+     *
+     * @returns {{ok:boolean, reason:string}}
+     */
+    async _isRepoUnused(repo) {
+        const vfs = this.storage.getVFS();
+        const files = vfs.files || {};
+        for (const f of Object.values(files)) {
+            if (!Array.isArray(f.chunks)) continue;
+            for (const c of f.chunks) {
+                if (c.owner === repo.owner && c.repo === repo.repo) {
+                    return { ok: false, reason: `仍有分片被记录引用（${c.path}）` };
+                }
+            }
+        }
+        // 再看远端实际还有没有文件（防止 VFS 漏记的情况）
+        try {
+            const contents = await this.api.getDirectoryContents(
+                repo.owner, repo.repo, '', repo.branch || 'main');
+            const left = (contents || []).filter(c =>
+                c.type === 'file' && c.name !== 'README.md' && c.name !== '.gitkeep');
+            if (left.length) {
+                return { ok: false, reason: `仓库里还有 ${left.length} 个文件` };
+            }
+        } catch (e) {
+            // 读不到（可能已被删）就不拦，交给下面的 delete 自己报错
+            console.debug('[FileManager] 读源仓目录失败（按可删处理）:', e.message);
+        }
+        return { ok: true, reason: '' };
     }
 
     // ==================== 文件下载（自动合并分片） ====================

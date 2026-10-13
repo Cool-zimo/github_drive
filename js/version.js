@@ -1,1 +1,1 @@
-const APP_VERSION = { internalVersion: '61', formalVersion: '0.0.61', displayVersion: 'v0.0.61' };
+const APP_VERSION = { internalVersion: '62', formalVersion: '0.0.62', displayVersion: 'v0.0.62' };
