@@ -1317,6 +1317,10 @@ class App {
                 sizeMB: (totalSize / 1024).toFixed(1),
                 sizeGB: (totalSize / (1024 * 1024)).toFixed(2),
                 name: `${list.length} 个存储仓库`,
+                // ★ 调用方（顶部显示、仓库管理面板）读的是 repoCount，
+                //   而这里只给了 name 字符串 —— 于是界面显示"共 undefined 个仓库"。
+                //   总数明明算对了（sizeMB 正确），就差这个字段。
+                repoCount: list.length,
                 full_name: `${owner}/drive-storage-*`
             };
         } catch (e) {
@@ -1493,14 +1497,127 @@ class App {
 
         h += `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn-primary btn-sm" onclick="app.createStorageRepoNow()">➕ 新建存储仓库</button>
+                <button class="btn-secondary btn-sm" onclick="app.showRepoCompaction()">🧹 整理合并</button>
                 <button class="btn-secondary btn-sm" onclick="app.quickRecalibrate()">🔧 校准用量登记</button>
                 <button class="btn-secondary btn-sm" onclick="ui.closeModal();ui.showStorageOptimizer();">⚡ 清理孤儿</button>
               </div>`;
         h += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;line-height:1.6;">
-                自动建仓：<b>${cfg.autoCreateRepo ? '已开启' : '已关闭'}</b>，单仓上限 ${Math.round(warnMB)} MB。
-                仓库满了会自动建新的，不需要手动操作。</div>`;
+                自动建仓：<b>${cfg.autoCreateRepo ? '已开启' : '已关闭'}</b>，单仓上限 ${Math.round(warnMB)} MB。<br>
+                ★ 自动建仓是「<b>所有仓都满了</b>」才触发 —— 只要还有一个仓有空位就往里写，
+                这是对的，否则会平白多出一堆半空仓库。想要减少仓数用「🧹 整理合并」。</div>`;
         h += '</div>';
         box.innerHTML = h;
+    }
+
+    /**
+     * 整理合并：把零散的小仓并进大仓，删掉腾空的仓。
+     *
+     * 用户问："仓库存储过剩，不就合并文件到几个仓库，删除其他仓库？"
+     * —— 对，但必须先看方案再执行，而且执行顺序不能反
+     *    （先写目标 → 校验 → 改 VFS → 才删源）。
+     */
+    async showRepoCompaction() {
+        const box = document.getElementById('storage-mgr-body');
+        if (box) box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在分析…</div>';
+
+        let plan;
+        try {
+            plan = this.fileManager.planRepoCompaction();
+        } catch (e) {
+            if (box) box.innerHTML = `<div style="color:#dc2626;">分析失败：${e.message}</div>`;
+            return;
+        }
+
+        const MB = n => (n / 1048576).toFixed(1);
+        const canMerge = plan.moves.length > 0;
+
+        let h = '<div style="font-size:13px;line-height:1.7;">';
+        if (!canMerge) {
+            h += `<div style="padding:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#166534;">
+                    ✓ 没有需要整理的 —— ${plan.beforeCount} 个仓分布合理，没有能合并的零散空间。
+                  </div>`;
+        } else {
+            h += `<div style="padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin-bottom:12px;">
+                    <b>${plan.beforeCount} 个仓 → ${plan.afterCount} 个</b>，
+                    需迁移 <b>${MB(plan.moveBytes)} MB</b>，然后删除 ${plan.deletable.length} 个腾空的仓。
+                  </div>`;
+            h += '<div style="font-size:12px;color:#6b7280;margin-bottom:6px;">迁移方案（大仓不动，只搬小仓）：</div>';
+            for (const m of plan.moves) {
+                h += `<div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;font-size:12px;">
+                        <span style="color:#1f2937;font-weight:600;">${m.from.repo}</span>
+                        <span style="color:#9ca3af;"> (${MB(m.from.used)} MB)</span>
+                        <span style="color:#6b7280;"> → </span>
+                        <span style="color:#2563eb;font-weight:600;">${m.to.repo}</span>
+                      </div>`;
+            }
+            h += `<div style="font-size:12px;color:#6b7280;margin-top:10px;line-height:1.6;background:#f9fafb;padding:10px;border-radius:8px;">
+                    安全保证：先把分片写进目标仓 → 逐片用 <b>sha 校验字节一致</b> →
+                    全部通过才改记录 → 最后删源仓。<br>
+                    任何一步失败都会中止，<b>源数据不受影响</b>。
+                  </div>`;
+        }
+
+        h += `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+                ${canMerge ? `<button class="btn-primary btn-sm" onclick="app.runRepoCompaction()">开始整理（${plan.moves.length} 次迁移）</button>` : ''}
+                <button class="btn-secondary btn-sm" onclick="app.showStorageManager()">返回</button>
+              </div>`;
+        h += '</div>';
+
+        this._compactPlan = plan;
+        if (box) box.innerHTML = h;
+    }
+
+    /** 执行整理合并 */
+    async runRepoCompaction() {
+        const plan = this._compactPlan;
+        if (!plan || !plan.moves.length) return;
+        const box = document.getElementById('storage-mgr-body');
+        const MB = n => (n / 1048576).toFixed(1);
+
+        const okDel = confirm(
+            `将把 ${plan.moves.length} 个仓库的内容迁入目标仓，然后删除这 ${plan.deletable.length} 个仓：
+
+` +
+            plan.deletable.join('\n') + '\n\n' +
+            `迁移量约 ${MB(plan.moveBytes)} MB。删除仓库不可恢复，确定继续？`);
+        if (!okDel) return;
+
+        if (box) box.innerHTML = '<div style="font-size:13px;color:#6b7280;">⏳ 正在迁移，请勿关闭页面…</div>';
+        try {
+            const res = await this.fileManager.compactRepos(plan, (stage, done, total, msg) => {
+                if (box) box.innerHTML =
+                    `<div style="font-size:13px;color:#6b7280;">⏳ 迁移中 ${done}/${total}…<br>
+                     <span style="font-size:12px;color:#9ca3af;">${msg}</span></div>`;
+            }, true);
+
+            // 本地仓库列表里也要移除已删的
+            const gone = new Set(res.deleted || []);
+            if (gone.size) {
+                this.storage.setRepos(this.storage.getRepos().filter(r => !gone.has(`${r.owner}/${r.repo}`)));
+            }
+            try { await this.configSync?.pushConfig?.(); } catch (e) { /* 已改本地，稍后会自动同步 */ }
+
+            if (box) box.innerHTML =
+                `<div style="font-size:13px;line-height:1.8;">
+                   <div style="padding:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#166534;">
+                     ✓ 迁移 ${res.moved} 个分片，删除 ${res.deleted.length} 个空仓。
+                   </div>
+                   <div style="margin-top:12px;">
+                     <button class="btn-secondary btn-sm" onclick="app.showStorageManager()">返回</button>
+                   </div>
+                 </div>`;
+            this.ui?.showToast(`整理完成：${plan.beforeCount} 个仓 → ${plan.afterCount} 个`, 'success');
+        } catch (e) {
+            if (box) box.innerHTML =
+                `<div style="font-size:13px;line-height:1.8;">
+                   <div style="padding:14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#991b1b;">
+                     ✗ ${e.message}
+                   </div>
+                   <div style="margin-top:12px;">
+                     <button class="btn-secondary btn-sm" onclick="app.showStorageManager()">返回</button>
+                   </div>
+                 </div>`;
+        }
     }
 
     /** 手动新建一个存储仓库 */

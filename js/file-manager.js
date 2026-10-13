@@ -494,6 +494,269 @@ class FileManager {
         return bufs;
     }
 
+    // ==================== 仓库整理（合并碎片仓库、回收空仓） ====================
+    /**
+     * 规划整理方案：把零散的小仓并进大仓，腾出来的仓可以删掉。
+     *
+     * 场景：用久了会出现 5 个仓，其中 1 个快满、另外 4 个各占几十 MB。
+     *   能写的只剩那 4 个的零散空间，仓库列表却越来越长、越来越难管。
+     *   整理后：内容集中到尽量少的仓里，剩下的整仓删除。
+     *
+     * ★ 排序必须是**用量降序**：
+     *   大仓当"桶"从不动，只搬小仓 —— 迁移量最小。
+     *   升序会让大仓的内容被搬来搬去，迁移量暴涨（实测差别是数量级的）。
+     *
+     * @returns {{bins:Array, moves:Array, deletable:Array, beforeCount:number, afterCount:number, moveBytes:number}}
+     */
+    planRepoCompaction() {
+        const config = this.storage.getStorageConfig();
+        const currentUser = this.storage.getUser()?.login;
+        const max = config.maxRepoSize || 943718400;
+
+        let repos = this.storage.getRepos();
+        if (currentUser) repos = repos.filter(r => r.owner === currentUser);
+
+        const usage = this.storage.getRepoUsage ? (this.storage.getRepoUsage() || {}) : {};
+        const rows = repos.map(r => {
+            const key = `${r.owner}/${r.repo}`;
+            const u = (usage[key] && usage[key].size) || 0;
+            return { key, owner: r.owner, repo: r.repo, branch: r.branch || 'main', used: u };
+        });
+        rows.sort((a, b) => b.used - a.used);
+
+        // First-Fit（降序）：大仓先占位当桶，小仓能塞就塞
+        const bins = [];
+        for (const r of rows) {
+            const bin = bins.find(b => (max - b.used) >= r.used);
+            if (bin) {
+                bin.used += r.used;
+                bin.sources.push(r);
+            } else {
+                bins.push({ key: r.key, owner: r.owner, repo: r.repo,
+                            branch: r.branch, used: r.used, sources: [] });
+            }
+        }
+
+        const moves = [];
+        for (const b of bins) {
+            for (const src of b.sources) {
+                moves.push({
+                    from: src,
+                    to: { key: b.key, owner: b.owner, repo: b.repo, branch: b.branch }
+                });
+            }
+        }
+        return {
+            max,
+            bins,
+            moves,
+            targets: bins.map(b => b.key),
+            deletable: moves.map(m => m.from.key),
+            beforeCount: rows.length,
+            afterCount: bins.length,
+            moveBytes: moves.reduce((sum, m) => sum + m.from.used, 0)
+        };
+    }
+
+    /**
+     * 执行整理：把待迁分片搬进目标仓，校验通过后才改 VFS、再删空仓。
+     *
+     * ★ 顺序不能反，这是唯一不会丢数据的做法：
+     *     1) 先把分片写进目标仓
+     *     2) 校验每一片（用 blob 的内容寻址特性，sha 对得上就是字节一致）
+     *     3) 全部通过 → 改 VFS 指向新位置
+     *     4) 最后才删源仓
+     *   如果先改 VFS 再上传，中途失败就是真丢数据。
+     *
+     * ★ 校验是"免费"的：blob 内容寻址，同内容必然同 sha。
+     *   所以源分片有 sha 时，只要新 sha == 旧 sha，就证明字节完全一致，
+     *   不需要再下载比对。
+     *
+     * @param {object} plan - planRepoCompaction() 的结果
+     * @param {Function} onProgress - (阶段, 已完成, 总数, 说明)
+     * @param {boolean} deleteSources - 是否删除源仓库
+     */
+    async compactRepos(plan, onProgress = null, deleteSources = true) {
+        const vfs = this.storage.getVFS();
+        const files = vfs.files || {};
+
+        // ① 收集待迁分片：哪些文件的哪些 chunk 住在 from 仓里
+        const byTarget = new Map();
+        for (const [vpath, f] of Object.entries(files)) {
+            if (!Array.isArray(f.chunks)) continue;
+            f.chunks.forEach((chunk, idx) => {
+                const key = `${chunk.owner}/${chunk.repo}`;
+                const mv = plan.moves.find(m => m.from.key === key);
+                if (!mv) return;
+                if (!byTarget.has(mv.to.key)) byTarget.set(mv.to.key, { move: mv, items: [] });
+                byTarget.get(mv.to.key).items.push({ vpath, idx, chunk });
+            });
+        }
+
+        const totalItems = [...byTarget.values()].reduce((s, g) => s + g.items.length, 0);
+        if (totalItems === 0) {
+            return { moved: 0, deleted: [], totalItems: 0, skipped: true };
+        }
+        console.log(`[FileManager] 整理仓库：${totalItems} 个分片待迁移`);
+
+        let done = 0;
+        const emit = (stage, msg) => {
+            if (onProgress) onProgress(stage, done, totalItems, msg);
+        };
+
+        // ② 逐个目标仓迁移
+        const migrated = [];   // {vpath, idx, newChunk}
+        const usedPaths = new Map();   // 目标仓内已占用的路径，防覆盖
+
+        for (const [targetKey, group] of byTarget) {
+            const to = group.move.to;
+            emit('migrate', `迁移到 ${to.repo}`);
+
+            // 目标仓现有路径（防覆盖）
+            const existing = new Set();
+            try {
+                const contents = await this.api.getDirectoryContents(to.owner, to.repo, '', to.branch);
+                (contents || []).forEach(c => existing.add(c.path));
+            } catch (e) {
+                console.warn('[FileManager] 读取目标仓目录失败（按空仓处理）:', e.message);
+            }
+            usedPaths.set(targetKey, existing);
+
+            // 读源分片字节（有 sha 就直连，1 次请求）
+            const failed = [];
+            const concurrency = 4;
+            const queue = group.items.slice();
+            const results = new Array(group.items.length);
+
+            async function worker() {
+                while (queue.length) {
+                    const job = queue.shift();
+                    const { chunk, idx, vpath } = job;
+                    try {
+                        const bytes = chunk.sha
+                            ? await this.api.getBlobBytes(chunk.owner, chunk.repo, chunk.sha)
+                            : await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch || 'main');
+                        results[group.items.indexOf(job)] = { job, bytes };
+                    } catch (e) {
+                        failed.push({ job, err: e });
+                    }
+                    done++;
+                    emit('migrate', `读取 ${done}/${totalItems}`);
+                }
+            }
+            await Promise.all(Array.from({ length: Math.min(concurrency, group.items.length || 1) },
+                () => worker.call(this)));
+
+            if (failed.length) {
+                throw new Error(
+                    `${failed.length} 个分片读取失败（首个：${failed[0].err.message}）。` +
+                    `未改动任何记录，源数据完好。`);
+            }
+
+            // 建 blob（并发）+ 一次 tree + commit
+            const stamp = Date.now().toString(36);
+            const entries = [];
+            const newChunks = new Array(group.items.length);
+
+            const blobQueue = results.map((r, i) => ({ r, i }));
+            const blobFail = [];
+            async function blobWorker() {
+                while (blobQueue.length) {
+                    const { r, i } = blobQueue.shift();
+                    const bytes = r.bytes instanceof Uint8Array ? r.bytes : new Uint8Array(r.bytes);
+                    try {
+                        const base64 = this.arrayBufferToBase64(bytes.buffer || bytes);
+                        const blob = await this.api.createBlob(to.owner, to.repo, base64, 'base64');
+                        const newSha = blob && blob.sha;
+                        if (!newSha) throw new Error('建 blob 未返回 sha');
+
+                        // ★ 免费校验：内容寻址 ⇒ 同内容必然同 sha
+                        if (r.job.chunk.sha && newSha !== r.job.chunk.sha) {
+                            throw new Error(`分片校验失败：新 sha ${newSha.slice(0, 8)} ≠ 原 sha ${r.job.chunk.sha.slice(0, 8)}`);
+                        }
+
+                        const base = (r.job.chunk.path || 'chunk').split('/').pop();
+                        let path = `${stamp}/c${i}_${base}`;
+                        const set = usedPaths.get(targetKey);
+                        let n = 0;
+                        while (set.has(path)) { path = `${stamp}/c${i}_${++n}_${base}`; }
+                        set.add(path);
+
+                        entries.push({ path, mode: '100644', type: 'blob', sha: newSha });
+                        newChunks[i] = {
+                            owner: to.owner,
+                            repo: to.repo,
+                            path,
+                            size: r.job.chunk.size || bytes.length,
+                            sha: newSha,
+                            branch: to.branch
+                        };
+                    } catch (e) {
+                        blobFail.push({ i, err: e });
+                    }
+                }
+            }
+            await Promise.all(Array.from({ length: Math.min(4, blobQueue.length || 1) },
+                () => blobWorker.call(this)));
+
+            if (blobFail.length) {
+                throw new Error(
+                    `${blobFail.length} 个分片写入失败（首个：${blobFail[0].err.message}）。` +
+                    `未改动任何记录，源数据完好。`);
+            }
+
+            // 分批提交（tree API 单次条数有上限）
+            const BATCH = 100;
+            let ref = await this.api.getRef(to.owner, to.repo, `heads/${to.branch}`);
+            let parentSha = ref.object.sha;
+            for (let b = 0; b < entries.length; b += BATCH) {
+                const part = entries.slice(b, b + BATCH);
+                const cm = await this.api.getCommit(to.owner, to.repo, parentSha);
+                const tree = await this.api.createTree(to.owner, to.repo, part, cm.tree.sha);
+                const commit = await this.api.createCommit(
+                    to.owner, to.repo, `整理仓库：迁入 ${part.length} 个分片`, tree.sha, [parentSha]);
+                await this.api.updateRef(to.owner, to.repo, `heads/${to.branch}`, commit.sha);
+                parentSha = commit.sha;
+            }
+
+            group.items.forEach((job, i) => {
+                migrated.push({ vpath: job.vpath, idx: job.idx, newChunk: newChunks[i] });
+            });
+        }
+
+        // ③ 全部校验通过才改 VFS
+        for (const m of migrated) {
+            const f = vfs.files[m.vpath];
+            if (f && f.chunks && f.chunks[m.idx]) f.chunks[m.idx] = m.newChunk;
+        }
+        this.storage.setVFS(vfs);
+
+        // ④ 重算用量（全量重算，不做加减 —— 加减漏记就会越滚越大）
+        for (const mv of plan.moves) {
+            this.storage.subtractFromRepoUsage?.(mv.from.owner, mv.from.repo, mv.from.used);
+        }
+        for (const m of migrated) {
+            this.storage.addToRepoUsage?.(m.newChunk.owner, m.newChunk.repo, m.newChunk.size || 0);
+        }
+
+        // ⑤ 删源仓（只有到这一步才不可逆）
+        const deleted = [];
+        if (deleteSources) {
+            for (const key of plan.deletable) {
+                const mv = plan.moves.find(m => m.from.key === key);
+                try {
+                    await this.api.deleteRepository(mv.from.owner, mv.from.repo);
+                    deleted.push(key);
+                } catch (e) {
+                    console.warn('[FileManager] 删除源仓失败（数据已迁移，不影响）:', key, e.message);
+                }
+            }
+        }
+
+        console.log(`[FileManager] 整理完成：迁移 ${migrated.length} 片，删除 ${deleted.length} 个空仓`);
+        return { moved: migrated.length, deleted, totalItems };
+    }
+
     // ==================== 文件下载（自动合并分片） ====================
     async downloadFile(virtualPath, onProgress = null) {
         virtualPath = Storage.normalizePath(virtualPath);
