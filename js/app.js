@@ -2053,6 +2053,13 @@ class App {
     }
 
     async showPluginMarket() {
+        // ★ 移动端不加载插件：拿不到后端（下载不了插件代码），点了只会白屏
+        try {
+            if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+                this.ui.showToast?.('插件在移动端不可用（无法下载插件后端）', 'info');
+                return;
+            }
+        } catch (e) {}
         const cached = this.getCache('gd_cache_plugins');
         const installed = this.getInstalledPlugins();
         if (cached) {

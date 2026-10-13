@@ -28,6 +28,7 @@ const TaskDock = (() => {
     let openPanelId = null;        // 当前展开的任务 id
     let listPanelOpen = false;     // 合并列表面板是否打开
     let focusId = null;            // 列表面板里点开的某个任务
+    let miniSuppressed = false;    // 打开"后台进程"面板时，小窗收进列表里
 
     function L(zh, en) {
         try {
@@ -277,12 +278,66 @@ const TaskDock = (() => {
         return { upload: '📤', download: '⬇️', share: '🔗' }[type] || '📋';
     }
 
+    /** 移动端？移动端不显示小窗（屏幕小、挡内容、且难拖动），
+     *  任务只在「后台进程」面板里查看。 */
+    function isMobile() {
+        try { return window.matchMedia && window.matchMedia('(max-width: 768px)').matches; }
+        catch (e) { return false; }
+    }
+
+    /** 通知界面更新角标（后台进程入口上的数字） */
+    function notifyChange() {
+        try { window.dispatchEvent(new CustomEvent('gd:tasks-changed', {
+            detail: { count: tasks.size,
+                      running: Array.from(tasks.values()).filter(t => t.status === 'running').length }
+        })); } catch (e) {}
+    }
+
     // ── 渲染 ──
     function render() {
         const list = Array.from(tasks.values());
         const el = ensureRoot();
-        if (!list.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+
+        // ★ 移动端：小窗一律不渲染。但"展开的面板"仍然要渲染
+        //   （用户主动点开的详情不能消失），只是不自动收成小窗。
+        if (isMobile()) {
+            if (!list.length) { el.innerHTML = ''; el.style.display = 'none'; notifyChange(); return; }
+            el.style.display = '';
+            let mhtml = '';
+            for (const t of list) {
+                if (t.id === openPanelId && t.view === 'expanded') mhtml += panelHTML(t);
+            }
+            if (listPanelOpen) mhtml += listPanelHTML(list);
+            if (focusId && !openPanelId) {
+                const ft = tasks.get(focusId);
+                if (ft) mhtml += panelHTML(ft, true);
+            }
+            el.innerHTML = mhtml;
+            bindAll();
+            notifyChange();
+            return;
+        }
+
+        if (!list.length) { el.innerHTML = ''; el.style.display = 'none'; notifyChange(); return; }
         el.style.display = '';
+
+        // ★ 打开"后台进程"面板时小窗不再单独显示 ——
+        //   它们已经在列表里了，屏幕边缘再留一排就是重复信息。
+        if (miniSuppressed) {
+            let sh = '';
+            for (const t of list) {
+                if (t.id === openPanelId && t.view === 'expanded') sh += panelHTML(t);
+            }
+            if (listPanelOpen) sh += listPanelHTML(list);
+            if (focusId && !openPanelId) {
+                const ft = tasks.get(focusId);
+                if (ft) sh += panelHTML(ft, true);
+            }
+            el.innerHTML = sh;
+            bindAll();
+            notifyChange();
+            return;
+        }
 
         const live = list.filter(t => t.status === 'running');
         const merged = live.length > MINI_LIMIT;
@@ -348,6 +403,7 @@ const TaskDock = (() => {
 
         el.innerHTML = html;
         bindAll();
+        notifyChange();
     }
 
     function miniCardHTML(o) {
@@ -818,9 +874,91 @@ const TaskDock = (() => {
     // 窗口尺寸随视口变化时保持贴边（小窗堆叠位置重算）
     window.addEventListener('resize', () => { if (pwins.size) pwLayout(); });
 
+    /**
+     * 小窗"飞进"后台进程列表。
+     *
+     * ★ 用 FLIP：先量小窗的起点位置，等列表渲染出落点后再量终点，
+     *   用 transform 把元素从终点平移回起点，然后过渡到 0。
+     *   全程只动 transform/opacity（合成层），不触发逐帧重排，所以很丝滑。
+     *
+     * @param {string} taskId - 要飞的任务；不给就飞当前所有小窗
+     */
+    function flyToList(taskId) {
+        if (isMobile()) { miniSuppressed = true; render(); return; }
+        const el = ensureRoot();
+        const cards = Array.from(el.querySelectorAll('.td-mini'));
+        // 没有小窗可飞（比如只剩展开的大面板）也要把状态置上，
+        // 否则关掉面板前小窗会重新冒出来，和列表重复。
+        if (!cards.length) { miniSuppressed = true; render(); return; }
+
+        // ① 记起点
+        const firstRects = new Map();
+        cards.forEach(c => firstRects.set(c, c.getBoundingClientRect()));
+
+        // ② 让调用方把面板打开（渲染出落点），下一帧再量终点
+        requestAnimationFrame(() => {
+            const rows = document.querySelectorAll('.task-mgr-row');
+            if (!rows.length) return;
+
+            cards.forEach((card, i) => {
+                const id = card.getAttribute('data-id');
+                if (taskId && id && id !== taskId) return;
+
+                // 找到对应落点：优先 data-id 匹配，其次按序号兜底
+                let target = id ? document.querySelector(`.task-mgr-row[data-id="${id}"]`) : null;
+                if (!target) target = rows[Math.min(i, rows.length - 1)];
+                if (!target) return;
+
+                const f = firstRects.get(card);
+                const last = target.getBoundingClientRect();
+                const dx = f.left - last.left;
+                const dy = f.top - last.top;
+
+                // ③ 倒置：把卡片放到落点上，再用 transform 拉回起点
+                card.classList.add('is-flying');
+                card.style.transform = `translate(${dx}px, ${dy}px)`;
+                card.style.opacity = '0.85';
+
+                requestAnimationFrame(() => {
+                    card.style.transform = 'translate(0, 0)';
+                    card.style.opacity = '0';
+                    target.classList.add('is-landing');
+                    setTimeout(() => {
+                        target.classList.remove('is-landing');
+                        card.classList.remove('is-flying');
+                        card.style.transform = '';
+                        card.style.opacity = '';
+                        // 飞完了才真正收掉：动画期间小窗必须还在 DOM 里
+                        miniSuppressed = true;
+                        render();
+                    }, 440);
+                });
+            });
+        });
+    }
+
+    /** 关掉"后台进程"面板后，小窗回边缘 */
+    function resumeMini() {
+        if (!miniSuppressed) return;
+        miniSuppressed = false;
+        render();
+    }
+
+    /** 拿全部任务（后台进程面板用） */
+    function all() {
+        return Array.from(tasks.values()).map(t => ({
+            id: t.id, type: t.type, title: t.title, note: t.note,
+            percent: t.percent, status: t.status, error: t.error,
+            startedAt: t.startedAt, finishedAt: t.finishedAt,
+            single: t.single,
+            items: t.items.map(i => ({ name: i.name, percent: i.percent, status: i.status }))
+        }));
+    }
+
     return {
         create, updateItem, setItemDone, setPercent, setNote, finish, remove,
         open, collapse, dismiss, openList, closeList, focus, backToList, get,
+        flyToList, resumeMini, all, isMobile,
         openPlugin, closePlugin: pwClose, expandPlugin: pwExpand, collapsePlugin: pwCollapse,
         togglePluginFull: pwToggleFull, closePluginList: pwCloseList,
         get pluginCount() { return pwins.size; },

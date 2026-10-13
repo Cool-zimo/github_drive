@@ -143,6 +143,7 @@
                 <span class="sidebar-title">GitHub Drive</span>
             </div>
             <nav class="sidebar-nav">
+                <!-- 我的文件 -->
                 <div class="nav-section">
                     <div class="nav-section-title"><span data-i18n="sidebar.myFiles">My Files</span></div>
                     <a href="#" class="nav-item" id="dashboard-nav" data-view="dashboard"><span class="nav-icon">📊</span><span>仪表盘</span></a>
@@ -162,15 +163,37 @@
                         <span class="nav-icon">🗑️</span>
                         <span data-i18n="nav.trash">回收站</span>
                     </a>
-                    <a href="#" class="nav-item" data-view="shared">
-                        <span class="nav-icon">🔗</span>
-                        <span data-i18n="nav.shared">我的分享</span>
+                </div>
+
+                <!-- 分享（可折叠：我的分享 + 发现分享） -->
+                <div class="nav-section">
+                    <div class="nav-group-header" data-group="share" onclick="ui.toggleNavGroup('share')">
+                        <span class="nav-group-icon">🔗</span>
+                        <span class="nav-group-title">分享</span>
+                        <span class="nav-group-badge" id="nav-badge-share"></span>
+                        <span class="nav-group-arrow">▾</span>
+                    </div>
+                    <div class="nav-group-body" data-group-body="share">
+                        <a href="#" class="nav-item" data-view="shared">
+                            <span class="nav-icon">📤</span>
+                            <span data-i18n="nav.shared">我的分享</span>
+                        </a>
+                        <a href="#" class="nav-item" data-view="explore">
+                            <span class="nav-icon">🌐</span>
+                            <span data-i18n="nav.explore">发现分享</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 后台进程：统一管理所有进度任务 -->
+                <div class="nav-section">
+                    <div class="nav-section-title"><span>任务</span></div>
+                    <a href="#" class="nav-item" id="tasks-nav" onclick="ui.showTaskManager();return false;">
+                        <span class="nav-icon">⚙️</span>
+                        <span>后台进程</span>
+                        <span class="nav-badge" id="nav-badge-tasks" style="display:none;"></span>
                     </a>
-                    <a href="#" class="nav-item" data-view="explore">
-                        <span class="nav-icon">🌐</span>
-                        <span data-i18n="nav.explore">发现分享</span>
-                    </a>
-                    <a href="#" class="nav-item" data-view="plugins">
+                    <a href="#" class="nav-item" data-view="plugins" id="plugins-nav">
                         <span class="nav-icon">🧩</span>
                         <span data-i18n="nav.plugins">插件广场</span>
                     </a>
@@ -344,11 +367,12 @@
             <div class="mobile-nav-item" onclick="app.switchView('favorites')">
                 <span class="icon">⭐</span><span>收藏</span>
             </div>
-            <div class="mobile-nav-item" onclick="app.switchView('plugins')">
-                <span class="icon">🧩</span><span>插件</span>
+            <div class="mobile-nav-item" onclick="ui.showTaskManager()">
+                <span class="icon">⚙️</span><span>后台</span>
+                <span class="mobile-nav-badge" id="mobile-badge-tasks" style="display:none;"></span>
             </div>
-            <div class="mobile-nav-item" onclick="app.showDashboard()">
-                <span class="icon">📊</span><span>仪表盘</span>
+            <div class="mobile-nav-item" onclick="ui.toggleMobileMenu()">
+                <span class="icon">☰</span><span>更多</span>
             </div>
         </div>
     </div>

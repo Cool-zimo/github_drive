@@ -224,10 +224,19 @@ class UI {
                     localStorage.setItem('gd_sidebar_collapsed', !isCollapsed);
                 }
             };
-            menuToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleSidebar(); });
+            menuToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (isMobile()) this.toggleMobileMenu();
+                else toggleSidebar();
+            });
             sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
             document.querySelectorAll('.sidebar .nav-item').forEach(item => {
-                item.addEventListener('click', () => { if (isMobile()) toggleSidebar(false); });
+                item.addEventListener('click', () => {
+                    if (isMobile()) {
+                        // 移动端：侧边栏是"更多"面板，选完就收起
+                        this.toggleMobileMenu(false);
+                    }
+                });
             });
             
             // 恢复电脑端折叠状态
@@ -236,6 +245,22 @@ class UI {
                 if (mainContent) mainContent.classList.add('sidebar-collapsed');
             }
         }
+
+        // 恢复侧边栏分组折叠状态
+        this.restoreNavGroups();
+
+        // 任务变化时更新"后台进程"角标
+        window.addEventListener('gd:tasks-changed', () => this.updateTaskBadge());
+        this.updateTaskBadge();
+
+        // ★ 移动端不加载插件：拿不到后端（下载不了插件代码），
+        //   点了只会白屏。这里再从 JS 层拦一道（CSS 只是隐藏入口）。
+        try {
+            if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+                const pn = document.getElementById('plugins-nav');
+                if (pn) pn.style.display = 'none';
+            }
+        } catch (e) {}
 
         // 右键菜单
         document.addEventListener('click', () => this.hideContextMenu());
@@ -353,6 +378,11 @@ class UI {
             } else if (view === 'explore') {
                 this.app.showExploreShares();
             } else if (view === 'plugins') {
+                // ★ 移动端不加载插件：下载不了后端代码，点了只会白屏
+                if (this.isPluginsBlocked && this.isPluginsBlocked()) {
+                    this.showToast?.('插件在移动端不可用（无法下载插件后端）', 'info');
+                    return;
+                }
                 this.app.showPluginMarket();
             }
         }
@@ -1278,42 +1308,74 @@ class UI {
         }
     }
 
+    /**
+     * 设置面板（分组版）
+     *
+     * ★ 之前是 15 项平铺一列 —— 找一个"校准用量"要滚半天，
+     *   而且"登出"这种破坏性操作和"暗色模式"挨在一起，容易误点。
+     *   现在按语义分成四组，破坏性操作单独放最后。
+     */
     showSettings() {
         var versionEl = document.getElementById('app-version');
-        var repoSizeEl = document.getElementById('repo-size-display');
         var version = versionEl ? versionEl.textContent : 'v-';
-        var repoSize = repoSizeEl ? repoSizeEl.textContent : '📦 --';
-        var items = [
-            {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
-            {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
-            {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
 
-            {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
-            {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
-            {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
-            {icon:'🤖', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
-            {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
-            {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
-            {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
-            {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();'},
-            {icon:'🎯', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
-            {icon:'📊', title:I18n.t('settings.storageStats') || '存储用量', desc:I18n.t('settings.storageStatsDesc') || '查看文件统计和仓库大小', action:'ui.closeModal();app.showStorageStats();'},
-            {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
-            {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
-            {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
+        const GROUPS = [
+            {
+                title: '外观',
+                items: [
+                    {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
+                    {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
+                ]
+            },
+            {
+                title: '存储与仓库',
+                items: [
+                    {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
+                    {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
+                    {icon:'🤖', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
+                    {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
+                    {icon:'📊', title:I18n.t('settings.storageStats') || '存储用量', desc:I18n.t('settings.storageStatsDesc') || '查看文件统计和仓库大小', action:'ui.closeModal();app.showStorageStats();'},
+                ]
+            },
+            {
+                title: '功能',
+                items: [
+                    {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();'},
+                    {icon:'🎯', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
+                    {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
+                ]
+            },
+            {
+                title: '关于与账号',
+                items: [
+                    {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
+                    {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
+                    {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
+                    {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
+                    {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
+                    {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
+                ]
+            }
         ];
-        var body = '';
-        for (var i = 0; i < items.length; i++) {
-            var it = items[i];
-            var extraHtml = it.extra ? ' <span style="font-weight:400;font-size:13px;color:#6b7280;">' + it.extra + '</span>' : '';
-            var color = it.danger ? 'color:#dc2626;' : '';
-            var hoverBg = it.danger ? '#fef2f2' : '#f3f4f6';
-            body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:8px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
-            body += '<span style="font-size:20px;">' + it.icon + '</span>';
-            body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
+
+        let body = '';
+        for (const g of GROUPS) {
+            body += '<div style="margin-bottom:14px;">'
+                  +   '<div style="font-size:11px;font-weight:700;color:#9ca3af;letter-spacing:0.5px;'
+                  +   'text-transform:uppercase;padding:0 4px 6px;">' + g.title + '</div>';
+            for (const it of g.items) {
+                const extraHtml = it.extra ? ' <span style="font-weight:400;font-size:13px;color:#6b7280;">' + it.extra + '</span>' : '';
+                const color = it.danger ? 'color:#dc2626;' : '';
+                const hoverBg = it.danger ? '#fef2f2' : '#f3f4f6';
+                body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
+                body += '<span style="font-size:20px;">' + it.icon + '</span>';
+                body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
+            }
+            body += '</div>';
         }
         this.showModal(I18n.t('settings.title'), body, '', true);
     }
+
 
     /**
      * 自动整理设置
@@ -1414,6 +1476,232 @@ class UI {
         delete c.lastAutoCompactAt;
         this.app.storage.updateStorageConfig?.(c);
         setTimeout(() => this.app.maybeAutoCompact?.('手动触发'), 300);
+    }
+
+    // ==================== 导航分组折叠 ====================
+
+    /** 侧边栏分组折叠。状态存 localStorage，刷新后保持。 */
+    toggleNavGroup(name) {
+        const key = 'gd_navgroup_' + name;
+        const header = document.querySelector(`.nav-group-header[data-group="${name}"]`);
+        const body = document.querySelector(`.nav-group-body[data-group-body="${name}"]`);
+        if (!header || !body) return;
+        const open = !body.classList.contains('open');
+        body.classList.toggle('open', open);
+        header.classList.toggle('open', open);
+        try { localStorage.setItem(key, open ? '1' : '0'); } catch (e) {}
+    }
+
+    /** 恢复折叠状态（默认展开） */
+    restoreNavGroups() {
+        document.querySelectorAll('.nav-group-header[data-group]').forEach(header => {
+            const name = header.getAttribute('data-group');
+            const body = document.querySelector(`.nav-group-body[data-group-body="${name}"]`);
+            if (!body) return;
+            let open = true;
+            try { const v = localStorage.getItem('gd_navgroup_' + name); if (v !== null) open = v === '1'; } catch (e) {}
+            body.classList.toggle('open', open);
+            header.classList.toggle('open', open);
+        });
+    }
+
+    // ==================== 后台进程 ====================
+
+    /**
+     * 后台进程面板：所有耗时任务的统一入口。
+     *
+     * ★ 为什么要在侧边栏单独加一个入口：
+     *   小窗是"贴边显示"的，超过 3 个就合并成一张卡，
+     *   合并之后点开是列表、再点才是详情 —— 想看全局很费劲。
+     *   这里直接一次列全，进度、子项、失败原因都在。
+     *
+     * ★ 打开时小窗会"飞"进来（TaskDock.flyToList），
+     *   给用户一个"它们都跑这儿来了"的视觉交代，而不是凭空列出一堆行。
+     */
+    showTaskManager() {
+        const refresh = () => {
+            const box = document.getElementById('task-mgr-body');
+            if (!box) return;                       // 面板已关
+            box.innerHTML = this._taskManagerHTML();
+            this._bindTaskManager(box);
+        };
+
+        const body = '<div id="task-mgr-body">' + this._taskManagerHTML() + '</div>';
+        this.showModal('⚙️ 后台进程', body, '', true);
+
+        // 先渲染出落点，再让小窗飞过来
+        refresh();
+        if (typeof TaskDock !== 'undefined' && TaskDock.flyToList) {
+            requestAnimationFrame(() => TaskDock.flyToList());
+        }
+
+        // 实时刷新：跑着的任务要能看到进度在动
+        clearInterval(this._taskMgrTimer);
+        this._taskMgrTimer = setInterval(() => {
+            if (!document.getElementById('task-mgr-body')) {
+                clearInterval(this._taskMgrTimer); this._taskMgrTimer = null;
+                // 面板关了 → 还在跑的任务回到边缘小窗
+                try { TaskDock.resumeMini && TaskDock.resumeMini(); } catch (e) {}
+                return;
+            }
+            refresh();
+        }, 700);
+        this._bindTaskManager(document.getElementById('task-mgr-body'));
+    }
+
+    _taskManagerHTML() {
+        if (typeof TaskDock === 'undefined' || !TaskDock.all) {
+            return '<div style="font-size:13px;color:#6b7280;">任务模块未加载</div>';
+        }
+        const all = TaskDock.all();
+        if (!all.length) {
+            return `<div style="padding:26px 10px;text-align:center;">
+                      <div style="font-size:40px;margin-bottom:10px;">✅</div>
+                      <div style="font-size:14px;font-weight:600;color:#1f2937;">没有正在进行的任务</div>
+                      <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+                        上传、下载、分享、整理仓库都会出现在这里
+                      </div></div>`;
+        }
+        const ico = { upload: '📤', download: '⬇️', share: '🔗', compact: '🧹' };
+        const esc = v => String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const ago = ts => {
+            if (!ts) return '';
+            const s = Math.floor((Date.now() - ts) / 1000);
+            if (s < 60) return s + ' 秒前';
+            if (s < 3600) return Math.floor(s / 60) + ' 分钟前';
+            return Math.floor(s / 3600) + ' 小时前';
+        };
+
+        // 跑着的排前面，其次失败，最后已完成
+        const rank = { running: 0, error: 1, done: 2 };
+        all.sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || b.startedAt - a.startedAt);
+
+        let h = '';
+        const running = all.filter(t => t.status === 'running').length;
+        const errored = all.filter(t => t.status === 'error').length;
+        if (running || errored) {
+            h += `<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">
+                    ${running ? `进行中 ${running}` : ''}${running && errored ? ' · ' : ''}${errored ? `<span style="color:#dc2626;">失败 ${errored}</span>` : ''}
+                  </div>`;
+        }
+
+        for (const t of all) {
+            const cls = t.status === 'error' ? ' is-error' : (t.status === 'done' ? ' is-done' : '');
+            const sub = t.status === 'error'
+                ? `<span style="color:#dc2626;">${esc(t.error || '失败')}</span>`
+                : t.status === 'done'
+                    ? (t.note || '已完成')
+                    : (t.single ? (t.note || '处理中')
+                        : `${t.items.filter(i => i.status === 'done').length}/${t.items.length} 个文件`);
+            let detail = '';
+            if (!t.single && t.items.length) {
+                // 子项只显示有状态的：已完成/失败/正在跑
+                const rows = t.items.filter(i => i.status !== 'pending').slice(-40);
+                if (rows.length) {
+                    detail = '<div class="task-mgr-items">' + rows.map(i =>
+                        `<div><span class="${i.status === 'done' ? 'ok' : (i.status === 'error' ? 'bad' : '')}">${
+                            i.status === 'done' ? '✓' : (i.status === 'error' ? '✗' : '·')}</span> ${esc(i.name)}</div>`
+                    ).join('') + '</div>';
+                }
+            }
+            h += `<div class="task-mgr-row${cls}" data-id="${t.id}">
+                    <div class="task-mgr-ico">${ico[t.type] || '📋'}</div>
+                    <div class="task-mgr-main">
+                        <div class="task-mgr-title">${esc(t.title)}</div>
+                        <div class="task-mgr-sub">${sub}</div>
+                        <div class="task-mgr-bar"><div class="task-mgr-fill" style="width:${t.percent}%"></div></div>
+                        ${detail}
+                    </div>
+                    <div class="task-mgr-right">
+                        <div>${t.percent}%</div>
+                        <div style="font-size:11px;color:#9ca3af;margin-top:3px;">${ago(t.startedAt)}</div>
+                    </div>
+                  </div>`;
+        }
+
+        const finished = all.filter(t => t.status !== 'running').length;
+        h += `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+                ${finished ? '<button class="btn-secondary btn-sm" onclick="ui.clearFinishedTasks()">清除已结束的（${finished}）</button>' : ''}
+                <button class="btn-secondary btn-sm" onclick="typeof TaskDock!=='undefined'&&TaskDock.resumeMini&&TaskDock.resumeMini();ui.closeModal();">关闭</button>
+              </div>`.replace('${finished}', finished);
+        return h;
+    }
+
+    _bindTaskManager(box) {
+        if (!box) return;
+        box.querySelectorAll('.task-mgr-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const id = row.getAttribute('data-id');
+                if (id && typeof TaskDock !== 'undefined' && TaskDock.open) TaskDock.open(id);
+            });
+        });
+    }
+
+    /** 清除已结束（完成/失败）的任务 */
+    clearFinishedTasks() {
+        if (typeof TaskDock === 'undefined' || !TaskDock.all) return;
+        for (const t of TaskDock.all()) {
+            if (t.status !== 'running' && TaskDock.remove) TaskDock.remove(t.id);
+        }
+        this.showTaskManager();
+    }
+
+    /** 更新"后台进程"入口的角标 */
+    updateTaskBadge() {
+        let running = 0;
+        try {
+            if (typeof TaskDock !== 'undefined' && TaskDock.all) {
+                running = TaskDock.all().filter(t => t.status === 'running').length;
+            }
+        } catch (e) { return; }
+        const show = running > 0;
+        [[ 'nav-badge-tasks', 'mobile-badge-tasks' ]].flat().forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.display = show ? '' : 'none';
+            el.textContent = running > 99 ? '99+' : String(running);
+        });
+    }
+
+    // ==================== 移动端「更多」面板 ====================
+
+    /**
+     * 移动端只留一套导航：底部 tab + 这里唤起的面板。
+     *
+     * ★ 原来移动端左侧是抽屉、底部又是 tab，两套入口干同一件事 ——
+     *   用户直接问"为什么左边有侧边栏，下面也有侧边栏"。
+     *   现在侧边栏在移动端改成从底部滑出的面板（.as-sheet），
+     *   只有底部「更多」能唤起，不再有第二个常驻入口。
+     */
+    toggleMobileMenu(force) {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+        // 电脑端侧边栏本来就常驻，不需要这个面板
+        try {
+            if (!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches)) return;
+        } catch (e) { return; }
+        sidebar.classList.add('as-sheet');
+
+        let overlay = document.getElementById('sheet-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'sheet-overlay';
+            overlay.className = 'sheet-overlay';
+            overlay.addEventListener('click', () => this.toggleMobileMenu(false));
+            document.body.appendChild(overlay);
+        }
+
+        const open = force !== undefined ? force : !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', open);
+        overlay.classList.toggle('active', open);
+    }
+
+    /** 移动端插件不可用（拿不到后端），兜底拦一道 */
+    isPluginsBlocked() {
+        try {
+            return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        } catch (e) { return false; }
     }
 
     /** 存储仓库管理（内容由 app.showStorageManager 填充） */

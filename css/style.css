@@ -2899,3 +2899,179 @@ body.dark .tp-list-row:hover { background: #374151; }
 @media (prefers-reduced-motion: reduce) {
     .tp-win { animation: none; }
 }
+
+
+/* ==================== 侧边栏分组折叠 ==================== */
+/* 把「我的分享 / 发现分享」收进一个折叠里，减少侧边栏纵向占用。 */
+.nav-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary, #4b5563);
+    user-select: none;
+    transition: background 0.15s;
+}
+.nav-group-header:hover { background: var(--bg-hover, #f3f4f6); }
+.nav-group-icon { font-size: 15px; width: 20px; text-align: center; }
+.nav-group-title { flex: 1; font-weight: 500; }
+.nav-group-badge {
+    font-size: 11px;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 999px;
+    padding: 1px 7px;
+}
+.nav-group-arrow {
+    font-size: 11px;
+    color: #9ca3af;
+    transition: transform 0.2s ease;
+}
+.nav-group-header.open .nav-group-arrow { transform: rotate(-90deg); }
+
+/* 折叠体：用 grid-template-rows 做高度动画，比 max-height 更平滑且不用写死高度 */
+.nav-group-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.22s ease;
+    overflow: hidden;
+}
+.nav-group-body > * { min-height: 0; }
+.nav-group-body.open { grid-template-rows: 1fr; }
+.nav-group-body .nav-item { padding-left: 42px; }
+
+/* 侧边栏角标 */
+.nav-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 999px;
+    padding: 1px 7px;
+    min-width: 18px;
+    text-align: center;
+}
+body.dark-mode .nav-badge { background: #3b82f6; }
+
+/* ==================== 后台进程面板 ==================== */
+.task-mgr-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.task-mgr-row:hover { background: var(--bg-hover, #f9fafb); border-color: #d1d5db; }
+.task-mgr-row.is-error { border-color: #fecaca; background: #fef2f2; }
+.task-mgr-row.is-done  { border-color: #bbf7d0; }
+.task-mgr-ico { font-size: 18px; line-height: 1.4; }
+.task-mgr-main { flex: 1; min-width: 0; }
+.task-mgr-title {
+    font-size: 13px; font-weight: 600; color: var(--text-primary, #1f2937);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.task-mgr-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.task-mgr-bar {
+    height: 4px; background: #e5e7eb; border-radius: 999px; margin-top: 7px; overflow: hidden;
+}
+.task-mgr-fill { height: 100%; background: #2563eb; border-radius: 999px; transition: width 0.3s ease; }
+.task-mgr-row.is-error .task-mgr-fill { background: #dc2626; }
+.task-mgr-row.is-done  .task-mgr-fill { background: #16a34a; }
+.task-mgr-right { text-align: right; font-size: 12px; color: #6b7280; white-space: nowrap; }
+.task-mgr-items { margin-top: 8px; font-size: 12px; color: #6b7280; line-height: 1.7; }
+.task-mgr-items .ok { color: #16a34a; }
+.task-mgr-items .bad { color: #dc2626; }
+
+/* ── 飞入动画：小窗从屏幕边缘飞到进程列表里 ──
+   用 transform 合成层做，不改 left/top，避免逐帧重排。 */
+.td-mini.is-flying {
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease;
+    pointer-events: none;
+    z-index: 9999;
+}
+/* 列表里接收飞入的那个位置，先留个"落点" */
+.task-mgr-row.is-landing {
+    animation: tm-land 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes tm-land {
+    0%   { transform: scale(0.92); opacity: 0.35; box-shadow: 0 0 0 3px rgba(37,99,235,0.35); }
+    60%  { transform: scale(1.01); opacity: 1; }
+    100% { transform: scale(1); box-shadow: none; }
+}
+
+/* ==================== 移动端：只留一套导航 ==================== */
+@media (max-width: 768px) {
+    /* ★ 移动端左侧抽屉不再作为独立导航（和底部 tab 重复）。
+       它改成由底部「更多」唤起的面板，见 .sidebar.as-sheet。 */
+    .sidebar:not(.as-sheet) {
+        display: none !important;
+    }
+    /* 汉堡按钮也一并隐藏 —— 入口统一在底部「更多」 */
+    #menu-toggle { display: none !important; }
+    .sidebar-resizer { display: none !important; }
+
+    /* 「更多」面板：从底部滑出 */
+    .sidebar.as-sheet {
+        position: fixed;
+        left: 0; right: 0; bottom: 0; top: auto;
+        width: 100%;
+        max-height: 78vh;
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        z-index: 1001;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -8px 28px rgba(0,0,0,0.18);
+        display: flex !important;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .sidebar.as-sheet.open { transform: translateY(0); }
+    .sidebar.as-sheet .sidebar-nav { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    /* 顶部加个抓手条 */
+    .sidebar.as-sheet::before {
+        content: '';
+        display: block;
+        width: 38px; height: 4px;
+        border-radius: 999px;
+        background: #d1d5db;
+        margin: 8px auto 2px;
+        flex: none;
+    }
+    /* ★ 移动端不加载插件：拿不到后端，点了也是白屏 */
+    #plugins-nav, .mobile-nav-item [data-view="plugins"] { display: none !important; }
+
+    /* 底部 tab 角标 */
+    .mobile-nav-item { position: relative; }
+    .mobile-nav-badge {
+        position: absolute; top: 2px; right: 50%;
+        margin-right: -18px;
+        min-width: 15px; height: 15px;
+        border-radius: 999px;
+        background: #2563eb; color: #fff;
+        font-size: 10px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0 4px;
+    }
+}
+
+/* 遮罩（更多面板用） */
+.sheet-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 1000;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+}
+.sheet-overlay.active { opacity: 1; pointer-events: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .td-mini.is-flying, .task-mgr-row.is-landing, .sidebar.as-sheet { transition: none !important; animation: none !important; }
+}
