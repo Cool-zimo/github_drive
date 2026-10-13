@@ -672,15 +672,19 @@ class Storage {
             maxConcurrency: 16,
             memoryBudget: 512 * 1024 * 1024,
             configVersion: 3,
-            // 自动整理：**默认关闭**。
+            // 自动整理：**默认开启**（v0.0.64）。
             //
-            // ★ v0.0.63 改默认：v0.0.62 默认开，实测跑了一次把 5 个仓并成 3 个，
-            //   结果反而更糟。原因是这个设计本身想错了，见 app.js 的说明：
-            //   「每个仓库就是一份 900MB 的写入额度」，减少仓数 = 减少额度。
-            //   整理前有 3458MB 可写，整理后只剩 1770MB —— 少了一半。
-            //   想要整理必须自己打开，并且界面会把容量变化算给你看。
-            autoCompact: false,
-            autoCompactDelete: false,
+            //   v0.0.63 关掉是因为算法错了：旧算法"按整个仓装箱"，
+            //   大仓剩 94MB 装不下小仓 124MB，就直接放弃 ——
+            //   结果仓没少几个，大仓还填不满，等于白跑一趟还倒腾数据。
+            //
+            //   v0.0.64 改成"按分片装箱、把仓填满"后，效果是实打实的：
+            //     3 个仓 → 2 个，大仓 806MB 被填到 900MB，迁移仅 94MB。
+            //   所以重新打开。
+            //
+            //   空仓删掉会少一份额度，但空仓随时能自动重建，代价很小。
+            autoCompact: true,
+            autoCompactDelete: true,
             autoCompactMaxMoveMB: 300,
             autoCompactCooldownHours: 24,
             lastAutoCompactAt: 0

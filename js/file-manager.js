@@ -508,6 +508,27 @@ class FileManager {
      *
      * @returns {{bins:Array, moves:Array, deletable:Array, beforeCount:number, afterCount:number, moveBytes:number}}
      */
+    /**
+     * 规划整理：**把仓填满，腾空的删掉**。
+     *
+     * ★ v0.0.64 重写。旧算法是"把整个仓当一个物品装箱"：
+     *     A 仓剩 94MB、B 仓 124MB → 124 装不进 94 → B 只能独立成仓。
+     *   结果 A 永远停在 806MB 填不满，B 也留着，仓数降不下去。
+     *
+     *   正确做法：以**分片**为单位装箱。
+     *     按用量降序遍历每个仓当作"目标"，拿它的剩余空间
+     *     从后面的小仓里挑分片搬进来（大分片优先，减少碎片）。
+     *     这样 A 那 94MB 会被塞满，B 剩下的部分继续留在 B。
+     *
+     *   ★ 只从"后面的仓"往"前面的仓"搬，绝不倒过来：
+     *     把大仓的数据往小仓倒，迁移量会暴涨，而且下次整理又倒回来，
+     *     来回震荡。单向搬运保证收敛。
+     *
+     *   ★ 副作用要说清楚：一个文件的分片可能被拆到不同仓。
+     *     storage 本来就支持跨仓分片（下载按 chunks 顺序拼），
+     *     但拆开后若其中某个仓被删，文件就坏了 ——
+     *     所以 deletable 只含"搬完后真的空了"的仓，且执行前还会再校验一次。
+     */
     planRepoCompaction() {
         const config = this.storage.getStorageConfig();
         const currentUser = this.storage.getUser()?.login;
@@ -517,44 +538,69 @@ class FileManager {
         if (currentUser) repos = repos.filter(r => r.owner === currentUser);
 
         const usage = this.storage.getRepoUsage ? (this.storage.getRepoUsage() || {}) : {};
-        const rows = repos.map(r => {
+        // 用量降序：大仓先填满
+        const bins = repos.map(r => {
             const key = `${r.owner}/${r.repo}`;
             const u = (usage[key] && usage[key].size) || 0;
             return { key, owner: r.owner, repo: r.repo, branch: r.branch || 'main', used: u };
-        });
-        rows.sort((a, b) => b.used - a.used);
+        }).sort((a, b) => b.used - a.used);
 
-        // First-Fit（降序）：大仓先占位当桶，小仓能塞就塞
-        const bins = [];
-        for (const r of rows) {
-            const bin = bins.find(b => (max - b.used) >= r.used);
-            if (bin) {
-                bin.used += r.used;
-                bin.sources.push(r);
-            } else {
-                bins.push({ key: r.key, owner: r.owner, repo: r.repo,
-                            branch: r.branch, used: r.used, sources: [] });
-            }
+        const binIndex = new Map(bins.map((b, i) => [b.key, i]));
+
+        // 收集所有分片（大分片优先 —— 更容易把剩余空间塞满，碎片更少）
+        const vfs = this.storage.getVFS();
+        const files = (vfs && vfs.files) || {};
+        const items = [];
+        for (const vp of Object.keys(files)) {
+            const arr = (files[vp] && Array.isArray(files[vp].chunks)) ? files[vp].chunks : [];
+            arr.forEach((chunk, idx) => {
+                if (!chunk) return;
+                items.push({
+                    vp, idx, chunk,
+                    size: chunk.size || 0,
+                    fromKey: `${chunk.owner}/${chunk.repo}`
+                });
+            });
         }
+        items.sort((a, b) => b.size - a.size);
 
         const moves = [];
-        for (const b of bins) {
-            for (const src of b.sources) {
+        for (let i = 0; i < bins.length; i++) {
+            const target = bins[i];
+            let space = max - target.used;
+            if (space <= 0) continue;
+            for (const it of items) {
+                if (space <= 0) break;
+                if (it._moved) continue;
+                const si = binIndex.get(it.fromKey);
+                if (si === undefined || si <= i) continue;   // 只从后面的仓往前搬
+                if (it.size > space) continue;               // 装不下就看更小的
+                it._moved = true;
+                space -= it.size;
+                target.used += it.size;
+                bins[si].used -= it.size;
                 moves.push({
-                    from: src,
-                    to: { key: b.key, owner: b.owner, repo: b.repo, branch: b.branch }
+                    vp: it.vp, idx: it.idx, chunk: it.chunk, size: it.size,
+                    from: bins[si], to: target
                 });
             }
         }
+
+        // 腾空的仓 → 可删。bins[0] 永远保留（它只进不出，且至少要留一个仓）
+        const empties = bins.filter((b, i) => b.used <= 0 && i > 0);
+
         return {
             max,
             bins,
             moves,
-            targets: bins.map(b => b.key),
-            deletable: moves.map(m => m.from.key),
-            beforeCount: rows.length,
-            afterCount: bins.length,
-            moveBytes: moves.reduce((sum, m) => sum + m.from.used, 0)
+            targets: [...new Set(moves.map(m => m.to.key))],
+            deletable: empties.map(b => ({
+                key: b.key, owner: b.owner, repo: b.repo, branch: b.branch
+            })),
+            beforeCount: bins.length,
+            afterCount: bins.length - empties.length,
+            moveBytes: moves.reduce((s, m) => s + m.size, 0),
+            totalBytes: bins.reduce((s, b) => s + Math.max(0, b.used), 0)
         };
     }
 
@@ -580,21 +626,17 @@ class FileManager {
         const vfs = this.storage.getVFS();
         const files = vfs.files || {};
 
-        // ① 收集待迁分片：哪些文件的哪些 chunk 住在 from 仓里
+        // ① 待迁分片：v0.0.64 起 plan.moves 已经是分片级，直接用
         const byTarget = new Map();
-        for (const [vpath, f] of Object.entries(files)) {
-            if (!Array.isArray(f.chunks)) continue;
-            f.chunks.forEach((chunk, idx) => {
-                const key = `${chunk.owner}/${chunk.repo}`;
-                const mv = plan.moves.find(m => m.from.key === key);
-                if (!mv) return;
-                if (!byTarget.has(mv.to.key)) byTarget.set(mv.to.key, { move: mv, items: [] });
-                byTarget.get(mv.to.key).items.push({ vpath, idx, chunk });
-            });
+        for (const mv of plan.moves) {
+            if (!byTarget.has(mv.to.key)) byTarget.set(mv.to.key, { move: mv, items: [] });
+            byTarget.get(mv.to.key).items.push({ vpath: mv.vp, idx: mv.idx, chunk: mv.chunk });
         }
 
         const totalItems = [...byTarget.values()].reduce((s, g) => s + g.items.length, 0);
-        if (totalItems === 0) {
+        // ★ 不能只看 totalItems：可能一个分片都不用搬，但有空仓要删。
+        //   （例：大仓已满、小仓也满，只剩一个新建的空仓 —— 该删却删不掉）
+        if (totalItems === 0 && (!plan.deletable || plan.deletable.length === 0)) {
             return { moved: 0, deleted: [], totalItems: 0, skipped: true };
         }
         console.log(`[FileManager] 整理仓库：${totalItems} 个分片待迁移`);
@@ -731,12 +773,27 @@ class FileManager {
         }
         this.storage.setVFS(vfs);
 
-        // ④ 重算用量（全量重算，不做加减 —— 加减漏记就会越滚越大）
-        for (const mv of plan.moves) {
-            this.storage.subtractFromRepoUsage?.(mv.from.owner, mv.from.repo, mv.from.used);
+        // ④ 重算用量 —— 必须**全量重算**，不能加减。
+        //
+        //   ★ v0.0.64 修正：原来的写法是 subtract(mv.from.used)，
+        //     但 moves 改成分片级之后，mv.from.used 是**整个仓**的用量，
+        //     而实际只搬走了其中一部分 —— 照旧写会把整个仓的用量扣光，
+        //     登记凭空少掉一大截，后续上传就会误判"还有空间"而超额写入。
+        //
+        //   全量重算的另一个理由：孤儿分片不进 VFS，加减法永远算不到它们，
+        //   漏记只会越滚越大。
+        const newUsage = {};
+        for (const f of Object.values(vfs.files || {})) {
+            for (const c of (f.chunks || [])) {
+                if (!c) continue;
+                const k = `${c.owner}/${c.repo}`;
+                newUsage[k] = (newUsage[k] || 0) + (c.size || 0);
+            }
         }
-        for (const m of migrated) {
-            this.storage.addToRepoUsage?.(m.newChunk.owner, m.newChunk.repo, m.newChunk.size || 0);
+        const oldUsage = this.storage.getRepoUsage ? (this.storage.getRepoUsage() || {}) : {};
+        for (const k of new Set([...Object.keys(oldUsage), ...Object.keys(newUsage)])) {
+            const [owner, repo] = k.split('/');
+            this.storage.setRepoUsage?.(owner, repo, newUsage[k] || 0);
         }
 
         // ⑤ 删源仓（只有到这一步才不可逆）
@@ -748,10 +805,10 @@ class FileManager {
         const deleted = [];
         const skipped = [];
         if (deleteSources) {
-            for (const key of plan.deletable) {
-                const mv = plan.moves.find(m => m.from.key === key);
+            for (const src of plan.deletable) {
+                const key = src.key;
                 try {
-                    const empty = await this._isRepoUnused(mv.from);
+                    const empty = await this._isRepoUnused(src);
                     if (!empty.ok) {
                         skipped.push({ key, reason: empty.reason });
                         console.warn(`[FileManager] 跳过删除 ${key}：${empty.reason}`);

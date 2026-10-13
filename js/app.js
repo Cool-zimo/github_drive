@@ -1453,25 +1453,26 @@ class App {
     }
 
     // ───────────────────────────────────────────────────────────────
-    // ★ 设计纠错（v0.0.63）：「整理合并」这个功能的前提是错的
+    // ★ v0.0.63/64 的两次纠错：目标搞错过，算法也搞错过
     //
-    //   我原本假设：仓库太多 = 不好管理 = 应该合并。
-    //   实测跑了一次（v0.0.62，5 个仓并成 3 个）才发现反了：
+    //   第一错（v0.0.63）：“减少仓库数量” 就是收益。
+    //     错。每个仓就是一份 900MB 额度，仓少了额度也少。
+    //     但用户真正在意的是"仓越少越好、别留半空的仓"，
+    //     额度少一点也不在乎 —— 空仓随时能自动重建。
+    //     ⇒ 是我把"额度"当成了目标，用户要的是"紧凑"。
     //
-    //     每个仓库就是一份 maxRepoSize（900MB）的**写入额度**。
-    //     整理前 5 个仓 ≈ 4500MB 额度，整理后 3 个仓 ≈ 2700MB。
-    //     按当时的实际数字算：可写空间 3458MB → 1770MB，少了一半。
+    //   第二错（v0.0.64）：按整个仓装箱。
+    //     8696 剩 94MB，c4aa 有 124MB → 124 装不进 94 → c4aa 独立成仓。
+    //     结果 8696 永远停在 806MB 填不满，仓数也降不下去。
+    //     ⇒ 改成**按分片**装箱：拿每个仓的剩余空间去挑分片塞，
+    //       大分片优先。真实数据实测：
+    //         8696  806 MB → 900 MB（填满）
+    //         c4aa  124 MB →  30 MB
+    //         3039    0 MB → 删除
+    //         3 个仓 → 2 个，迁移仅 94MB。
     //
-    //   而 GitHub 免费账户根本没有总容量上限 —— 多留几个空仓
-    //   **不花任何代价**，需要时还能立刻往里写。
-    //   所以"减少仓库数量"不是收益，是纯损失。
-    //
-    //   唯一真实的收益是：整理时只迁移 VFS 引用的分片，
-    //   孤儿分片不跟着走，源仓一删就顺带清掉了（那次清了约 223MB）。
-    //   但这个收益用「⚡ 一键优化」就能拿到，而且不用动仓库结构。
-    //
-    //   所以：默认关闭。界面上先把容量代价算给用户看，
-    //   用户自己权衡后再决定要不要手动整理。
+    //   ★ 只从后面的仓往前面的仓搬，绝不倒过来 ——
+    //     否则大仓数据往小仓倒，迁移量暴涨且来回震荡，不收敛。
     // ───────────────────────────────────────────────────────────────
 
     // ==================== 自动整理（后台，无需手动） ====================
@@ -1517,8 +1518,8 @@ class App {
     async maybeAutoCompact(reason = '自动') {
         if (this._compactRunning) return null;
         const cfg = this.storage.getStorageConfig() || {};
-        // ★ 默认改成了 false（v0.0.63）。原因见本文件末尾的设计说明。
-        if (cfg.autoCompact !== true) return null;
+        // v0.0.64：算法修正后重新默认开启（见文末说明）
+        if (cfg.autoCompact === false) return null;
 
         // 冷却
         const HOUR = 3600 * 1000;
@@ -1563,7 +1564,7 @@ class App {
             const t = TaskDock.create({
                 type: 'compact',
                 title: `🧹 整理仓库（${reason}）`,
-                items: plan.moves.map(m => `${m.from.repo} → ${m.to.repo}`),
+                items: [...new Set(plan.moves.map(m => `${m.from.repo} → ${m.to.repo}`))],
                 note: `${plan.beforeCount} 个仓 → ${plan.afterCount} 个 · ${MB(plan.moveBytes)} MB`,
                 expand: false   // ★ 后台任务默认收成小窗，不打断当前操作
             });
@@ -1692,26 +1693,26 @@ class App {
         }
 
         const MB = n => (n / 1048576).toFixed(1);
-        const canMerge = plan.moves.length > 0;
+        // ★ 有分片要搬 **或** 有空仓可删，都算"有得整"
+        const canMerge = plan.moves.length > 0 || (plan.deletable && plan.deletable.length > 0);
         const maxMB = Math.round(this._cfgMaxRepoSize() / 1048576);
         const capBefore = plan.beforeCount * maxMB;
         const capAfter = plan.afterCount * maxMB;
 
-        // ★ 必须先把"整理会减少总容量"这件事摆在最前面。
-        //   每个仓库就是一份 maxRepoSize 的写入额度 ——
-        //   5 个仓 = 4500MB 额度，并成 3 个 = 2700MB，凭空少 1800MB。
-        //   而 GitHub 免费账户并没有总容量上限，多留几个空仓不花任何代价。
-        //   所以"减少仓库数量"本身不是收益，是损失。
+        // 目标（v0.0.64 按用户意图重定）：**把仓填满，腾空的删掉**。
+        //   不是"把小仓并进大仓就完事"，而是真正把大仓的剩余空间塞满。
+        //
+        // 代价要写清楚：每个仓就是一份额度，删掉空仓 = 少一份额度。
+        //   但空仓随时能自动重建，所以这个代价实际很小 —— 不再劝阻。
         const capWarn = canMerge
-            ? `<div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:12px;color:#991b1b;">
-                 <b>⚠️ 整理会减少可写入的总容量</b><br>
+            ? `<div style="padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;margin-bottom:12px;color:#1e40af;">
+                 <b>整理方式：填满大仓 → 删除腾空的仓</b><br>
                  <span style="font-size:12px;line-height:1.6;">
-                 每个仓库就是一份 ${maxMB} MB 的额度。现在 ${plan.beforeCount} 个仓 ≈
-                 <b>${(capBefore / 1024).toFixed(1)} GB</b> 额度，
-                 整理后 ${plan.afterCount} 个仓 ≈ <b>${(capAfter / 1024).toFixed(1)} GB</b>，
-                 少了 <b>${((capBefore - capAfter) / 1024).toFixed(1)} GB</b>。<br>
-                 GitHub 并没有总容量上限，留着空仓不花代价 ——
-                 <b>除非仓库多到不好管理，否则不建议整理。</b>
+                 按分片搬运，把排在前面的仓尽量塞到 ${maxMB} MB，
+                 剩下的往后堆，最后把<b>归零的仓删掉</b>。<br>
+                 整理后 ${plan.afterCount} 个仓 ≈ ${(capAfter / 1024).toFixed(1)} GB 额度
+                 （现在 ${(capBefore / 1024).toFixed(1)} GB）。
+                 额度变少不影响使用 —— 需要时会自动建新仓。
                  </span>
                </div>`
             : '';
@@ -1725,15 +1726,24 @@ class App {
         } else {
             h += `<div style="padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin-bottom:12px;">
                     <b>${plan.beforeCount} 个仓 → ${plan.afterCount} 个</b>，
-                    需迁移 <b>${MB(plan.moveBytes)} MB</b>，然后删除 ${plan.deletable.length} 个腾空的仓。
+                    ${plan.moves.length ? `需迁移 <b>${MB(plan.moveBytes)} MB</b>（${plan.moves.length} 个分片）` : '无需迁移分片'}
+                    ，然后删除 ${plan.deletable.length} 个腾空的仓。
                   </div>`;
-            h += '<div style="font-size:12px;color:#6b7280;margin-bottom:6px;">迁移方案（大仓不动，只搬小仓）：</div>';
+            h += '<div style="font-size:12px;color:#6b7280;margin-bottom:6px;">'
+               +  '搬运路线（按分片，从后面的仓往前填）：</div>';
+            // ★ moves 是分片级，同一对 (from,to) 会有几十条，必须聚合后再显示
+            const agg = new Map();
             for (const m of plan.moves) {
+                const k = m.from.key + '=>' + m.to.key;
+                if (!agg.has(k)) agg.set(k, { from: m.from, to: m.to, bytes: 0, n: 0 });
+                const a = agg.get(k); a.bytes += m.size; a.n++;
+            }
+            for (const a of agg.values()) {
                 h += `<div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;font-size:12px;">
-                        <span style="color:#1f2937;font-weight:600;">${m.from.repo}</span>
-                        <span style="color:#9ca3af;"> (${MB(m.from.used)} MB)</span>
+                        <span style="color:#1f2937;font-weight:600;">${a.from.repo}</span>
+                        <span style="color:#9ca3af;"> (${a.n} 片 · ${MB(a.bytes)} MB)</span>
                         <span style="color:#6b7280;"> → </span>
-                        <span style="color:#2563eb;font-weight:600;">${m.to.repo}</span>
+                        <span style="color:#2563eb;font-weight:600;">${a.to.repo}</span>
                       </div>`;
             }
             h += `<div style="font-size:12px;color:#6b7280;margin-top:10px;line-height:1.6;background:#f9fafb;padding:10px;border-radius:8px;">
@@ -1744,7 +1754,10 @@ class App {
         }
 
         h += `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-                ${canMerge ? `<button class="btn-primary btn-sm" onclick="app.runRepoCompaction()">开始整理（${plan.moves.length} 次迁移）</button>` : ''}
+                ${canMerge ? `<button class="btn-primary btn-sm" onclick="app.runRepoCompaction()">${
+                    plan.moves.length
+                        ? `开始整理（${plan.moves.length} 片 · ${MB(plan.moveBytes)} MB）`
+                        : `删除 ${plan.deletable.length} 个空仓`}</button>` : ''}
                 <button class="btn-secondary btn-sm" onclick="app.showStorageManager()">返回</button>
               </div>`;
         h += '</div>';
