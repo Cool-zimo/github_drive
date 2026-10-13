@@ -204,8 +204,11 @@ class ShareManager {
             while (queue.length) {
                 const { ti, ci, chunk } = queue.shift();
                 try {
-                    const raw = await this.api.getFileRaw(
-                        chunk.owner, chunk.repo, chunk.path, chunk.branch, treeCache);
+                    // 有 sha 就直连（1 次请求），没有才走 tree 路径
+                    const raw = chunk.sha
+                        ? await this.api.getBlobBytes(chunk.owner, chunk.repo, chunk.sha)
+                        : await this.api.getFileRaw(
+                            chunk.owner, chunk.repo, chunk.path, chunk.branch, treeCache);
                     // ★ 必须按下标 ci 放，不能 push。
                     //   并发完成的先后不等于分片顺序 —— 用 push 拼出来的
                     //   文件内容是乱的，而且不报错，只是打不开。
@@ -352,7 +355,9 @@ class ShareManager {
                     if (!file.owner || !file.repo) {
                         throw new Error(`缺少来源仓库信息（owner=${file.owner}, repo=${file.repo}），无法下载`);
                     }
-                    const raw = await this.api.getFileRaw(file.owner, file.repo, file.path, file.branch);
+                    const raw = file.sha
+                        ? await this.api.getBlobBytes(file.owner, file.repo, file.sha)
+                        : await this.api.getFileRaw(file.owner, file.repo, file.path, file.branch);
                     if (this.isTextFile(fname)) {
                         content = new TextDecoder('utf-8').decode(raw);
                     } else {

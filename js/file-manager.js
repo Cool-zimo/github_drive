@@ -439,29 +439,90 @@ class FileManager {
         return { count: files.length, results };
     }
 
+    // ==================== 分片批量读取（下载/预览共用） ====================
+    /**
+     * 并发拉取一个文件的所有分片，按**原顺序**返回字节数组。
+     *
+     * @param {Array} chunks - [{owner, repo, path, sha, branch}]
+     * @param {Function} onChunkDone - (已完成片数) => void
+     * @param {number} concurrency - 并发上限
+     * @returns {Promise<Uint8Array[]>}
+     */
+    async _fetchChunks(chunks, onChunkDone = null, concurrency = 6) {
+        const total = chunks.length;
+        const bufs = new Array(total);
+        const treeCache = new Map();        // 老数据没 sha 时的兜底：复用同一棵树
+        const queue = chunks.map((c, i) => ({ chunk: c, i }));
+        let done = 0;
+
+        async function worker() {
+            while (queue.length) {
+                const { chunk, i } = queue.shift();
+                try {
+                    let bytes;
+                    if (chunk.sha) {
+                        // 快路径：内容寻址，一步到位
+                        bytes = await this.api.getBlobBytes(chunk.owner, chunk.repo, chunk.sha);
+                    } else {
+                        // 慢路径：老数据没有 sha，至少复用 tree
+                        const raw = await this.api.getFileRaw(
+                            chunk.owner, chunk.repo, chunk.path, chunk.branch || 'main', treeCache);
+                        bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+                    }
+                    // ★ 必须按下标 i 放，不能 push。
+                    //   并发完成的先后不等于分片顺序 —— 用 push 拼出来的文件是乱的，
+                    //   而且不报错，只是打不开。
+                    bufs[i] = bytes;
+                } catch (e) {
+                    // ★ 必须在这里就把片号带上。
+                    //   worker 里直接抛的话，Promise.all 只会把原始错误（如 "404"）
+                    //   冒出去，用户看到的就是一句没头没尾的 404，不知道是哪片、
+                    //   也不知道总共几片 —— 而下面那段空洞检查根本没机会执行。
+                    throw new Error(`分片 ${i + 1}/${total} 读取失败：${e.message}`);
+                }
+                done++;
+                if (onChunkDone) onChunkDone(done);
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(concurrency, total || 1) },
+            () => worker.call(this)));
+
+        // 有空洞说明那一片失败，不能拼
+        for (let i = 0; i < total; i++) {
+            if (!bufs[i]) throw new Error(`分片 ${i + 1}/${total} 下载失败`);
+        }
+        return bufs;
+    }
+
     // ==================== 文件下载（自动合并分片） ====================
     async downloadFile(virtualPath, onProgress = null) {
         virtualPath = Storage.normalizePath(virtualPath);
         const fileInfo = this.storage.getFile(virtualPath);
         if (!fileInfo) throw new Error('文件不存在');
 
-        console.log(`[FileManager] 下载文件: ${virtualPath}, 分片数: ${fileInfo.chunks.length}`);
-
-        const parts = [];
         const totalChunks = fileInfo.chunks.length;
-        for (let i = 0; i < totalChunks; i++) {
-            const chunk = fileInfo.chunks[i];
-            console.log(`[FileManager] 下载分片 ${i + 1}/${totalChunks}: ${chunk.repo}/${chunk.path}`);
-            const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-            if (content instanceof Uint8Array) {
-                parts.push(content);
-            } else if (content instanceof ArrayBuffer) {
-                parts.push(new Uint8Array(content));
-            } else {
-                throw new Error('分片数据类型错误');
-            }
-            if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100), i + 1, totalChunks);
-        }
+        console.log(`[FileManager] 下载文件: ${virtualPath}, 分片数: ${totalChunks}`);
+
+        /**
+         * ★ 这里原本是下载慢的主因，两层问题叠在一起：
+         *
+         *   1) 分片**串行**：32 片的文件就是 32 次串行往返。
+         *
+         *   2) 每片都要重跑 getRef → getCommit → getTree(递归) → getBlob。
+         *      其中 getTree 拉的是**整棵仓库树** —— 跟要读的那个分片毫无关系，
+         *      仓库越大越慢。实测小仓库（tree 9 条）单分片：
+         *        老路径  4 次请求 2006ms
+         *        sha直连 1 次请求  520ms
+         *
+         *   而 VFS 里每个 chunk **早就记了 sha**（上传时就写进去了），
+         *   blob 又是内容寻址的 —— 有 sha 就能一步拿到内容，那三步全是绕路。
+         *
+         *   所以：有 sha → 直连（1 次请求）；没有 → 退回老路径并复用 tree。
+         */
+        const parts = await this._fetchChunks(fileInfo.chunks, (done) => {
+            if (onProgress) onProgress(Math.round(done / totalChunks * 100), done, totalChunks);
+        });
+
         const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
         const merged = new Uint8Array(totalLen);
         let offset = 0;
@@ -521,11 +582,8 @@ class FileManager {
         const fileInfo = this.storage.getFile(virtualPath);
         if (!fileInfo) throw new Error('文件不存在');
 
-        const parts = [];
-        for (const chunk of fileInfo.chunks) {
-            const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-            parts.push(content);
-        }
+        // 走同一套并发 + sha 直连（原来是串行 + 每片重拉整棵 tree）
+        const parts = await this._fetchChunks(fileInfo.chunks);
         // 合并所有分片的字节，再按 UTF-8 解码为文本
         const totalLen = parts.reduce((sum, p) => sum + (p.length || 0), 0);
         if (totalLen === 0) return '';
@@ -547,30 +605,14 @@ class FileManager {
         if (!fileInfo) throw new Error('文件不存在');
         if (!fileInfo.chunks || fileInfo.chunks.length === 0) throw new Error('文件分片信息缺失');
 
-        const parts = [];
-        for (let i = 0; i < fileInfo.chunks.length; i++) {
-            const chunk = fileInfo.chunks[i];
-            try {
-                const content = await this.api.getFileRaw(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-                // 确保是 Uint8Array
-                if (content instanceof Uint8Array) {
-                    parts.push(content);
-                } else if (content instanceof ArrayBuffer) {
-                    parts.push(new Uint8Array(content));
-                } else if (typeof content === 'string') {
-                    // base64 字符串，转换
-                    const binary = atob(content);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
-                    parts.push(bytes);
-                } else {
-                    console.warn('[FileManager] 分片 ' + i + ' 返回未知类型:', typeof content);
-                    throw new Error('分片数据类型错误');
-                }
-            } catch (e) {
-                console.error('[FileManager] 下载分片 ' + i + ' 失败:', e);
-                throw new Error('下载分片失败: ' + e.message);
-            }
+        // ★ 预览走的是这条路（点开图片看），原来也是串行 + 每片重拉整棵 tree。
+        //   现在与下载共用同一套并发 + sha 直连。
+        let parts;
+        try {
+            parts = await this._fetchChunks(fileInfo.chunks);
+        } catch (e) {
+            console.error('[FileManager] 读取分片失败:', e);
+            throw new Error('读取分片失败: ' + e.message);
         }
         const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
         if (totalLen === 0) throw new Error('文件内容为空');
