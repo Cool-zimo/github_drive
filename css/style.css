@@ -3075,3 +3075,11 @@ body.dark-mode .nav-badge { background: #3b82f6; }
 @media (prefers-reduced-motion: reduce) {
     .td-mini.is-flying, .task-mgr-row.is-landing, .sidebar.as-sheet { transition: none !important; animation: none !important; }
 }
+
+
+/* ==================== CSS 版本戳 ====================
+   JS 读这条规则的 --stamp 判断浏览器实际加载的 CSS 是不是最新的。
+   GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
+   结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
+   现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
+#gd-css-stamp { --stamp: "66"; }

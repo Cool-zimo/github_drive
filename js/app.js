@@ -749,6 +749,51 @@ class App {
     }
 
     // ==================== 仪表盘概览 ====================
+    /**
+     * 检查浏览器加载的 CSS 是不是最新的。
+     *
+     * ★ 为什么需要：GitHub Pages 的 CDN 会长时间缓存 css/style.css。
+     *   曾经资源版本号写死在 ?v=58 后又连改 6 个版本没更新它，
+     *   用户看到的界面比代码落后 7 个版本 —— 改了等于没改。
+     *   现在 stamp 跟着 internalVersion 走，对不上就明确提示，
+     *   而不是让用户以为功能没做。
+     */
+    checkCssFreshness() {
+        try {
+            const want = String(window.APP_VERSION?.internalVersion || '').trim();
+            if (!want) return;
+            let got = null;
+            for (const ss of document.styleSheets) {
+                let rules;
+                try { rules = ss.cssRules; } catch (e) { continue; }   // 跨域（jsdelivr 分支）读不到就跳过
+                if (!rules) continue;
+                for (const r of rules) {
+                    if (r.selectorText === '#gd-css-stamp') {
+                        got = (r.style.getPropertyValue('--stamp') || '').trim().replace(/["']/g, '');
+                        break;
+                    }
+                }
+                if (got) break;
+            }
+            if (got === null) return;      // 读不到就不猜，避免误报
+            if (got === want) return;
+
+            const bar = document.createElement('div');
+            bar.id = 'gd-stale-css-bar';
+            bar.innerHTML = '⚠️ 界面样式是旧版（缓存 ' + got + '，最新 ' + want + '）'
+                + ' <button style="margin-left:8px;padding:2px 10px;border:none;border-radius:6px;'
+                + 'background:#fff;color:#92400e;font-weight:600;cursor:pointer;">强制刷新</button>';
+            bar.style.cssText = 'position:fixed;left:0;right:0;bottom:56px;z-index:99999;'
+                + 'background:#fef3c7;color:#92400e;font-size:12px;padding:8px 12px;'
+                + 'text-align:center;border-top:1px solid #fde68a;';
+            bar.querySelector('button').onclick = () => {
+                try { localStorage.removeItem('gd_css_stale_dismissed'); } catch (e) {}
+                location.reload(true);
+            };
+            document.body.appendChild(bar);
+        } catch (e) { /* 检测失败不能影响正常使用 */ }
+    }
+
     async showDashboard() {
         const container = document.getElementById('file-list');
         if (!container) return;

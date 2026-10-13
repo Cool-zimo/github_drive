@@ -249,6 +249,9 @@ class UI {
         // 恢复侧边栏分组折叠状态
         this.restoreNavGroups();
 
+        // 检查 CSS 是否被 CDN 缓存成旧版（见 app.checkCssFreshness）
+        setTimeout(() => { try { this.app.checkCssFreshness?.(); } catch (e) {} }, 1200);
+
         // 任务变化时更新"后台进程"角标
         window.addEventListener('gd:tasks-changed', () => this.updateTaskBadge());
         this.updateTaskBadge();
