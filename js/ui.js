@@ -1291,7 +1291,7 @@ class UI {
             {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
             {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
             {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
-            {icon:'🤖', title:'自动整理设置', desc:'后台自动把零散小仓并进大仓，不用手动操作', action:'ui.closeModal();ui.showAutoCompactSettings();'},
+            {icon:'🤖', title:'自动整理设置', desc:'默认关闭 · 整理会减少可写入的总容量', action:'ui.closeModal();ui.showAutoCompactSettings();'},
             {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
             {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
             {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
@@ -1355,10 +1355,15 @@ class UI {
 
         const body = `
         <div style="padding:8px 0;font-size:13px;line-height:1.7;">
-            <div style="padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;font-size:12px;color:#6b7280;">
-                空闲时自动把零散的小仓并进大仓，减少仓库数量、集中可用空间。<br>
-                在后台跑，收成小窗，不打断你当前的操作。<br>
-                <b>默认只迁移、不删仓</b> —— 迁移后数据仍在源仓，随时可以验证。
+            <div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:12px;font-size:12px;color:#991b1b;line-height:1.6;">
+                <b>⚠️ 默认关闭，且建议保持关闭</b><br>
+                <span style="color:#7f1d1d;">
+                每个仓库就是一份 900 MB 的写入额度 —— 把 5 个仓并成 3 个，
+                等于凭空少掉 2 份额度。而 GitHub 没有总容量上限，
+                留着空仓并不花任何代价。<br>
+                真正的收益（清掉孤儿分片）用「⚡ 一键优化」就能拿到，
+                不用动仓库结构。
+                </span>
             </div>
 
             ${row('自动整理', '满足条件时后台自动执行', toggle('autoCompact', on, '已开启', '已关闭'))}

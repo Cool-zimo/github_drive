@@ -672,10 +672,14 @@ class Storage {
             maxConcurrency: 16,
             memoryBudget: 512 * 1024 * 1024,
             configVersion: 3,
-            // 自动整理：默认开，但**只迁移不删仓**。
-            //   迁移可控（数据还在源仓），删仓不可逆 ——
-            //   后台默默删仓库默认开太危险。
-            autoCompact: true,
+            // 自动整理：**默认关闭**。
+            //
+            // ★ v0.0.63 改默认：v0.0.62 默认开，实测跑了一次把 5 个仓并成 3 个，
+            //   结果反而更糟。原因是这个设计本身想错了，见 app.js 的说明：
+            //   「每个仓库就是一份 900MB 的写入额度」，减少仓数 = 减少额度。
+            //   整理前有 3458MB 可写，整理后只剩 1770MB —— 少了一半。
+            //   想要整理必须自己打开，并且界面会把容量变化算给你看。
+            autoCompact: false,
             autoCompactDelete: false,
             autoCompactMaxMoveMB: 300,
             autoCompactCooldownHours: 24,

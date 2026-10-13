@@ -1452,6 +1452,28 @@ class App {
         }
     }
 
+    // ───────────────────────────────────────────────────────────────
+    // ★ 设计纠错（v0.0.63）：「整理合并」这个功能的前提是错的
+    //
+    //   我原本假设：仓库太多 = 不好管理 = 应该合并。
+    //   实测跑了一次（v0.0.62，5 个仓并成 3 个）才发现反了：
+    //
+    //     每个仓库就是一份 maxRepoSize（900MB）的**写入额度**。
+    //     整理前 5 个仓 ≈ 4500MB 额度，整理后 3 个仓 ≈ 2700MB。
+    //     按当时的实际数字算：可写空间 3458MB → 1770MB，少了一半。
+    //
+    //   而 GitHub 免费账户根本没有总容量上限 —— 多留几个空仓
+    //   **不花任何代价**，需要时还能立刻往里写。
+    //   所以"减少仓库数量"不是收益，是纯损失。
+    //
+    //   唯一真实的收益是：整理时只迁移 VFS 引用的分片，
+    //   孤儿分片不跟着走，源仓一删就顺带清掉了（那次清了约 223MB）。
+    //   但这个收益用「⚡ 一键优化」就能拿到，而且不用动仓库结构。
+    //
+    //   所以：默认关闭。界面上先把容量代价算给用户看，
+    //   用户自己权衡后再决定要不要手动整理。
+    // ───────────────────────────────────────────────────────────────
+
     // ==================== 自动整理（后台，无需手动） ====================
     /**
      * 自动整理调度：空闲时默默把零散的小仓并进大仓。
@@ -1495,7 +1517,8 @@ class App {
     async maybeAutoCompact(reason = '自动') {
         if (this._compactRunning) return null;
         const cfg = this.storage.getStorageConfig() || {};
-        if (cfg.autoCompact === false) return null;
+        // ★ 默认改成了 false（v0.0.63）。原因见本文件末尾的设计说明。
+        if (cfg.autoCompact !== true) return null;
 
         // 冷却
         const HOUR = 3600 * 1000;
@@ -1647,6 +1670,15 @@ class App {
      * —— 对，但必须先看方案再执行，而且执行顺序不能反
      *    （先写目标 → 校验 → 改 VFS → 才删源）。
      */
+    /** 取单仓上限（MB 换算用） */
+    _cfgMaxRepoSize() {
+        try {
+            const c = this.storage.getStorageConfig?.();
+            return (c && c.maxRepoSize) || 900 * 1048576;
+        } catch (e) { return 900 * 1048576; }
+    }
+    _cfg_max() { return this._cfgMaxRepoSize(); }
+
     async showRepoCompaction() {
         const box = document.getElementById('storage-mgr-body');
         if (box) box.innerHTML = '<div style="font-size:13px;color:#6b7280;">正在分析…</div>';
@@ -1661,8 +1693,31 @@ class App {
 
         const MB = n => (n / 1048576).toFixed(1);
         const canMerge = plan.moves.length > 0;
+        const maxMB = Math.round(this._cfgMaxRepoSize() / 1048576);
+        const capBefore = plan.beforeCount * maxMB;
+        const capAfter = plan.afterCount * maxMB;
+
+        // ★ 必须先把"整理会减少总容量"这件事摆在最前面。
+        //   每个仓库就是一份 maxRepoSize 的写入额度 ——
+        //   5 个仓 = 4500MB 额度，并成 3 个 = 2700MB，凭空少 1800MB。
+        //   而 GitHub 免费账户并没有总容量上限，多留几个空仓不花任何代价。
+        //   所以"减少仓库数量"本身不是收益，是损失。
+        const capWarn = canMerge
+            ? `<div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:12px;color:#991b1b;">
+                 <b>⚠️ 整理会减少可写入的总容量</b><br>
+                 <span style="font-size:12px;line-height:1.6;">
+                 每个仓库就是一份 ${maxMB} MB 的额度。现在 ${plan.beforeCount} 个仓 ≈
+                 <b>${(capBefore / 1024).toFixed(1)} GB</b> 额度，
+                 整理后 ${plan.afterCount} 个仓 ≈ <b>${(capAfter / 1024).toFixed(1)} GB</b>，
+                 少了 <b>${((capBefore - capAfter) / 1024).toFixed(1)} GB</b>。<br>
+                 GitHub 并没有总容量上限，留着空仓不花代价 ——
+                 <b>除非仓库多到不好管理，否则不建议整理。</b>
+                 </span>
+               </div>`
+            : '';
 
         let h = '<div style="font-size:13px;line-height:1.7;">';
+        h += capWarn;
         if (!canMerge) {
             h += `<div style="padding:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#166534;">
                     ✓ 没有需要整理的 —— ${plan.beforeCount} 个仓分布合理，没有能合并的零散空间。
