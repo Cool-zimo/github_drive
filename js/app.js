@@ -33,6 +33,8 @@ class App {
     showLogin() {
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('app').classList.add('hidden');
+        // 未登录：底部 tab 无处可去，整个藏起来
+        document.body.classList.add('gd-logged-out');
         this.ui?.renderSavedAccounts();
     }
     
@@ -40,6 +42,8 @@ class App {
     showApp() {
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+        // 已登录：底部 tab 恢复
+        document.body.classList.remove('gd-logged-out');
     }
 
     // 显示应用版本号（从 script 标签提取）

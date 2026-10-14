@@ -3077,9 +3077,22 @@ body.dark-mode .nav-badge { background: #3b82f6; }
 }
 
 
+/* ==================== 登录页隐藏底部导航 ====================
+   未登录时底部 tab（文件/最近/收藏/后台/更多）没有任何可去的地方 ——
+   点哪个都是空界面，还占着 56px 高度挡登录卡片。
+   body 默认带 gd-logged-out（首屏就不闪），登录成功后由 showApp() 移除。 */
+body.gd-logged-out .mobile-bottom-nav {
+    display: none !important;
+}
+/* 纯 CSS 兜底：只要登录页是可见的就隐藏，不依赖 JS 有没有跑到。
+   （:has 在 Chrome 105+ / Safari 15.4+ 都支持；不支持的老浏览器靠上面那条 body class。） */
+body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
+    display: none !important;
+}
+
 /* ==================== CSS 版本戳 ====================
    JS 读这条规则的 --stamp 判断浏览器实际加载的 CSS 是不是最新的。
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "66"; }
+#gd-css-stamp { --stamp: "67"; }
