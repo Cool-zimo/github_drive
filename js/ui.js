@@ -1670,34 +1670,36 @@ class UI {
     // ==================== 移动端「更多」面板 ====================
 
     /**
-     * 移动端只留一套导航：底部 tab + 这里唤起的面板。
+     * 移动端唯一导航：左侧抽屉。
      *
-     * ★ 原来移动端左侧是抽屉、底部又是 tab，两套入口干同一件事 ——
+     * ★ 演变：原来移动端左侧是抽屉、底部又是 tab，两套入口干同一件事 ——
      *   用户直接问"为什么左边有侧边栏，下面也有侧边栏"。
-     *   现在侧边栏在移动端改成从底部滑出的面板（.as-sheet），
-     *   只有底部「更多」能唤起，不再有第二个常驻入口。
+     *   中间一度改成"底部 tab + 更多面板"，用户选了反过来：
+     *   留抽屉、去掉底部。理由是抽屉装得下更多条目，
+     *   而底部只能塞 5 个图标，后台进程之类的功能挤不进去。
      */
     toggleMobileMenu(force) {
         const sidebar = document.querySelector('.sidebar');
         if (!sidebar) return;
-        // 电脑端侧边栏本来就常驻，不需要这个面板
+        // 电脑端侧边栏本来就常驻，不需要抽屉
         try {
             if (!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches)) return;
         } catch (e) { return; }
-        sidebar.classList.add('as-sheet');
 
-        let overlay = document.getElementById('sheet-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'sheet-overlay';
-            overlay.className = 'sheet-overlay';
+        // ★ 关键：清掉 as-sheet。侧边栏节点是复用的，
+        //   旧版把它变成过"从底部滑出"的面板，残留这个 class 会让抽屉从底部冒出来。
+        sidebar.classList.remove('as-sheet');
+
+        // 用侧边栏自己的遮罩（#sidebar-overlay），不再另建 sheet-overlay
+        let overlay = document.getElementById('sidebar-overlay');
+        if (overlay && !overlay._gdBound) {
             overlay.addEventListener('click', () => this.toggleMobileMenu(false));
-            document.body.appendChild(overlay);
+            overlay._gdBound = true;
         }
 
         const open = force !== undefined ? force : !sidebar.classList.contains('open');
         sidebar.classList.toggle('open', open);
-        overlay.classList.toggle('active', open);
+        if (overlay) overlay.classList.toggle('active', open);
     }
 
     /** 移动端插件不可用（拿不到后端），兜底拦一道 */

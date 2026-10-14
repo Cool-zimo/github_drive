@@ -2151,7 +2151,8 @@ body.dark-mode .modal-close {
     }
     .main-content {
         margin-left: 0 !important;
-        padding-bottom: 70px;
+        /* 底部 tab 已移除，不再需要给它让出 70px */
+        padding-bottom: 16px;
     }
     .file-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
@@ -3007,15 +3008,16 @@ body.dark-mode .nav-badge { background: #3b82f6; }
     100% { transform: scale(1); box-shadow: none; }
 }
 
-/* ==================== 移动端：只留一套导航 ==================== */
+/* ==================== 移动端：只留一套导航（左侧抽屉） ==================== */
 @media (max-width: 768px) {
-    /* ★ 移动端左侧抽屉不再作为独立导航（和底部 tab 重复）。
-       它改成由底部「更多」唤起的面板，见 .sidebar.as-sheet。 */
-    .sidebar:not(.as-sheet) {
+    /* ★ 用户选了「留左侧抽屉、去掉底部」。
+       底部 tab 整个移除 —— 两个常驻入口干同一件事没必要，
+       而抽屉能放下更多条目（后台进程、设置、账号等），比 5 个 tab 宽裕。 */
+    .mobile-bottom-nav {
         display: none !important;
     }
-    /* 汉堡按钮也一并隐藏 —— 入口统一在底部「更多」 */
-    #menu-toggle { display: none !important; }
+    /* 汉堡按钮恢复：它是抽屉的唯一入口 */
+    #menu-toggle { display: flex !important; }
     .sidebar-resizer { display: none !important; }
 
     /* 「更多」面板：从底部滑出 */
@@ -3095,4 +3097,4 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "67"; }
+#gd-css-stamp { --stamp: "68"; }
