@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.js?v=69&api_v=1"></script>
+    <script src="js/branch-guard.js?v=70&api_v=2"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,12 +33,12 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.css?v=69&api_v=1">');
+            document.write('<link rel="stylesheet" href="css/style.css?v=70&api_v=2">');
         }
     })();
     </script>
 </head>
-<body class="gd-logged-out" data-api-v="1">
+<body class="gd-logged-out" data-api-v="2">
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
@@ -146,21 +146,21 @@
                 <!-- 我的文件 -->
                 <div class="nav-section">
                     <div class="nav-section-title"><span data-i18n="sidebar.myFiles">My Files</span></div>
-                    <a href="#" class="nav-item" id="dashboard-nav" data-view="dashboard"><span class="nav-icon">📊</span><span>仪表盘</span></a>
+                    <a href="#" class="nav-item" id="dashboard-nav" data-view="dashboard"><span class="nav-icon"><img src="assets/icons/dashboard-48.png" alt="" width="20" height="20"></span><span>仪表盘</span></a>
                     <a href="#" class="nav-item active" data-view="all-files">
-                        <span class="nav-icon">🗂️</span>
+                        <span class="nav-icon"><img src="assets/icons/allfiles-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.allFiles">全部文件</span>
                     </a>
                     <a href="#" class="nav-item" data-view="recent">
-                        <span class="nav-icon">🕐</span>
+                        <span class="nav-icon"><img src="assets/icons/recent-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.recent">最近使用</span>
                     </a>
                     <a href="#" class="nav-item" data-view="starred">
-                        <span class="nav-icon">⭐</span>
+                        <span class="nav-icon"><img src="assets/icons/starred-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.starred">收藏</span>
                     </a>
                     <a href="#" class="nav-item" data-view="trash">
-                        <span class="nav-icon">🗑️</span>
+                        <span class="nav-icon"><img src="assets/icons/trash-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.trash">回收站</span>
                     </a>
                 </div>
@@ -169,11 +169,11 @@
                 <div class="nav-section">
                     <div class="nav-section-title"><span>分享</span></div>
                     <a href="#" class="nav-item" data-view="shared">
-                        <span class="nav-icon">📤</span>
+                        <span class="nav-icon"><img src="assets/icons/shared-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.shared">我的分享</span>
                     </a>
                     <a href="#" class="nav-item" data-view="explore">
-                        <span class="nav-icon">🌐</span>
+                        <span class="nav-icon"><img src="assets/icons/explore-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.explore">发现分享</span>
                     </a>
                 </div>
@@ -182,12 +182,12 @@
                 <div class="nav-section">
                     <div class="nav-section-title"><span>任务</span></div>
                     <a href="#" class="nav-item" id="tasks-nav" data-view="tasks" onclick="ui.showTaskManager();return false;">
-                        <span class="nav-icon">⚙️</span>
+                        <span class="nav-icon"><img src="assets/icons/tasks-48.png" alt="" width="20" height="20"></span>
                         <span>后台进程</span>
                         <span class="nav-badge" id="nav-badge-tasks" style="display:none;"></span>
                     </a>
                     <a href="#" class="nav-item" data-view="plugins" id="plugins-nav">
-                        <span class="nav-icon">🧩</span>
+                        <span class="nav-icon"><img src="assets/icons/plugins-48.png" alt="" width="20" height="20"></span>
                         <span data-i18n="nav.plugins">插件广场</span>
                     </a>
                 </div>
@@ -282,7 +282,7 @@
     // 根据分支动态加载 JS
     (function() {
         var base = window.__BRANCH_BASE__ || '';
-        var v = window.__BRANCH_BASE__ ? '' : '?v=69&api_v=1';
+        var v = window.__BRANCH_BASE__ ? '' : '?v=70&api_v=2';
         var files = ['bridge', 'icons', 'github-api', 'cangshu-link', 'storage', 'maintain', 'file-manager', 'share', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'app'];
         files.forEach(function(f) {
             document.write('<script src="' + base + 'js/' + f + '.js' + v + '"><\/script>');

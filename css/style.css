@@ -353,7 +353,26 @@ body {
     font-size: 16px;
     width: 20px;
     text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
+
+/* 侧边栏图标：图片版。
+   ★ 为什么不用 background-image 而用 <img>：
+     <img> 能被浏览器按 width/height 缩放并保留 alt 语义，
+     而且 collapsed 态（侧边栏收窄）时不用额外改 CSS。 */
+.nav-icon img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    display: block;
+    /* 图标本身是紫蓝渐变描边，在深色主题下不至于消失 */
+    opacity: .92;
+}
+
+/* 深色主题：图标提亮，否则描边在深底上发灰 */
+body.dark-theme .nav-icon img { opacity: 1; }
 
 .repo-list {
     margin-top: 4px;
@@ -3152,4 +3171,4 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "69"; --api-stamp: "1"; }
+#gd-css-stamp { --stamp: "70"; --api-stamp: "2"; }
