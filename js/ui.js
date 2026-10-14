@@ -249,8 +249,8 @@ class UI {
         // 恢复侧边栏分组折叠状态
         this.restoreNavGroups();
 
-        // 检查 CSS 是否被 CDN 缓存成旧版（见 app.checkCssFreshness）
-        setTimeout(() => { try { this.app.checkCssFreshness?.(); } catch (e) {} }, 1200);
+        // 兼容性自检：CSS 缓存版本 + CSS/HTML 的 API 版本（见 app.checkCompatibility）
+        setTimeout(() => { try { this.app.checkCompatibility?.(); } catch (e) {} }, 1200);
 
         // 任务变化时更新"后台进程"角标
         window.addEventListener('gd:tasks-changed', () => this.updateTaskBadge());
@@ -324,6 +324,8 @@ class UI {
     // ==================== 视图切换 ====================
 
     switchView(view) {
+        // 离开后台进程视图时停掉刷新定时器（否则它每 700ms 空转一整天）
+        if (this.app._currentView === 'tasks' && view !== 'tasks') this._stopTasksRefresh();
         this.app._currentView = view;
         this.app.saveLastState?.();
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -380,6 +382,19 @@ class UI {
                 this.app.showShares();
             } else if (view === 'explore') {
                 this.app.showExploreShares();
+            } else if (view === 'tasks') {
+                // 后台进程：占主窗口，不弹窗
+                if (fileList) fileList.style.display = '';
+                if (breadcrumb) breadcrumb.style.display = 'none';
+                if (toolbarActions) toolbarActions.style.display = 'none';
+                if (emptyState) emptyState.classList.add('hidden');
+                if (loadingState) loadingState.classList.add('hidden');
+                this._renderTasksView();
+                this._startTasksRefresh();
+                // 先渲染出落点，再让小窗飞过来
+                if (typeof TaskDock !== 'undefined' && TaskDock.flyToList) {
+                    requestAnimationFrame(() => TaskDock.flyToList());
+                }
             } else if (view === 'plugins') {
                 // ★ 移动端不加载插件：下载不了后端代码，点了只会白屏
                 if (this.isPluginsBlocked && this.isPluginsBlocked()) {
@@ -1521,35 +1536,53 @@ class UI {
      * ★ 打开时小窗会"飞"进来（TaskDock.flyToList），
      *   给用户一个"它们都跑这儿来了"的视觉交代，而不是凭空列出一堆行。
      */
+    /**
+     * 后台进程：显示在主窗口（不是弹窗）。
+     *
+     * ★ 为什么改：
+     *   原来用 showModal 弹窗。弹窗是叠在文件列表上的浮层 ——
+     *   看任务的时候没法同时翻文件，而"传完了没、要不要接着传"
+     *   恰恰需要边看进度边决定。而且弹窗一关进度就断了。
+     *   现在走 switchView('tasks')，像"最近/收藏"一样占主窗口。
+     */
     showTaskManager() {
+        // 侧边栏高亮同步（走 nav 的话 switchView 已经切过了，这里兜底）
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.view === 'tasks');
+        });
+        this.switchView('tasks');
+    }
+
+    /** 主窗口渲染后台进程 */
+    _renderTasksView() {
+        const fileList = document.getElementById('file-list');
+        if (!fileList) return;
+        // ★ 显示前必须清掉内联 display:none ——
+        //   switchView 对非文件视图写过 style.display='none'，
+        //   内联样式优先级高于 CSS 类，只改 className 不管用
+        //   （之前"我的分享"列表空白就是这个原因）。
+        fileList.style.display = '';
+        fileList.className = 'file-list';
+        fileList.innerHTML = '<div class="tasks-view" id="task-mgr-body">' + this._taskManagerHTML() + '</div>';
+        this._bindTaskManager(fileList);
+    }
+
+    /** 后台进程视图的实时刷新（跑着的任务要能看到进度在动） */
+    _startTasksRefresh() {
         const refresh = () => {
-            const box = document.getElementById('task-mgr-body');
-            if (!box) return;                       // 面板已关
-            box.innerHTML = this._taskManagerHTML();
-            this._bindTaskManager(box);
+            // 已经不在后台进程视图了就停
+            if (this.app?._currentView !== 'tasks') { this._stopTasksRefresh(); return; }
+            this._renderTasksView();
         };
+        this._stopTasksRefresh();
+        this._taskMgrTimer = setInterval(refresh, 700);
+    }
 
-        const body = '<div id="task-mgr-body">' + this._taskManagerHTML() + '</div>';
-        this.showModal('⚙️ 后台进程', body, '', true);
-
-        // 先渲染出落点，再让小窗飞过来
-        refresh();
-        if (typeof TaskDock !== 'undefined' && TaskDock.flyToList) {
-            requestAnimationFrame(() => TaskDock.flyToList());
-        }
-
-        // 实时刷新：跑着的任务要能看到进度在动
+    _stopTasksRefresh() {
         clearInterval(this._taskMgrTimer);
-        this._taskMgrTimer = setInterval(() => {
-            if (!document.getElementById('task-mgr-body')) {
-                clearInterval(this._taskMgrTimer); this._taskMgrTimer = null;
-                // 面板关了 → 还在跑的任务回到边缘小窗
-                try { TaskDock.resumeMini && TaskDock.resumeMini(); } catch (e) {}
-                return;
-            }
-            refresh();
-        }, 700);
-        this._bindTaskManager(document.getElementById('task-mgr-body'));
+        this._taskMgrTimer = null;
+        // 离开视图 → 还在跑的任务回到边缘小窗
+        try { TaskDock.resumeMini && TaskDock.resumeMini(); } catch (e) {}
     }
 
     _taskManagerHTML() {
@@ -1700,6 +1733,191 @@ class UI {
         const open = force !== undefined ? force : !sidebar.classList.contains('open');
         sidebar.classList.toggle('open', open);
         if (overlay) overlay.classList.toggle('active', open);
+    }
+
+    // ==================== 工具栏：文件夹导航 / 高级筛选 ====================
+
+    /** HTML 转义（渲染文件名、路径等不可信内容时必须用） */
+    _escHtml(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    /** 属性转义：比 _escHtml 多转义反引号和等号，防止拼进 data-* 后截断属性 */
+    _escAttr(v) {
+        return this._escHtml(v).replace(/`/g, '&#96;').replace(/=/g, '&#61;');
+    }
+
+    /**
+     * 🗂️ 文件夹导航
+     *
+     * ★ 为什么之前"按了没反应"：
+     *   index.html 里绑了 click → this.showFolderTree()，
+     *   但这个方法从来没被实现过 —— 点了直接抛
+     *   "this.showFolderTree is not a function"，界面上没有任何反应。
+     *   这是最容易漏的一类 bug：绑定写了、实现没写，静态看不出来。
+     */
+    showFolderTree() {
+        const vfs = this.app?.storage?.getVFS?.();
+        if (!vfs) { this.showToast?.('数据还没加载完', 'info'); return; }
+
+        // 从 vfs.folders 还原整棵树（它是 path -> info 的扁平 map）
+        const paths = Object.keys(vfs.folders || {}).filter(p => p && p !== '/drive_home');
+        if (!paths.length) {
+            this.showModal('🗂️ 文件夹导航',
+                '<div style="font-size:13px;color:#6b7280;padding:8px 0;">还没有任何文件夹</div>', '', true);
+            return;
+        }
+        paths.sort();
+
+        // 每个文件夹下挂多少文件（只数直接子文件，够用且不卡）
+        const countIn = (dir) => {
+            const prefix = dir + '/';
+            return Object.keys(vfs.files || {}).filter(f =>
+                f.startsWith(prefix) && !f.substring(prefix.length).includes('/')).length;
+        };
+
+        const cur = this.app.fileManager?.getCurrentPath?.() || '/drive_home';
+        const rows = paths.map(p => {
+            const name = p.split('/').pop() || p;
+            const depth = p.split('/').length - 2;          // /drive_home/x 的 depth = 0
+            const n = countIn(p);
+            const isCur = p === cur;
+            return `<div class="ft-row${isCur ? ' is-cur' : ''}" data-path="${this._escAttr(p)}"
+                        style="padding-left:${8 + Math.max(0, depth) * 16}px">
+                        <span class="ft-ico">📁</span>
+                        <span class="ft-name">${this._escHtml(name)}</span>
+                        <span class="ft-count">${n ? n + ' 个文件' : '空'}</span>
+                    </div>`;
+        }).join('');
+
+        const body = `<div class="folder-tree" id="folder-tree-box">${rows}</div>`;
+        this.showModal('🗂️ 文件夹导航', body, '', true);
+
+        document.getElementById('folder-tree-box')?.querySelectorAll('.ft-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const path = row.getAttribute('data-path');
+                this.closeModal?.();
+                this.app.fileManager?.setCurrentPath?.(path);
+                this.app.fileManager?.setCurrentRepo?.(null);
+                this.switchView('all-files');
+                // switchView('all-files') 会把路径重置成 last_state，这里再改回去
+                setTimeout(() => {
+                    this.app.fileManager?.setCurrentPath?.(path);
+                    this.app.loadFiles?.();
+                }, 0);
+            });
+        });
+    }
+
+    /**
+     * ⚙️ 高级筛选
+     *
+     * ★ 同样是"绑了 click 但方法没实现"，点了完全没反应。
+     */
+    showAdvancedSearch() {
+        const vfs = this.app?.storage?.getVFS?.();
+        if (!vfs) { this.showToast?.('数据还没加载完', 'info'); return; }
+
+        // 统计现有扩展名，避免给用户一个空的分类列表
+        const exts = new Set();
+        Object.keys(vfs.files || {}).forEach(f => {
+            const m = f.match(/\.([^./]+)$/);
+            if (m) exts.add(m[1].toLowerCase());
+        });
+        const extList = [...exts].sort();
+
+        const body = `
+            <div class="adv-search" id="adv-search-box">
+                <div class="adv-field">
+                    <label>文件类型</label>
+                    <div class="adv-chips" id="adv-exts">
+                        <span class="adv-chip is-on" data-ext="">全部</span>
+                        ${extList.map(e => `<span class="adv-chip" data-ext="${this._escAttr(e)}">.${this._escHtml(e)}</span>`).join('')}
+                    </div>
+                </div>
+                <div class="adv-field">
+                    <label>大小</label>
+                    <select id="adv-size">
+                        <option value="">不限</option>
+                        <option value="s">&lt; 1 MB</option>
+                        <option value="m">1 MB ~ 10 MB</option>
+                        <option value="l">&gt; 10 MB</option>
+                    </select>
+                </div>
+                <div class="adv-field">
+                    <label>名称包含</label>
+                    <input type="text" id="adv-name" placeholder="留空则不过滤">
+                </div>
+                <div id="adv-count" class="adv-count"></div>
+                <div class="adv-actions">
+                    <button class="btn-secondary" id="adv-cancel">取消</button>
+                    <button class="btn-primary" id="adv-apply">🔍 应用筛选</button>
+                </div>
+            </div>`;
+
+        // ★ 注意：showModal 只收 4 个参数，第 5 个按钮数组会被静默忽略 ——
+        //   按钮根本渲染不出来。所以按钮直接放进 body，
+        //   不去改 showModal 签名（它还有 30+ 处调用）。
+        this.showModal('⚙️ 高级筛选', body, '', true);
+        document.getElementById('adv-cancel')?.addEventListener('click', () => this.closeModal?.());
+        document.getElementById('adv-apply')?.addEventListener('click', () => this._applyAdvancedSearch());
+
+        const box = document.getElementById('adv-search-box');
+        box?.querySelectorAll('.adv-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                box.querySelectorAll('.adv-chip').forEach(c => c.classList.remove('is-on'));
+                chip.classList.add('is-on');
+                if (chip.getAttribute('data-ext') !== '') {
+                    box.querySelectorAll('.adv-chip').forEach(c => {
+                        if (c.getAttribute('data-ext') === '') c.classList.remove('is-on');
+                    });
+                }
+            });
+        });
+        box?.querySelectorAll('#adv-size,#adv-name').forEach(el =>
+            el.addEventListener('input', () => this._previewAdvancedSearch()));
+        box?.querySelectorAll('.adv-chip').forEach(c =>
+            c.addEventListener('click', () => this._previewAdvancedSearch()));
+        this._previewAdvancedSearch();
+    }
+
+    _advFilter() {
+        const box = document.getElementById('adv-search-box');
+        const ext = box?.querySelector('.adv-chip.is-on')?.getAttribute('data-ext') || '';
+        const size = box?.querySelector('#adv-size')?.value || '';
+        const name = (box?.querySelector('#adv-name')?.value || '').trim().toLowerCase();
+        const vfs = this.app.storage.getVFS();
+
+        return Object.entries(vfs.files || {}).filter(([path, info]) => {
+            if (ext && !path.toLowerCase().endsWith('.' + ext)) return false;
+            if (name && !path.toLowerCase().includes(name)) return false;
+            const sz = info.size || 0;
+            if (size === 's' && sz >= 1024 * 1024) return false;
+            if (size === 'm' && (sz < 1024 * 1024 || sz >= 10 * 1024 * 1024)) return false;
+            if (size === 'l' && sz < 10 * 1024 * 1024) return false;
+            return true;
+        }).map(([path, info]) => ({ ...info, path, isFile: true }));
+    }
+
+    _previewAdvancedSearch() {
+        const el = document.getElementById('adv-count');
+        if (!el) return;
+        try {
+            const n = this._advFilter().length;
+            el.textContent = n ? `匹配 ${n} 个文件` : '没有匹配的文件';
+        } catch (e) { /* 预览失败不影响应用 */ }
+    }
+
+    _applyAdvancedSearch() {
+        let items = [];
+        try { items = this._advFilter(); } catch (e) { items = []; }
+        this.closeModal?.();
+        this.app.currentFiles = items;
+        this.app._isFilterResult = true;
+        this.ui?.renderFileList?.(items);
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        this.showToast?.(`筛选出 ${items.length} 个文件`, 'info');
     }
 
     /** 移动端插件不可用（拿不到后端），兜底拦一道 */

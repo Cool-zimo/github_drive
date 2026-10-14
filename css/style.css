@@ -3092,9 +3092,64 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     display: none !important;
 }
 
+/* ==================== 文件夹导航 / 高级筛选 ==================== */
+.folder-tree {
+    max-height: 54vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.ft-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #374151;
+}
+.ft-row:hover { background: #f3f4f6; }
+.ft-row.is-cur { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+.ft-ico { flex: none; }
+.ft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-count { flex: none; font-size: 11px; color: #9ca3af; }
+
+.adv-field { margin-bottom: 14px; }
+.adv-field > label {
+    display: block; font-size: 12px; color: #6b7280; margin-bottom: 6px; font-weight: 600;
+}
+.adv-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow-y: auto; }
+.adv-chip {
+    padding: 4px 10px; border-radius: 999px; font-size: 12px;
+    background: #f3f4f6; color: #4b5563; cursor: pointer; user-select: none;
+}
+.adv-chip.is-on { background: #2563eb; color: #fff; font-weight: 600; }
+.adv-field select, .adv-field input[type=text] {
+    width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; box-sizing: border-box;
+}
+.adv-count { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+.adv-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ==================== 后台进程（主窗口视图） ==================== */
+.tasks-view {
+    padding: 20px;
+    max-width: 860px;
+    margin: 0 auto;
+}
+.tasks-view-title {
+    font-size: 16px; font-weight: 700; color: #111827;
+    margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
+}
+.tasks-view-sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+.tasks-view-empty {
+    text-align: center; padding: 48px 16px; color: #9ca3af; font-size: 13px;
+}
+.tasks-view-empty .tv-ico { font-size: 34px; display: block; margin-bottom: 10px; }
+
 /* ==================== CSS 版本戳 ====================
    JS 读这条规则的 --stamp 判断浏览器实际加载的 CSS 是不是最新的。
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "68"; }
+#gd-css-stamp { --stamp: "69"; --api-stamp: "1"; }

@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.js?v=68"></script>
+    <script src="js/branch-guard.js?v=69&api_v=1"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,12 +33,12 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.css?v=68">');
+            document.write('<link rel="stylesheet" href="css/style.css?v=69&api_v=1">');
         }
     })();
     </script>
 </head>
-<body class="gd-logged-out">
+<body class="gd-logged-out" data-api-v="1">
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
@@ -165,30 +165,23 @@
                     </a>
                 </div>
 
-                <!-- 分享（可折叠：我的分享 + 发现分享） -->
+                <!-- 分享（平铺：和其他分组保持一致，不再折叠） -->
                 <div class="nav-section">
-                    <div class="nav-group-header" data-group="share" onclick="ui.toggleNavGroup('share')">
-                        <span class="nav-group-icon">🔗</span>
-                        <span class="nav-group-title">分享</span>
-                        <span class="nav-group-badge" id="nav-badge-share"></span>
-                        <span class="nav-group-arrow">▾</span>
-                    </div>
-                    <div class="nav-group-body" data-group-body="share">
-                        <a href="#" class="nav-item" data-view="shared">
-                            <span class="nav-icon">📤</span>
-                            <span data-i18n="nav.shared">我的分享</span>
-                        </a>
-                        <a href="#" class="nav-item" data-view="explore">
-                            <span class="nav-icon">🌐</span>
-                            <span data-i18n="nav.explore">发现分享</span>
-                        </a>
-                    </div>
+                    <div class="nav-section-title"><span>分享</span></div>
+                    <a href="#" class="nav-item" data-view="shared">
+                        <span class="nav-icon">📤</span>
+                        <span data-i18n="nav.shared">我的分享</span>
+                    </a>
+                    <a href="#" class="nav-item" data-view="explore">
+                        <span class="nav-icon">🌐</span>
+                        <span data-i18n="nav.explore">发现分享</span>
+                    </a>
                 </div>
 
                 <!-- 后台进程：统一管理所有进度任务 -->
                 <div class="nav-section">
                     <div class="nav-section-title"><span>任务</span></div>
-                    <a href="#" class="nav-item" id="tasks-nav" onclick="ui.showTaskManager();return false;">
+                    <a href="#" class="nav-item" id="tasks-nav" data-view="tasks" onclick="ui.showTaskManager();return false;">
                         <span class="nav-icon">⚙️</span>
                         <span>后台进程</span>
                         <span class="nav-badge" id="nav-badge-tasks" style="display:none;"></span>
@@ -289,7 +282,7 @@
     // 根据分支动态加载 JS
     (function() {
         var base = window.__BRANCH_BASE__ || '';
-        var v = window.__BRANCH_BASE__ ? '' : '?v=68';
+        var v = window.__BRANCH_BASE__ ? '' : '?v=69&api_v=1';
         var files = ['bridge', 'icons', 'github-api', 'cangshu-link', 'storage', 'maintain', 'file-manager', 'share', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'app'];
         files.forEach(function(f) {
             document.write('<script src="' + base + 'js/' + f + '.js' + v + '"><\/script>');

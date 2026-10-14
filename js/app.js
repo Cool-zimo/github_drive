@@ -754,46 +754,77 @@ class App {
 
     // ==================== 仪表盘概览 ====================
     /**
-     * 检查浏览器加载的 CSS 是不是最新的。
+     * 兼容性自检：校验三件事。
      *
-     * ★ 为什么需要：GitHub Pages 的 CDN 会长时间缓存 css/style.css。
-     *   曾经资源版本号写死在 ?v=58 后又连改 6 个版本没更新它，
-     *   用户看到的界面比代码落后 7 个版本 —— 改了等于没改。
-     *   现在 stamp 跟着 internalVersion 走，对不上就明确提示，
-     *   而不是让用户以为功能没做。
+     * ★ 为什么要分别校验（历史教训）：
+     *
+     *   1) CSS 缓存版本号（--stamp）
+     *      GitHub Pages 的 CDN 会长时间缓存 css。曾经资源版本号写死在 ?v=58
+     *      后又连改 6 个版本没更新它，用户看到的界面比代码落后 7 个版本 ——
+     *      改了等于没改。
+     *
+     *   2) CSS 的 API 版本（--api-stamp）
+     *      ★ 这是最关键的一条，"文件是新的"不代表"能配合工作"。
+     *      例如 v68 的 CSS 靠 body.gd-logged-out 隐藏底部栏，而这个 class
+     *      是 v67 的 JS 才加的 —— 老 JS 配新 CSS，底部栏永远藏不掉。
+     *      反过来也一样：新 JS 调 ui.xxx() 而老 HTML 里没那个节点，点了没反应。
+     *
+     *   3) HTML 的 API 版本（body[data-api-v]）
+     *      index.html 和 js 是分开缓存的，同样可能错配。
+     *
+     * 保守原则：读不到就不猜。宁可不提示，也不误报 ——
+     * 一个假的"版本不兼容"会把用户吓到，而漏报只是偶尔样式不对。
      */
-    checkCssFreshness() {
+    checkCompatibility() {
         try {
             const want = String(window.APP_VERSION?.internalVersion || '').trim();
-            if (!want) return;
-            let got = null;
+            const wantApi = String(window.APP_VERSION?.apiVersion || '').trim();
+            if (!want && !wantApi) return;
+
+            let gotVer = null, gotApi = null;
             for (const ss of document.styleSheets) {
                 let rules;
                 try { rules = ss.cssRules; } catch (e) { continue; }   // 跨域（jsdelivr 分支）读不到就跳过
                 if (!rules) continue;
                 for (const r of rules) {
                     if (r.selectorText === '#gd-css-stamp') {
-                        got = (r.style.getPropertyValue('--stamp') || '').trim().replace(/["']/g, '');
+                        gotVer = (r.style.getPropertyValue('--stamp') || '').trim().replace(/["']/g, '');
+                        gotApi = (r.style.getPropertyValue('--api-stamp') || '').trim().replace(/["']/g, '');
                         break;
                     }
                 }
-                if (got) break;
+                if (gotVer || gotApi) break;
             }
-            if (got === null) return;      // 读不到就不猜，避免误报
-            if (got === want) return;
 
+            const problems = [];
+            // ① CSS 缓存版本落后 —— 只是旧，未必坏
+            if (gotVer && want && gotVer !== want) {
+                problems.push({ level: 'warn', text: `界面样式是旧版（缓存 ${gotVer}，最新 ${want}）` });
+            }
+            // ② CSS 契约不匹配 —— 真的会坏
+            if (gotApi && wantApi && gotApi !== wantApi) {
+                problems.push({ level: 'error',
+                    text: `样式与程序不兼容（样式 API ${gotApi}，程序 API ${wantApi}）` });
+            }
+            // ③ HTML 契约不匹配 —— 真的会坏
+            const htmlApi = (document.body?.getAttribute('data-api-v') || '').trim();
+            if (htmlApi && wantApi && htmlApi !== wantApi) {
+                problems.push({ level: 'error',
+                    text: `页面结构与程序不兼容（页面 API ${htmlApi}，程序 API ${wantApi}）` });
+            }
+
+            if (!problems.length) return;
+            const isErr = problems.some(p => p.level === 'error');
             const bar = document.createElement('div');
-            bar.id = 'gd-stale-css-bar';
-            bar.innerHTML = '⚠️ 界面样式是旧版（缓存 ' + got + '，最新 ' + want + '）'
+            bar.id = 'gd-compat-bar';
+            bar.innerHTML = (isErr ? '⚠️ ' : 'ℹ️ ') + problems.map(p => p.text).join('；')
                 + ' <button style="margin-left:8px;padding:2px 10px;border:none;border-radius:6px;'
-                + 'background:#fff;color:#92400e;font-weight:600;cursor:pointer;">强制刷新</button>';
-            bar.style.cssText = 'position:fixed;left:0;right:0;bottom:56px;z-index:99999;'
-                + 'background:#fef3c7;color:#92400e;font-size:12px;padding:8px 12px;'
-                + 'text-align:center;border-top:1px solid #fde68a;';
-            bar.querySelector('button').onclick = () => {
-                try { localStorage.removeItem('gd_css_stale_dismissed'); } catch (e) {}
-                location.reload(true);
-            };
+                + 'background:#fff;color:' + (isErr ? '#991b1b' : '#92400e') + ';font-weight:600;cursor:pointer;">强制刷新</button>';
+            bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;'
+                + 'background:' + (isErr ? '#fee2e2' : '#fef3c7') + ';color:' + (isErr ? '#991b1b' : '#92400e') + ';'
+                + 'font-size:12px;padding:8px 12px;text-align:center;'
+                + 'border-top:1px solid ' + (isErr ? '#fecaca' : '#fde68a') + ';';
+            bar.querySelector('button').onclick = () => location.reload(true);
             document.body.appendChild(bar);
         } catch (e) { /* 检测失败不能影响正常使用 */ }
     }
