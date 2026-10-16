@@ -31,6 +31,10 @@
     --radius-lg: 12px;
     --sidebar-width: 260px;
     --toolbar-height: 56px;
+    /* 外框：给侧边栏和主窗口留出圆角所需的边距 */
+    --frame-pad: 10px;
+    --frame-bg: #eef1f6;
+    --panel-radius: 14px;
 }
 
 body {
@@ -273,6 +277,10 @@ body {
     display: flex;
     height: 100vh;
     overflow: hidden;
+    /* ★ 外框留白：侧边栏和主窗口各自带圆角，中间留出缝隙才看得出是两块面板 */
+    padding: var(--frame-pad);
+    gap: var(--frame-pad);
+    background: var(--frame-bg);
 }
 
 /* ===== 侧边栏 ===== */
@@ -284,6 +292,8 @@ body {
     flex-direction: column;
     flex-shrink: 0;
     position: relative;
+    border-radius: var(--panel-radius);
+    overflow: hidden;
 }
 
 .sidebar-header {
@@ -451,7 +461,10 @@ body.dark-theme .nav-icon img { opacity: 1; }
 
 /* 侧边栏拖拽调整宽度 */
 .sidebar-resizer {
-    width: 4px;
+    /* 外框加了 gap，这里用负边距把缝隙占满 —— 否则只有 4px 能拖，很难抓到 */
+    margin-left: calc(-1 * var(--frame-pad));
+    margin-right: calc(-1 * var(--frame-pad));
+    width: calc(2 * var(--frame-pad));
     cursor: col-resize;
     background: transparent;
     flex-shrink: 0;
@@ -476,6 +489,7 @@ body.resizing {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    border-radius: var(--panel-radius);
 }
 
 /* ===== 工具栏 ===== */
@@ -1289,6 +1303,9 @@ body.resizing {
 }
 .sidebar.collapsed .nav-icon {
     margin: 0;
+    /* ★ 收窄到 60px 后图标挤在一起是歪的（图标和文字的基线对不齐），
+         与其调半天对齐，不如收起时干脆不显示 —— 用户要的就是这个 */
+    display: none;
 }
 .sidebar.collapsed .user-info {
     justify-content: center;
@@ -1298,7 +1315,9 @@ body.resizing {
     margin: 0;
 }
 .main-content.sidebar-collapsed {
-    margin-left: 60px;
+    /* ★ 侧边栏在文档流里，收窄后本来就只占 60px；
+         再给 main 加 60px 边距会凭空多出一条空档 */
+    margin-left: 0;
 }
 
 /* 侧边栏遮罩 */
@@ -2064,6 +2083,10 @@ body.dark-mode .main-content {
     background: var(--bg-primary);
 }
 
+body.dark-mode .app {
+    background: #0d1117;
+}
+
 body.dark-mode .toolbar {
     background: var(--bg-secondary);
     border-bottom-color: var(--border-color);
@@ -2160,6 +2183,19 @@ body.dark-mode .modal-close {
 @media (max-width: 768px) {
     .mobile-bottom-nav {
         display: block;
+    }
+    /* 移动端侧边栏是浮层：不需要外框留白，圆角也去掉（贴满屏幕更自然） */
+    .app {
+        padding: 0;
+        gap: 0;
+        background: transparent;
+    }
+    .sidebar,
+    .main-content {
+        border-radius: 0;
+    }
+    .sidebar-resizer {
+        display: none;
     }
     .sidebar {
         transform: translateX(-100%);
@@ -3171,4 +3207,4 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "70"; --api-stamp: "2"; }
+#gd-css-stamp { --stamp: "71"; --api-stamp: "2"; }

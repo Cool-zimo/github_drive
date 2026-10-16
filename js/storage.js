@@ -419,9 +419,16 @@ class Storage {
         const prefix = virtualPath === '/drive_home' ? '/drive_home/' : virtualPath + '/';
         const items = [];
 
+        // ★ .trash 是回收站的内部目录，不该出现在"全部文件"里。
+        //   但回收站视图要列它里面的东西 —— 所以只在"当前不在 .trash 里"时隐藏它。
+        //   （不按"名字以 . 开头"一刀切：用户自己的点开头目录不该被顺手藏掉。）
+        const insideTrash = virtualPath.split('/').includes('.trash');
+        const hidden = name => (!insideTrash && name === '.trash');
+
         // 直接子文件
         Object.entries(vfs.files).forEach(([path, info]) => {
             if (path.startsWith(prefix) && !path.substring(prefix.length).includes('/')) {
+                if (hidden(info.name)) return;
                 items.push({ ...info, path, isFile: true });
             }
         });
@@ -429,6 +436,7 @@ class Storage {
         // 直接子文件夹
         Object.entries(vfs.folders).forEach(([path, info]) => {
             if (path.startsWith(prefix) && !path.substring(prefix.length).includes('/')) {
+                if (hidden(info.name)) return;
                 items.push({ ...info, path, isFolder: true });
             }
         });

@@ -1165,8 +1165,14 @@ class FileManager {
     }
 
     // ==================== 搜索 ====================
-    searchFiles(query) {
-        return this.storage.searchFiles(query);
+    /**
+     * ★ 之前签名是 searchFiles(query)，把第二个参数丢了 ——
+     *   app.searchFiles 明明传了 searchContent=true，
+     *   到这里被截断成 undefined，storage 侧永远走 false，
+     *   于是"内容搜索"开了也跟没开一样。
+     */
+    searchFiles(query, searchContent = false) {
+        return this.storage.searchFiles(query, searchContent);
     }
 
     // ==================== 容量同步 ====================

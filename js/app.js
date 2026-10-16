@@ -829,12 +829,28 @@ class App {
         } catch (e) { /* 检测失败不能影响正常使用 */ }
     }
 
+    /**
+     * 仪表盘
+     *
+     * ★ 为什么分两步渲染：
+     *   仓库容量要逐个仓库调 GitHub API（3 个仓 = 3 次往返，慢的一两秒）。
+     *   之前是 await 完再一次性出 HTML —— 这段时间整页是转圈的，
+     *   而文件数、类型分布这些数据全在 VFS 里，本地算一下就出来了，
+     *   根本没必要等网络。
+     *
+     * ★ 仓库那段为什么改写措辞：
+     *   原来写"共 3 个仓库 · 合计 1143.2 MB · 最大 995.2 MB（单仓建议 < 900 MB）"。
+     *   数字没错，但一进页面就看见两件事：数字很大、还超了建议值。
+     *   用户只会觉得"是不是要满了"，而实际上这是多仓分摊的正常结果。
+     *   现在主数字改成"还能写入多少"—— 这才是真正要关心的量。
+     */
     async showDashboard() {
         const container = document.getElementById('file-list');
         if (!container) return;
+        // 渲染前还原可见性（switchView 可能对非文件视图写过 display:none）
+        container.style.display = '';
         container.className = 'dashboard-view';
-        container.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;"><div class="spinner" style="margin:0 auto 12px;"></div>加载仪表盘...</div>';
-        
+
         const vfs = this.storage.getVFS();
         const files = Object.entries(vfs.files || {});
         const folders = Object.entries(vfs.folders || {});
@@ -848,9 +864,10 @@ class App {
             typeStats[ext] = (typeStats[ext] || 0) + 1;
         });
         const topTypes = Object.entries(typeStats).sort((a,b) => b[1]-a[1]).slice(0, 5);
-        const repoInfo = await this.getRepoSize().catch(() => null);
-        
-        const html = '<div style="padding:20px;max-width:1200px;margin:0 auto;">' +
+
+        // ① 先出 UI —— 全部来自本地 VFS，不含任何网络等待
+        const fmtGB = mb => (mb >= 1024 ? (mb/1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB');
+        container.innerHTML = '<div style="padding:20px;max-width:1200px;margin:0 auto;">' +
             '<h2 style="font-size:22px;font-weight:700;margin-bottom:20px;color:#111827;">📊 仪表盘</h2>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
             '<div style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.3);"><div style="font-size:32px;font-weight:700;">' + files.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📄 文件总数</div></div>' +
@@ -860,7 +877,7 @@ class App {
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
             '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">📦 GitHub 仓库存储</div>' +
-            (repoInfo ? '<div style="font-size:13px;color:#6b7280;line-height:1.7;">共 ' + repoInfo.repoCount + ' 个仓库 · 合计 <b>' + repoInfo.sizeMB + ' MB</b><div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin:8px 0;"><div style="height:100%;width:' + Math.min(100, repoInfo.largestMB / (repoInfo.warnMB || 900) * 100).toFixed(1) + '%;background:' + (repoInfo.overRepos && repoInfo.overRepos.length ? '#dc2626' : '#2563eb') + ';"></div></div><div style="font-size:12px;">最大：<b>' + repoInfo.largestName + '</b> ' + repoInfo.largestMB + ' MB（单仓建议 &lt; ' + Math.round(repoInfo.warnMB || 900) + ' MB）</div></div>' : '<div style="font-size:14px;color:#9ca3af;">加载中...</div>') +
+            '<div id="dash-repo-box"><div style="font-size:13px;color:#9ca3af;">正在读取仓库容量…</div></div>' +
             '</div>' +
             '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">📊 文件类型分布</div>' +
@@ -873,7 +890,45 @@ class App {
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">🕐 最近使用</div>' +
             (recent.length > 0 ? recent.slice(0,8).map(p => '<div style="display:flex;align-items:center;padding:10px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;cursor:pointer;" onclick="app.openFileByPath(\'' + p + '\')"><span style="margin-right:8px;">📄</span><span style="font-size:13px;color:#374151;">' + p.split('/').pop() + '</span><span style="margin-left:auto;font-size:11px;color:#9ca3af;">' + p + '</span></div>').join('') : '<div style="font-size:13px;color:#9ca3af;text-align:center;padding:20px;">暂无最近文件</div>') +
             '</div></div>';
-        container.innerHTML = html;
+
+        // ② 再补数字 —— 网络好了就填进去，失败也不影响上面已经能看的部分
+        const box = document.getElementById('dash-repo-box');
+        if (!box) return;
+        const repoInfo = await this.getRepoSize().catch(() => null);
+        // ★ 用户可能已经切走了；容器也可能被别的视图复用 —— 两种情况都不能写
+        if (!box.isConnected) return;
+        if (!repoInfo) {
+            box.innerHTML = '<div style="font-size:13px;color:#9ca3af;">仓库容量暂时读不到（不影响使用）</div>';
+            return;
+        }
+
+        const warnMB = repoInfo.warnMB || 900;
+        // 可写 = 每个仓各自还剩多少，加起来；不是"总容量 - 总已用"，
+        // 后者会把某个仓超出的部分从别的仓的空余里扣掉，算出来偏悲观
+        const remainMB = (repoInfo.repos || []).reduce(
+            (s, r) => s + Math.max(0, warnMB - r.sizeMB), 0);
+        const usedMB = parseFloat(repoInfo.sizeMB) || 0;
+        const capMB = warnMB * (repoInfo.repoCount || 1);
+        const pct = capMB > 0 ? Math.min(100, usedMB / capMB * 100) : 0;
+
+        let tone = '#2563eb', note = '';
+        if (remainMB < 200) {
+            tone = '#dc2626';
+            note = '<div style="margin-top:8px;font-size:12px;color:#b91c1c;">空间不多了，继续上传会自动新建仓库。</div>';
+        } else if (remainMB < 600) {
+            tone = '#d97706';
+            note = '<div style="margin-top:8px;font-size:12px;color:#b45309;">还剩一些，接近时会自动新建仓库。</div>';
+        }
+
+        box.innerHTML =
+            '<div style="font-size:28px;font-weight:700;color:' + tone + ';line-height:1.1;">'
+          +   fmtGB(remainMB) + '</div>'
+          + '<div style="font-size:13px;color:#6b7280;margin-top:4px;">还能写入</div>'
+          + '<div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin:12px 0 8px;">'
+          +   '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + tone + ';"></div></div>'
+          + '<div style="font-size:12px;color:#6b7280;">'
+          +   repoInfo.repoCount + ' 个仓库 · 已用 ' + fmtGB(usedMB)
+          + '</div>' + note;
     }
 
     // ==================== 文件标签管理 ====================

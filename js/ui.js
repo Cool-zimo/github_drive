@@ -378,6 +378,15 @@ class UI {
                 this.app.showStarredFiles();
             } else if (view === 'trash') {
                 this.app.showTrashFiles();
+            } else if (view === 'settings') {
+                // ★ 设置：占主窗口，不弹窗
+                //   这三个视图都是把列表渲染进 #file-list 的，
+                //   而上面刚把它 display:none 了 —— 必须先还原，
+                //   否则"有 8 个最近文件却一个不显示"。
+                if (fileList) fileList.style.display = '';
+                if (emptyState) emptyState.classList.add('hidden');
+                if (loadingState) loadingState.classList.add('hidden');
+                this._renderSettingsView();
             } else if (view === 'shared') {
                 this.app.showShares();
             } else if (view === 'explore') {
@@ -624,6 +633,14 @@ class UI {
         const container = document.getElementById('file-list');
         const emptyState = document.getElementById('empty-state');
         const loadingState = document.getElementById('loading-state');
+
+        // ★ 渲染前必须自己还原可见性。
+        //   switchView 对"非文件视图"写过 container.style.display='none'
+        //   （内联样式优先级高于 CSS 类，只改 className 救不回来）。
+        //   而"最近使用 / 收藏 / 回收站"全都是渲染进这个容器的 ——
+        //   于是出现"明明有 8 个最近文件，点进去一个都不显示"。
+        //   由渲染方自己保证可见，比让每个调用方记得还原更可靠。
+        if (container) container.style.display = '';
 
         loadingState?.classList.add('hidden');
 
@@ -1329,11 +1346,21 @@ class UI {
     /**
      * 设置面板（分组版）
      *
+     * ★ 为什么渲染在主窗口而不是弹窗：
+     *   ① 弹窗宽度受限，15 个条目要滚半天
+     *   ② 弹窗里点开二级面板（仓库管理/自动整理）会叠成两层，关掉后容易迷路
+     *   ③ 主窗口可以用「视图」的方式缓存滚动位置，来回切换不丢
+     *
      * ★ 之前是 15 项平铺一列 —— 找一个"校准用量"要滚半天，
      *   而且"登出"这种破坏性操作和"暗色模式"挨在一起，容易误点。
      *   现在按语义分成四组，破坏性操作单独放最后。
      */
     showSettings() {
+        // 入口在侧边栏底部按钮，走视图切换 → 主窗口渲染
+        this.switchView('settings');
+    }
+
+    _settingsGroups() {
         var versionEl = document.getElementById('app-version');
         var version = versionEl ? versionEl.textContent : 'v-';
 
@@ -1349,16 +1376,14 @@ class UI {
                 title: '存储与仓库',
                 items: [
                     {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
-                    {icon:'⚡', title:'一键优化仓库存储', desc:'删除孤儿分片，立即释放被占满的容量', action:'ui.closeModal();ui.showStorageOptimizer();'},
                     {icon:'🤖', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
-                    {icon:'🧹', title:I18n.t('settings.maintain') || '仓库维护', desc:I18n.t('settings.maintainDesc') || '扫描孤儿与幽灵文件', action:'ui.closeModal();ui.showMaintain();'},
-                    {icon:'📊', title:I18n.t('settings.storageStats') || '存储用量', desc:I18n.t('settings.storageStatsDesc') || '查看文件统计和仓库大小', action:'ui.closeModal();app.showStorageStats();'},
                 ]
             },
             {
                 title: '功能',
                 items: [
-                    {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();'},
+                    {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
+                     extra:(localStorage.getItem('gd_search_content') === '1' ? '开' : '关')},
                     {icon:'🎯', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
                     {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
                 ]
@@ -1391,7 +1416,49 @@ class UI {
             }
             body += '</div>';
         }
-        this.showModal(I18n.t('settings.title'), body, '', true);
+        return body;
+    }
+
+    /**
+     * 设置页渲染到主窗口
+     *
+     * ★ 必须清掉 switchView 写的内联 display:none ——
+     *   内联样式优先级高于 CSS 类，只改 className 不管用
+     *   （"我的分享""最近使用"列表空白都是同一个原因）。
+     */
+    _renderSettingsView() {
+        const fileList = document.getElementById('file-list');
+        if (!fileList) return;
+        fileList.style.display = '';
+        fileList.className = 'settings-view';
+        fileList.innerHTML =
+            '<div style="max-width:760px;margin:0 auto;">'
+          +   '<h2 style="font-size:20px;font-weight:700;margin:0 0 4px;color:#111827;">⚙️ '
+          +   (I18n.t('settings.title') || '设置') + '</h2>'
+          +   '<div style="font-size:12px;color:#9ca3af;margin-bottom:18px;">'
+          +   '设置项已按用途分组</div>'
+          +   this._settingsGroups()
+          + '</div>';
+    }
+
+    /**
+     * 内容搜索开关
+     *
+     * ★ 这个方法之前根本不存在 —— 设置里那条写着 action:'ui.toggleContentSearch();'，
+     *   点下去抛 ReferenceError，界面上就是"点了没反应"。
+     *   而且就算实现了开关，fileManager.searchFiles 也把第二个参数丢了，
+     *   所以这里连同真正的开关状态一起修。
+     */
+    toggleContentSearch() {
+        const cur = localStorage.getItem('gd_search_content') === '1';
+        const next = !cur;
+        localStorage.setItem('gd_search_content', next ? '1' : '0');
+        this.showToast?.(
+            next ? '内容搜索已开启：搜索时也会匹配文本文件内容（更慢）'
+                 : '内容搜索已关闭：只匹配文件名',
+            next ? 'success' : 'info');
+        // 就地刷新，让"开/关"状态立刻变
+        if (this.app?._currentView === 'settings') this._renderSettingsView();
     }
 
 
