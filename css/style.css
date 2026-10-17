@@ -2884,6 +2884,47 @@ body.dark .td-foot { background: #111827; border-color: #374151; }
 .tp-win.is-mini .tp-body { display: none; }
 .tp-win.is-mini .tp-head { height: 100%; border-radius: 10px 10px 0 0; cursor: pointer; }
 
+/* ── 收进「后台进程」的插件：贴在预览卡上（移动端） ── */
+.tp-win.is-stage {
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(17, 24, 39, .14);
+}
+.tp-win.is-stage .tp-head { cursor: pointer; }
+
+/* 预览态的透明点击层：点在它上面 = 全屏打开插件 */
+.tp-body { position: relative; }
+.tp-stage-mask { position: absolute; inset: 0; z-index: 5; display: none; cursor: pointer; }
+.tp-win.is-stage .tp-stage-mask { display: block; }
+
+/* ── 「后台进程」里的插件预览卡 ──
+   占位框只是给插件窗口一个落脚点，窗口本身盖在上面（#plugin-dock 是 fixed 层），
+   所以这里画成虚线空框，窗口没贴上来时也不显得像块脏东西。 */
+.tp-stage-sec { margin: 0 0 14px; }
+.tp-stage-title { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+.tp-stage-card {
+    border: 1px solid #e5e7eb; border-radius: 12px; padding: 8px;
+    background: #fff; margin-bottom: 10px; cursor: pointer;
+}
+.tp-stage-card:active { background: #f9fafb; }
+.tp-stage-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;
+}
+.tp-stage-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-stage {
+    position: relative; height: 210px; border-radius: 8px;
+    background: #f9fafb; border: 1px dashed #d1d5db;
+}
+.tp-stage::after {
+    content: '插件预览';
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #9ca3af;
+}
+.tp-stage-tip { font-size: 11px; color: #9ca3af; margin-top: 6px; text-align: center; }
+
 /* ── 合并卡 ── */
 .tp-merged {
     position: absolute;
@@ -3207,4 +3248,4 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "71"; --api-stamp: "2"; }
+#gd-css-stamp { --stamp: "72"; --api-stamp: "3"; }
