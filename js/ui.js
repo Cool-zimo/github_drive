@@ -256,14 +256,13 @@ class UI {
         window.addEventListener('gd:tasks-changed', () => this.updateTaskBadge());
         this.updateTaskBadge();
 
-        // ★ 移动端不加载插件：拿不到后端（下载不了插件代码），
-        //   点了只会白屏。这里再从 JS 层拦一道（CSS 只是隐藏入口）。
-        try {
-            if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-                const pn = document.getElementById('plugins-nav');
-                if (pn) pn.style.display = 'none';
-            }
-        } catch (e) {}
+        // 插件增减时，后台进程里的预览卡要立刻跟着变（不用等 700ms 那轮）
+        window.addEventListener('gd:plugin-changed', () => {
+            if (this.app?._currentView === 'tasks') this._renderPluginStages();
+        });
+
+        // 插件入口在移动端也保留：插件跑的是仓库里的 html 或外部 URL，
+        // 不依赖本地后端，手机能跑（只是不飘小窗，改去「后台进程」里看预览）。
 
         // 右键菜单
         document.addEventListener('click', () => this.hideContextMenu());
@@ -1630,8 +1629,33 @@ class UI {
         //   （之前"我的分享"列表空白就是这个原因）。
         fileList.style.display = '';
         fileList.className = 'file-list';
-        fileList.innerHTML = '<div class="tasks-view" id="task-mgr-body">' + this._taskManagerHTML() + '</div>';
-        this._bindTaskManager(fileList);
+        // ★ 插件预览区和任务列表分开：
+        //   任务列表每 700ms 刷新一次，预览区不能跟着重建，
+        //   否则预览卡会被销毁再生成，插件窗口每 0.7 秒闪一下。
+        fileList.innerHTML = '<div class="tasks-view" id="task-mgr-body">'
+            + '<div id="tm-stages"></div><div id="tm-list"></div></div>';
+        this._renderPluginStages();
+        this._renderTaskList();
+    }
+
+    /** 插件预览区：内容没变就不重绘（只在插件增减时重建） */
+    _renderPluginStages() {
+        const box = document.getElementById('tm-stages');
+        if (!box) return;
+        if (typeof TaskDock === 'undefined' || !TaskDock.pluginStagesHTML) return;
+        const html = TaskDock.pluginStagesHTML();
+        if (box.getAttribute('data-sig') !== html) {
+            box.innerHTML = html;
+            box.setAttribute('data-sig', html);
+        }
+        try { TaskDock.bindPluginStages(box); } catch (e) { console.warn(e); }
+    }
+
+    _renderTaskList() {
+        const box = document.getElementById('tm-list');
+        if (!box) return;
+        box.innerHTML = this._taskManagerHTML();
+        this._bindTaskManager(box);
     }
 
     /** 后台进程视图的实时刷新（跑着的任务要能看到进度在动） */
@@ -1639,7 +1663,8 @@ class UI {
         const refresh = () => {
             // 已经不在后台进程视图了就停
             if (this.app?._currentView !== 'tasks') { this._stopTasksRefresh(); return; }
-            this._renderTasksView();
+            this._renderTaskList();
+            this._renderPluginStages();
         };
         this._stopTasksRefresh();
         this._taskMgrTimer = setInterval(refresh, 700);
@@ -1650,6 +1675,8 @@ class UI {
         this._taskMgrTimer = null;
         // 离开视图 → 还在跑的任务回到边缘小窗
         try { TaskDock.resumeMini && TaskDock.resumeMini(); } catch (e) {}
+        // 预览区销毁 → 收起的插件窗口先藏起来，等下次进来再贴上去
+        try { TaskDock.stopPluginStages && TaskDock.stopPluginStages(); } catch (e) {}
     }
 
     _taskManagerHTML() {
@@ -1987,8 +2014,21 @@ class UI {
         this.showToast?.(`筛选出 ${items.length} 个文件`, 'info');
     }
 
-    /** 移动端插件不可用（拿不到后端），兜底拦一道 */
+    /**
+     * 移动端是否禁用插件。
+     *
+     * ★ 改过一次：原来返回 true（移动端一律拦截），理由是"下载不了插件后端"。
+     *   但实际上插件有两种来源：仓库里的 html（blob 直接跑）和外部 URL，
+     *   都不依赖本地后端，移动端能跑。
+     *   现在返回 false —— 移动端照样用插件，只是交互换成手机习惯的那套
+     *   （见 _mountMobilePlugin：不飘小窗，去「后台进程」里看实时预览）。
+     */
     isPluginsBlocked() {
+        return false;
+    }
+
+    /** 窄屏判定（<=768px）：插件走移动端交互，任务坞小窗也据此隐藏 */
+    isMobileViewport() {
         try {
             return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
         } catch (e) { return false; }
