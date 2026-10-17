@@ -559,6 +559,8 @@ const TaskDock = (() => {
          这样 iframe 从头到尾没有离开过文档流，插件也就不会重载。
        ===================================================================== */
     const pwins = new Map();          // id -> win
+    const pwStages = new Map();       // 插件 id -> 后台进程里的预览占位元素
+    let pwStageRaf = null;            // 预览位置同步循环
     let pwRoot = null;
     let pwSeq = 0;
     let pwZ = 9500;
@@ -611,6 +613,19 @@ const TaskDock = (() => {
         };
         pwins.set(id, w);
 
+        // ★ 移动端：打开就是全屏。
+        //   手机上再飘一个 460×380 的小窗很难拖，也不符合"点了就进去"的习惯。
+        if (isMobile()) { w.view = 'expanded'; w.full = true; }
+
+        // ★ 移动端标题栏不放"全屏"按钮（本来就是全屏），
+        //   "收起"也从 ─ 换成 ↧ —— 含义是"收进后台进程"，不是"贴到侧边"。
+        const acts = isMobile()
+            ? `<button class="tp-btn" data-act="mini" title="${L('收进后台进程', 'Send to background')}">↧</button>
+               <button class="tp-btn" data-act="close" title="${L('关闭', 'Close')}">✕</button>`
+            : `<button class="tp-btn" data-act="mini" title="${L('收起到侧边', 'Dock to side')}">─</button>
+               <button class="tp-btn" data-act="full" title="${L('全屏', 'Fullscreen')}">⤢</button>
+               <button class="tp-btn" data-act="close" title="${L('关闭', 'Close')}">✕</button>`;
+
         const el = document.createElement('div');
         el.className = 'tp-win';
         el.dataset.id = id;
@@ -619,12 +634,22 @@ const TaskDock = (() => {
                 <span class="tp-ico">${pwEsc(w.icon)}</span>
                 <span class="tp-title">${pwEsc(w.title)}</span>
                 <span class="tp-spacer"></span>
-                <button class="tp-btn" data-act="mini" title="${L('收起到侧边', 'Dock to side')}">─</button>
-                <button class="tp-btn" data-act="full" title="${L('全屏', 'Fullscreen')}">⤢</button>
-                <button class="tp-btn" data-act="close" title="${L('关闭', 'Close')}">✕</button>
+                ${acts}
             </div>
             <div class="tp-body"></div>`;
         if (w.mount) el.querySelector('.tp-body').appendChild(w.mount);
+        // ★ 预览态的点击层：窗口盖在预览卡上，点 iframe 会被插件自己吃掉，
+        //   所以铺一层透明的罩子，点它就全屏打开（标题栏按钮留在外面照常能点）。
+        const mask = document.createElement('div');
+        mask.className = 'tp-stage-mask';
+        mask.addEventListener('click', ev => {
+            ev.stopPropagation();
+            w.view = 'expanded';
+            w.full = true;
+            pwBring(id);
+            pwLayout();
+        });
+        el.querySelector('.tp-body').appendChild(mask);
         root.appendChild(el);
         w.el = el;
 
@@ -649,6 +674,7 @@ const TaskDock = (() => {
         el.addEventListener('pointerdown', () => pwBring(id));
 
         pwLayout();
+        try { window.dispatchEvent(new CustomEvent('gd:plugin-changed')); } catch (e) {}
         return id;
     }
 
@@ -660,6 +686,8 @@ const TaskDock = (() => {
 
     function pwCollapse(id) {
         const w = pwins.get(id); if (!w) return;
+        // ★ 移动端：收起不是"贴边变小窗"，而是收进「后台进程」里的预览卡
+        if (isMobile()) { w.view = 'stage'; w.full = false; pwLayout(); return; }
         w.view = 'mini';
         w.full = false;
         pwLayout();
@@ -682,6 +710,109 @@ const TaskDock = (() => {
         try { if (w.onClose) w.onClose(); } catch (e) { console.warn(e); }
         if (w.el && w.el.parentNode) w.el.parentNode.removeChild(w.el);
         pwins.delete(id);
+        pwStages.delete(id);
+        pwLayout();
+        // 通知界面：后台进程里的预览卡要跟着少一个
+        try { window.dispatchEvent(new CustomEvent('gd:plugin-changed')); } catch (e) {}
+    }
+
+    /* =====================================================================
+       移动端插件预览 —— 「后台进程」里直接看到插件在跑的样子
+       =====================================================================
+       难点：iframe 一旦被移动（换父节点）就会重新加载，插件里的进度、
+       填了一半的表单全没了。所以这里**绝不移动窗口节点**，
+       只把窗口用绝对定位贴到预览卡的位置上（#plugin-dock 是 fixed inset:0，
+       它的 absolute 坐标原点就是视口左上角，正好和 getBoundingClientRect 对齐）。
+       位置每帧同步一次，列表滚动时也跟得上。
+       ===================================================================== */
+    /** 找预览占位：视图重绘后节点会换，所以每次都现场确认一遍 */
+    function findStage(id) {
+        let st = pwStages.get(id);
+        if (!st || !document.body.contains(st)) {
+            const again = document.querySelector('.tp-stage[data-pid="' + id + '"]');
+            if (again) { pwStages.set(id, again); st = again; }
+        }
+        return (st && document.body.contains(st)) ? st : null;
+    }
+
+    function pwSyncStages() {
+        for (const w of pwins.values()) {
+            const id = w.id;
+            const st = findStage(id);
+            if (!st) continue;
+            if (!w || !w.el) continue;
+            // 全屏/展开的窗口不跟随预览卡，否则会被拽回小尺寸
+            if (w.full || w.view !== 'stage') continue;
+            if (!document.body.contains(st)) continue;
+            const r = st.getBoundingClientRect();
+            if (r.width < 4 || r.height < 4) continue;
+            const el = w.el;
+            el.style.left = Math.round(r.left) + 'px';
+            el.style.top = Math.round(r.top) + 'px';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+            el.style.width = Math.round(r.width) + 'px';
+            el.style.height = Math.round(r.height) + 'px';
+            el.style.minWidth = '0';
+            el.style.minHeight = '0';
+        }
+    }
+
+    function pwStartStageSync() {
+        if (pwStageRaf) return;
+        const tick = () => { pwStageRaf = requestAnimationFrame(tick); pwSyncStages(); };
+        pwStageRaf = requestAnimationFrame(tick);
+    }
+
+    function pwStopStageSync() {
+        if (pwStageRaf) { cancelAnimationFrame(pwStageRaf); pwStageRaf = null; }
+    }
+
+    /** 后台进程里的插件预览区 HTML（没插件时返回空串） */
+    function pluginStagesHTML() {
+        if (!pwins.size) return '';
+        let h = '<div class="tp-stage-sec"><div class="tp-stage-title">🧩 '
+              + L('运行中的插件', 'Running plugins') + `（${pwins.size}）</div>`;
+        for (const w of pwins.values()) {
+            h += `<div class="tp-stage-card" data-pid="${pwEsc(w.id)}">`
+               + `<div class="tp-stage-head"><span>${pwEsc(w.icon)}</span>`
+               + `<span class="tp-stage-name">${pwEsc(w.title)}</span></div>`
+               + `<div class="tp-stage" data-pid="${pwEsc(w.id)}"></div>`
+               + `<div class="tp-stage-tip">${L('点击预览，全屏打开', 'Tap the preview to open fullscreen')}</div>`
+               + `</div>`;
+        }
+        return h + '</div>';
+    }
+
+    /**
+     * 收集预览占位并启动同步。
+     * @param {HTMLElement} box 预览区容器
+     */
+    function bindPluginStages(box) {
+        const root = box || document;
+        pwStages.clear();
+        root.querySelectorAll('.tp-stage[data-pid]').forEach(st => {
+            pwStages.set(st.getAttribute('data-pid'), st);
+        });
+        // 点卡片任意处 → 全屏打开（这就是"点小窗口后直接进去应用"）
+        root.querySelectorAll('.tp-stage-card[data-pid]').forEach(card => {
+            card.addEventListener('click', () => {
+                const id = card.getAttribute('data-pid');
+                const w = pwins.get(id);
+                if (!w) return;
+                w.view = 'expanded';
+                w.full = true;
+                pwBring(id);
+                pwLayout();
+            });
+        });
+        if (pwStages.size) { pwLayout(); pwStartStageSync(); }
+    }
+
+    /** 离开后台进程视图：停止同步，收起的插件先藏起来 */
+    function stopPluginStages() {
+        pwStopStageSync();
+        pwStages.clear();
         pwLayout();
     }
 
@@ -813,6 +944,26 @@ const TaskDock = (() => {
             el.style.zIndex = w.z;
             el.classList.toggle('is-mini', w.view === 'mini');
             el.classList.toggle('is-full', !!w.full);
+
+            // 收进「后台进程」：位置由 pwSyncStages 每帧对齐到预览卡，
+            // 窗口节点始终待在 #plugin-dock 里，iframe 不会重载。
+            if (w.view === 'stage') {
+                el.classList.add('is-stage');
+                const st = findStage(w.id);
+                if (st) {
+                    // 占位找到了就得有人持续对齐位置（视图重绘后循环可能已停）
+                    pwStartStageSync();
+                }
+                if (st) {
+                    el.style.display = '';
+                    el.style.width = ''; el.style.height = '';
+                } else {
+                    // 还没进后台进程视图（或预览卡已销毁）→ 先藏着
+                    el.style.display = 'none';
+                }
+                continue;
+            }
+            el.classList.remove('is-stage');
 
             if (w.full) {
                 el.style.left = '0px'; el.style.top = '0px';
@@ -961,6 +1112,7 @@ const TaskDock = (() => {
         flyToList, resumeMini, all, isMobile,
         openPlugin, closePlugin: pwClose, expandPlugin: pwExpand, collapsePlugin: pwCollapse,
         togglePluginFull: pwToggleFull, closePluginList: pwCloseList,
+        pluginStagesHTML, bindPluginStages, stopPluginStages,
         get pluginCount() { return pwins.size; },
         get count() { return tasks.size; }
     };
