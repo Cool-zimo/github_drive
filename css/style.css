@@ -3179,8 +3179,10 @@ body.dark-mode .nav-badge { background: #3b82f6; }
         margin: 8px auto 2px;
         flex: none;
     }
-    /* ★ 移动端不加载插件：拿不到后端，点了也是白屏 */
-    #plugins-nav, .mobile-nav-item [data-view="plugins"] { display: none !important; }
+    /* ★ 这里曾经有一条「移动端不加载插件」的 display:none !important。
+       它已经过期（移动端早已支持插件），而且它跟自定义菜单直接打架：
+       用户在右键菜单里勾了「插件广场」，界面却不显示 —— 勾选功能等于坏了。
+       现在是否显示只由 custom.js 的 hidden 属性决定，见下面那条 :not([hidden]) 规则。 */
 
     /* 底部 tab 角标 */
     .mobile-nav-item { position: relative; }
@@ -3308,7 +3310,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "80"; --api-stamp: "7"; }
+#gd-css-stamp { --stamp: "81"; --api-stamp: "7"; }
 
 /* ==================================================================
    动画打磨
@@ -3992,3 +3994,8 @@ body.dark-mode .gd-token-eye .gd-eye-img { filter: invert(1) brightness(1.6); }
 
 /* 顶栏常驻后，与当前视图无关的按钮置灰（不隐藏，避免"点了没反应"） */
 .gd-bar-off { opacity: .38; cursor: not-allowed; }
+
+/* 侧边栏自定义：用户勾了「显示」就必须显示。
+   这条专门用来压掉任何历史残留的 display:none（比如早期「移动端不加载插件」
+   那条 !important 规则）。勾选是用户意图，优先级高于任何写死的封锁。 */
+.sidebar .nav-item[data-view]:not([hidden]) { display: flex !important; }
