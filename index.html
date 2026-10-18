@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=78&api_v=7"></script>
+    <script src="js/branch-guard.min.js?v=79&api_v=7"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,7 +33,7 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.min.css?v=78&api_v=7">');
+            document.write('<link rel="stylesheet" href="css/style.min.css?v=79&api_v=7">');
         }
     })();
     </script>
@@ -50,7 +50,10 @@
                 <label for="token-input"><span data-i18n="login.tokenLabel">GitHub Personal Access Token</span></label>
                 <div class="gd-token-wrap">
                     <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
-                    <button type="button" class="gd-token-eye" id="token-eye" aria-label="Show/Hide" title="显示/隐藏">👁</button>
+                    <button type="button" class="gd-token-eye" id="token-eye" aria-label="Show/Hide" title="显示/隐藏">
+                        <img class="gd-eye-img" data-state="hidden" src="assets/eye.png" alt="显示" width="18" height="18">
+                        <img class="gd-eye-img" data-state="shown" src="assets/eye-off.png" alt="隐藏" width="18" height="18" hidden>
+                    </button>
                 </div>
                 <p class="token-hint"><span data-i18n="login.tokenHint">需要</span> <code>repo</code> <span data-i18n="login.and">和</span> <code>workflow</code> <span data-i18n="login.permission">权限</span></p>
                 <button id="enter-drive-btn" type="button"><span data-i18n="login.enter">Enter Drive</span></button>
@@ -135,7 +138,12 @@
         eye.addEventListener('click', function() {
             var show = inp.type === 'password';
             inp.type = show ? 'text' : 'password';
-            eye.textContent = show ? '🙈' : '👁';
+            // 两张图都在 DOM 里，只切 hidden —— 不用等图片加载，也不会闪
+            var imgs = eye.querySelectorAll('.gd-eye-img');
+            for (var k = 0; k < imgs.length; k++) {
+                imgs[k].hidden = ((imgs[k].getAttribute('data-state') === 'shown') !== show);
+            }
+            eye.setAttribute('aria-pressed', show ? 'true' : 'false');
             // 切完把光标放回末尾，否则会从开头输入
             try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
         });
@@ -337,8 +345,8 @@
             'storage': 'e360e26265',
             'task-dock': 'b85747e5e4',
             'theme': '89aafc792a',
-            'ui': '2a852b92c2',
-            'version': '2723dc6563'
+            'ui': 'eb3bf5f72f',
+            'version': 'bdee5be5e6'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
