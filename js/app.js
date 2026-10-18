@@ -870,23 +870,23 @@ class App {
         container.innerHTML = '<div style="padding:20px;max-width:1200px;margin:0 auto;">' +
             '<h2 style="font-size:22px;font-weight:700;margin-bottom:20px;color:#111827;">📊 仪表盘</h2>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
-            '<div style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.3);"><div style="font-size:32px;font-weight:700;">' + files.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📄 文件总数</div></div>' +
-            '<div style="padding:20px;background:linear-gradient(135deg,#f093fb,#f5576c);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(240,147,251,0.3);"><div style="font-size:32px;font-weight:700;">' + folders.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📁 文件夹</div></div>' +
-            '<div style="padding:20px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(79,172,254,0.3);"><div style="font-size:28px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + ' MB</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📦 文件总大小</div></div>' +
-            '<div style="padding:20px;background:linear-gradient(135deg,#43e97b,#38f9d7);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(67,233,123,0.3);"><div style="font-size:32px;font-weight:700;">' + favorites.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">⭐ 收藏</div></div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.3);"><div class="dash-num" data-count="' + files.length + '" style="font-size:32px;font-weight:700;">' + files.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📄 文件总数</div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#f093fb,#f5576c);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(240,147,251,0.3);"><div class="dash-num" data-count="' + folders.length + '" style="font-size:32px;font-weight:700;">' + folders.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📁 文件夹</div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(79,172,254,0.3);"><div class="dash-num" data-count="' + (totalSize/1024/1024).toFixed(1) + '" data-suffix=" MB" style="font-size:28px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + ' MB</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📦 文件总大小</div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#43e97b,#38f9d7);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(67,233,123,0.3);"><div class="dash-num" data-count="' + favorites.length + '" style="font-size:32px;font-weight:700;">' + favorites.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">⭐ 收藏</div></div></div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
-            '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
+            '<div class="dash-panel" style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">📦 GitHub 仓库存储</div>' +
             '<div id="dash-repo-box"><div style="font-size:13px;color:#9ca3af;">正在读取仓库容量…</div></div>' +
             '</div>' +
-            '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
+            '<div class="dash-panel" style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">📊 文件类型分布</div>' +
             (files.length > 0 ? topTypes.map(([ext, count]) => {
                 const pct = (count/files.length*100).toFixed(1);
                 return '<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span style="color:#374151;">.' + ext + '</span><span style="color:#6b7280;">' + count + ' (' + pct + '%)</span></div><div style="height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:4px;transition:width 0.3s;"></div></div></div>';
             }).join('') : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>') +
             '</div></div>' +
-            '<div style="margin-top:20px;padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
+            '<div class="dash-panel" style="margin-top:20px;padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
             '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#111827;">🕐 最近使用</div>' +
             (recent.length > 0 ? recent.slice(0,8).map(p => '<div style="display:flex;align-items:center;padding:10px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;cursor:pointer;" onclick="app.openFileByPath(\'' + p + '\')"><span style="margin-right:8px;">📄</span><span style="font-size:13px;color:#374151;">' + p.split('/').pop() + '</span><span style="margin-left:auto;font-size:11px;color:#9ca3af;">' + p + '</span></div>').join('') : '<div style="font-size:13px;color:#9ca3af;text-align:center;padding:20px;">暂无最近文件</div>') +
             '</div></div>';
@@ -921,7 +921,7 @@ class App {
         }
 
         box.innerHTML =
-            '<div style="font-size:28px;font-weight:700;color:' + tone + ';line-height:1.1;">'
+            '<div class="dash-num" data-count="' + remainMB.toFixed(1) + '" data-suffix=" MB" data-form="gb" style="font-size:28px;font-weight:700;color:' + tone + ';line-height:1.1;">'
           +   fmtGB(remainMB) + '</div>'
           + '<div style="font-size:13px;color:#6b7280;margin-top:4px;">还能写入</div>'
           + '<div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin:12px 0 8px;">'
