@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=76&api_v=6"></script>
+    <script src="js/branch-guard.min.js?v=76&api_v=7"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,12 +33,12 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.min.css?v=76&api_v=6">');
+            document.write('<link rel="stylesheet" href="css/style.min.css?v=76&api_v=7">');
         }
     })();
     </script>
 </head>
-<body class="gd-logged-out" data-api-v="6">
+<body class="gd-logged-out" data-api-v="7">
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
@@ -404,12 +404,6 @@
         </div>
     </div>
 
-
-    <!-- 文档入口：移动端底部导航之上 -->
-    <div style="text-align:center;padding:14px 16px 22px;font-size:12.5px;color:#6a7488">
-        📖 <a href="https://cool-zimo.github.io/COOL-DOC/github_drive/" style="color:#8b7cf0" target="_blank" rel="noopener">使用文档</a>
-        &nbsp;·&nbsp; <a href="https://cool-zimo.github.io/COOL-DOC/" style="color:#8b7cf0" target="_blank" rel="noopener">全部文档</a>
-    </div>
     <!-- 移动端底部导航 -->
     <div class="mobile-bottom-nav">
         <div class="mobile-nav-items">
