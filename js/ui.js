@@ -1667,21 +1667,33 @@ class UI {
 
     /** 主窗口渲染后台进程 */
     /**
-     * 顶栏常驻后，按视图同步按钮可用态。
-     * 直接隐藏会造成"点了没反应"，所以改成置灰 + 提示。
-     * 用户自己在右键菜单里勾掉的项（hidden）不受影响。
+     * 顶栏常驻后，按视图同步按钮显隐。
+     *
+     * ★ 用隐藏，不用置灰（v0.0.80 改）。
+     *   上一版写的是 disabled + opacity:.38，理由是"隐藏会造成点了没反应"。
+     *   这个理由是反的：按钮还在但按下去不动，才是真的"点了没反应"；
+     *   根本看不见的按钮，用户压根不会去点。而且三个半透明按钮杵在那里，
+     *   视觉上像"界面坏了"，比没有更糟。
+     *
+     * ★ 必须和用户自己的勾选（custom.js 的 cfg.barHidden）合并判断，
+     *   不能直接写 el.hidden = !isFiles ——
+     *   那样切回文件视图时会把用户主动勾掉的项又显示出来。
      */
     _syncToolbarForView(view) {
         const isFiles = (view === 'all-files');
-        // 只依赖当前文件列表上下文的按钮
+        // 只在文件列表语境下才有意义的按钮
         const FILE_ONLY = ['#adv-search-btn', '#folder-tree-btn', '#view-toggle-btn'];
         FILE_ONLY.forEach(sel => {
             const el = document.querySelector('.toolbar ' + sel)
                     || document.querySelector(sel);
             if (!el) return;
-            el.disabled = !isFiles;
-            el.classList.toggle('gd-bar-off', !isFiles);
-            el.title = isFiles ? '' : '切换到「全部文件」后可用';
+            const userOff = (window.GdCustom && window.GdCustom.get)
+                ? !!window.GdCustom.get().barHidden[sel]
+                : false;
+            el.hidden = userOff || !isFiles;
+            // 清掉上一版留下的置灰态，否则切回来还是灰的
+            el.disabled = false;
+            el.classList.remove('gd-bar-off');
         });
     }
 
