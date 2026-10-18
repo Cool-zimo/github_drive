@@ -3310,7 +3310,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "83"; --api-stamp: "7"; }
+#gd-css-stamp { --api-stamp: "7"; }
 
 /* ==================================================================
    动画打磨
