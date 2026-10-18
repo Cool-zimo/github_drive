@@ -148,6 +148,76 @@ class FileManager {
         }
     }
 
+    /**
+     * ★ 分片级归属校验（v0.0.83）
+     *
+     * v0.0.82 只修了「往哪儿写」——校验装在 autoSelectRepo 上，那是上传新文件时
+     * 选仓库的入口。但读和删走的是另一条路：
+     *
+     *     _fetchChunks      → api.getBlobBytes(chunk.owner, ...)   // 下载/预览
+     *     _cleanupOrphanChunks / deleteFile
+     *                       → api.deleteFile(chunk.owner, ...)     // 删除分片
+     *
+     * 这些用的是 VFS 文件条目里写死的 chunk.owner，根本不经过 autoSelectRepo。
+     * 所以界面上能看到旧账号的文件夹（"学习""BINGBING"），一点就必然 401 —
+     * 不是 token 失效，是拿 Feng-zimo 的 token 去打 Cool-zimo 的仓库。
+     *
+     * 这里的策略是「明确报错」而不是「静默尝试」：
+     * 静默尝试 = 一串 401 刷屏，用户只会以为 token 坏了，
+     * 于是去重新申请令牌 —— 白折腾，根因完全没碰到。
+     */
+    async _guardChunks(chunks, action) {
+        if (!Array.isArray(chunks) || !chunks.length) return chunks;
+        const me = await this._ensureIdentity();
+        if (!me) return chunks;                      // 拿不到身份时不误伤
+        const foreign = chunks.find(c => c && c.owner && c.owner !== me);
+        if (!foreign) return chunks;
+        throw new Error(
+            `无法${action}：这些分片属于 ${foreign.owner}，` +
+            `当前登录的是 ${me}。文件实体仍在 ${foreign.owner} 的仓库里（没丢），` +
+            `只是这个账号没有权限操作。请切换到 ${foreign.owner}，或到设置里清理跨账号残留。`);
+    }
+
+    /**
+     * 扫描 VFS，列出不属于当前账号的文件条目（只报告，不改动）。
+     *
+     * 刻意不自动删除 —— 这些条目背后的文件实体是真实存在的，
+     * 一键清掉等于「我的文件凭空消失」。先列出来让用户自己决定。
+     */
+    async scanForeignFiles() {
+        const me = await this._ensureIdentity();
+        if (!me) return { me: null, foreign: [] };
+        const vfs = this.storage.getVFS();
+        const foreign = [];
+        for (const [path, info] of Object.entries(vfs.files || {})) {
+            const owners = [...new Set((info.chunks || []).map(c => c.owner).filter(Boolean))];
+            const bad = owners.filter(o => o !== me);
+            if (bad.length) {
+                foreign.push({
+                    path, name: info.name, size: info.size || 0,
+                    owners: bad, chunks: (info.chunks || []).length
+                });
+            }
+        }
+        return { me, foreign };
+    }
+
+    /**
+     * 清掉 VFS 里不属于当前账号的条目（只删本地索引，不动远端文件）。
+     */
+    async purgeForeignFiles(paths = null) {
+        const { me, foreign } = await this.scanForeignFiles();
+        if (!me) throw new Error('无法确定当前身份');
+        const targets = paths
+            ? foreign.filter(f => paths.includes(f.path))
+            : foreign;
+        if (!targets.length) return { removed: 0, me };
+        const vfs = this.storage.getVFS();
+        for (const f of targets) delete vfs.files[f.path];
+        this.storage.setVFS(vfs);
+        return { removed: targets.length, me, names: targets.map(t => t.name) };
+    }
+
     async autoSelectRepo(neededSize) {
         const config = this.storage.getStorageConfig();
         // ★ 放在这里而不是 uploadFile 里：autoSelectRepo 是【所有】写入路径的
@@ -529,6 +599,9 @@ class FileManager {
      * @returns {Promise<Uint8Array[]>}
      */
     async _fetchChunks(chunks, onChunkDone = null, concurrency = 6) {
+        // ★ 读路径的归属校验：下载/预览都走这里，而 chunk.owner 来自 VFS 历史记录，
+        //   不经过 autoSelectRepo。少了这道就会用当前 token 去打别人的仓库。
+        await this._guardChunks(chunks, '读取');
         const total = chunks.length;
         const bufs = new Array(total);
         const treeCache = new Map();        // 老数据没 sha 时的兜底：复用同一棵树
@@ -1125,6 +1198,9 @@ class FileManager {
      *   失败的分片记进 pendingOrphanChunks，下次有机会再清。
      */
     async _cleanupOrphanChunks(chunks, why) {
+        // ★ 删路径的归属校验：跨账号的删请求必然 401，
+        //   而且会被记成"孤儿清理失败"，越积越多，真正的孤儿反而淹没在里面。
+        await this._guardChunks(chunks, '清理');
         for (const chunk of chunks) {
             try {
                 let sha = chunk.sha;
@@ -1164,6 +1240,10 @@ class FileManager {
         virtualPath = Storage.normalizePath(virtualPath);
         const fileInfo = this.storage.getFile(virtualPath);
         if (!fileInfo) throw new Error('文件不存在');
+
+        // ★ 删路径的归属校验：跨账号删除必然 401，
+        //   且原逻辑会把失败静默记成孤儿，用户看到的是"删不掉"而不是"不属于你"。
+        await this._guardChunks(fileInfo.chunks, '删除');
 
         console.log(`[FileManager] 删除文件: ${virtualPath}, 分片数: ${fileInfo.chunks.length}`);
 
