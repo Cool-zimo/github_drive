@@ -1371,6 +1371,9 @@ class UI {
                     {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
                     {icon:'🎨', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
                      action:'ui.closeModal();ui.showLookPanel();'},
+                    {icon:'🔗', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
+                     action:'ui.toggleBridge();',
+                     extra:(localStorage.getItem('gd_bridge_enabled') === '1' ? '开' : '关')},
                 ]
             },
             {
@@ -1427,6 +1430,21 @@ class UI {
      *   内联样式优先级高于 CSS 类，只改 className 不管用
      *   （"我的分享""最近使用"列表空白都是同一个原因）。
      */
+    /**
+     * 🔗 仓鼠联动开关（默认关闭）
+     *
+     * ★ 为什么默认关：跨应用联动会在登录页多出一整块提示区，
+     *   多数情况下用不到，反而把登录页挤乱。
+     *   关掉时连 Bridge 都不去读 —— 不只是隐藏显示。
+     */
+    toggleBridge() {
+        const cur = localStorage.getItem('gd_bridge_enabled') === '1';
+        const next = !cur;
+        localStorage.setItem('gd_bridge_enabled', next ? '1' : '0');
+        this.showToast?.(next ? '已开启仓鼠联动，刷新登录页后生效' : '已关闭仓鼠联动', 'info');
+        if (this.app?._currentView === 'settings') this._renderSettingsView();
+    }
+
     /** 外观面板：从设置项点进来时直接滚到自定义控件 */
     showLookPanel() {
         this.switchView('settings');
