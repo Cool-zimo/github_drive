@@ -1369,6 +1369,8 @@ class UI {
                 items: [
                     {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
                     {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
+                    {icon:'🎨', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
+                     action:'ui.closeModal();ui.showLookPanel();'},
                 ]
             },
             {
@@ -1425,6 +1427,15 @@ class UI {
      *   内联样式优先级高于 CSS 类，只改 className 不管用
      *   （"我的分享""最近使用"列表空白都是同一个原因）。
      */
+    /** 外观面板：从设置项点进来时直接滚到自定义控件 */
+    showLookPanel() {
+        this.switchView('settings');
+        setTimeout(function () {
+            var host = document.getElementById('gd-look-host');
+            if (host && host.scrollIntoView) host.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 60);
+    }
+
     _renderSettingsView() {
         const fileList = document.getElementById('file-list');
         if (!fileList) return;
@@ -1438,6 +1449,17 @@ class UI {
           +   '设置项已按用途分组</div>'
           +   this._settingsGroups()
           + '</div>';
+        // 外观控件由 GdCustom 提供；模块没加载就跳过，不能让设置页开不了
+        try {
+            if (window.GdCustom && window.GdCustom.bindLook) {
+                var host = document.createElement('div');
+                host.id = 'gd-look-host';
+                host.innerHTML = window.GdCustom.lookSectionHtml();
+                var wrap = fileList.firstChild;
+                if (wrap) wrap.appendChild(host);
+                window.GdCustom.bindLook(host);
+            }
+        } catch (e) { /* 设置页不能因为外观控件挂掉 */ }
     }
 
     /**
@@ -2848,7 +2870,44 @@ class UI {
             this._conflictFallback = null;
             fb();
         }
-        document.getElementById('modal-container').innerHTML = '';
+        const container = document.getElementById('modal-container');
+        // 先取出旧节点，再立刻腾空容器 —— 顺序不能反，
+        // 否则紧跟其后的 showModal 写进来的新弹窗会被退场定时器清掉。
+        const overlay = container.querySelector('.modal-overlay');
+        container.innerHTML = '';
+        this._playModalExit(overlay);
+    }
+
+    /**
+     * 弹窗退场动画。
+     *
+     * ★ 为什么不能简单写成「加 is-closing，等 180ms 再清空容器」：
+     *   设置里有一批 action 是 `ui.closeModal(); ui.showStorageManager();`
+     *   —— 关掉旧的、立刻开新的。延迟清空会把刚打开的新弹窗一起清掉，
+     *   表现是"点了设置项，弹窗闪一下就没了"。
+     *
+     *   所以这里先把旧节点摘出来、挪到独立退场层，容器立刻腾空，
+     *   新弹窗写进去不会被定时器误伤。
+     */
+    _playModalExit(overlay) {
+        if (!overlay) return;
+        try {
+            if (window.matchMedia &&
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            let layer = document.getElementById('modal-exit-layer');
+            if (!layer) {
+                layer = document.createElement('div');
+                layer.id = 'modal-exit-layer';
+                document.body.appendChild(layer);
+            }
+            // 同一时刻只留一个退场节点，否则连续开关会层层堆叠
+            layer.innerHTML = '';
+
+            overlay.classList.add('is-closing');
+            layer.appendChild(overlay);
+            setTimeout(() => { try { overlay.remove(); } catch (e) {} }, 260);
+        } catch (e) { /* 动画失败不影响关闭本身 */ }
     }
 
     /** 上传列表里把某个文件标成"已跳过" */
@@ -4255,14 +4314,14 @@ window.I18n = {
         toast.innerHTML = `
             <span class="toast-icon">${icons[type] || icons.info}</span>
             <span class="toast-message">${message}</span>
-            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+            <button class="toast-close" onclick="var t=this.parentElement;t.classList.add('is-out');setTimeout(function(){t.remove()},260)">×</button>
         `;
         container.appendChild(toast);
         setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100%)';
-            toast.style.transition = 'all 0.3s';
-            setTimeout(() => toast.remove(), 300);
+            // 用 class 而不是内联样式：内联优先级高于 CSS，
+            // 会盖掉 prefers-reduced-motion 里"不要动画"的兜底。
+            toast.classList.add('is-out');
+            setTimeout(() => { try { toast.remove(); } catch (e) {} }, 260);
         }, duration);
     }
 
