@@ -1,7 +1,7 @@
 const APP_VERSION = {
-    internalVersion: '77',
-    formalVersion: '0.0.77',
-    displayVersion: 'v0.0.77',
+    internalVersion: '78',
+    formalVersion: '0.0.78',
+    displayVersion: 'v0.0.78',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
