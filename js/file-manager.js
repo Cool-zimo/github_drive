@@ -84,9 +84,75 @@ class FileManager {
         return Math.max(0, base - reserved);
     }
 
+    /**
+     * 当前 token 的真实身份。
+     *
+     * ★ 不能只信 storage.getUser()。
+     *   本地缓存的 user 可能和 token 不是同一个人（切换账号、桥接同步、
+     *   或某条路径漏更新）。一旦如此，下面按 owner 过滤就会【保留别人的
+     *   仓库、滤掉自己的】，然后拿自己的 token 去写 → 401 Bad credentials。
+     *   拿不到缓存时现拉一次真实身份，宁可多一个请求也不要 401 风暴。
+     */
+    async _resolveLogin() {
+        if (this._verifiedLogin) return this._verifiedLogin;   // 本会话已复核过
+        const cached = this.storage.getUser()?.login;
+        if (cached) return cached;
+        if (this._loginPromise) return this._loginPromise;
+        this._loginPromise = (async () => {
+            try {
+                const me = await this.api.getMe();
+                const login = me && me.login;
+                if (login) { this.storage.setUser(me); return login; }
+            } catch (e) {
+                console.warn('[FileManager] 无法确认 token 身份:', e.message);
+            }
+            return null;
+        })();
+        return this._loginPromise;
+    }
+
+    /**
+     * 上传前用 token 复核一次身份（整个会话只问一次 GitHub）。
+     *
+     * ★ 这是「A 的仓库目录 + B 的 token」最直接的兜底。
+     *   storage 里的 user 是缓存，和当前 token 可能不是同一个人。
+     *   只信缓存的话，按 owner 过滤反而会帮倒忙。
+     */
+    async _ensureIdentity() {
+        if (this._verifiedLogin) return this._verifiedLogin;
+        const cached = this.storage.getUser()?.login;
+        try {
+            const me = await this.api.getMe();
+            const real = me && me.login;
+            if (!real) { this._verifiedLogin = cached || null; return this._verifiedLogin; }
+            if (cached && cached !== real) {
+                console.warn(
+                    `[FileManager] 身份不符：本地缓存 ${cached}，token 实际 ${real}，` +
+                    `已按 token 修正并重新同步仓库归属`);
+                this.storage.setUser(me);
+                // 缓存的仓库列表属于旧身份，必须清掉，
+                // 否则会拿新身份去写旧身份的仓库。
+                const all = this.storage.getRepos() || [];
+                const stale = all.filter(r => r.owner !== real);
+                if (stale.length) {
+                    console.warn(`[FileManager] 清理 ${stale.length} 个不属于 ${real} 的仓库`);
+                    this.storage.setRepos(all.filter(r => r.owner === real));
+                }
+            }
+            this._verifiedLogin = real;
+            return real;
+        } catch (e) {
+            console.warn('[FileManager] 身份复核失败，回退到本地缓存:', e.message);
+            this._verifiedLogin = cached || null;
+            return this._verifiedLogin;
+        }
+    }
+
     async autoSelectRepo(neededSize) {
         const config = this.storage.getStorageConfig();
-        const currentUser = this.storage.getUser()?.login;
+        // ★ 放在这里而不是 uploadFile 里：autoSelectRepo 是【所有】写入路径的
+        //   必经之地，uploadFile 只是其中之一。放在上游才能覆盖全部。
+        const currentUser = await this._ensureIdentity();
         let repos = this.storage.getRepos();
 
         // ★ 分块超过单仓上限时直接报错，不能走进下面的 autoCreateRepo
@@ -113,10 +179,24 @@ class FileManager {
             }
         }
 
+        // ★ 统一出口校验：不管仓库是从哪来的（缓存、迁移、自动新建），
+        //   只要 owner 和当前身份不符就拦下。
+        //
+        //   这是最后一道防线。上游任何一处污染（迁移、切换账号漏清理、
+        //   身份缓存过期）都会在这里被挡住，而不是发出一串必然 401 的请求。
+        const guard = (repo) => {
+            if (currentUser && repo && repo.owner !== currentUser) {
+                throw new Error(
+                    `仓库 ${repo.owner}/${repo.repo} 不属于当前账号 ${currentUser}，` +
+                    `已阻止写入（否则会 401 Bad credentials）。请在设置里重新同步仓库列表。`);
+            }
+            return repo;
+        };
+
         const defaultRepo = this.storage.getDefaultRepo();
         if (defaultRepo && defaultRepo.owner === currentUser && this._remainingOf(defaultRepo) >= neededSize) {
             this._reservedAdd(`${defaultRepo.owner}/${defaultRepo.repo}`, neededSize);
-            return defaultRepo;
+            return guard(defaultRepo);
         }
 
         const otherRepos = repos
@@ -125,12 +205,12 @@ class FileManager {
         for (const repo of otherRepos) {
             if (this._remainingOf(repo) >= neededSize) {
                 this._reservedAdd(`${repo.owner}/${repo.repo}`, neededSize);
-                return repo;
+                return guard(repo);
             }
         }
 
         if (config.autoCreateRepo) {
-            return await this.autoCreateStorageRepo();
+            return guard(await this.autoCreateStorageRepo());
         }
 
         throw new Error('所有仓库容量不足，且未开启自动创建仓库功能');

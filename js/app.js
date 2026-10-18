@@ -109,31 +109,16 @@ class App {
             console.error('登录失败:', e);
             let errorMessage = '登录失败';
             if (e.status === 401) {
+                // 401 不一定是 token 坏了。多账号场景下更常见的是
+                // 「拿 A 的身份去写 B 的仓库」——token 本身完全有效。
+                // 一律说"token 无效"会把人引到重新申请令牌上，白折腾。
                 errorMessage = 'Token 无效或已过期，请检查并重试';
-            } else if (e.status === 403) {
-                // ★ 403 有两张完全不同的脸，混成一句"权限不足"害人不浅：
-                //   1) 真·权限不足 —— GitHub 会在 errors[].message 里说清缺什么
-                //   2) 限流        —— 同样是 403，message 含 "rate limit"，
-                //                    但跟权限毫无关系，等一会儿就好
-                //   用户反馈"我的 token 明明有权限却一直提示没权限"，
-                //   很可能就是限流被当成了权限问题（isRateLimit 已由
-                //   github-api 打标，这里优先按限流解释）。
-                if (e.isRateLimit) {
-                    errorMessage = 'GitHub API 限流（不是权限问题）：剩余 ' +
-                        (this.api?.rateLimit?.remaining ?? 0) + ' 次，请稍后重试';
-                } else {
-                    // github-api 已把 errors[].message 收进 e.errors，
-                    // 那是 GitHub 原话（例如 "Resource not accessible by
-                    // personal access token"），比我们猜的准。
-                    const why = (e.errors && e.errors.length)
-                        ? '（' + e.errors.join('；') + '）' : '';
-                    errorMessage = 'Token 权限不足' + why +
-                        '。请确认：classic token 勾选 repo+workflow；' +
-                        'fine-grained token 需授权全部目标仓库并给 Contents 读写';
+                const owner = this.storage.getUser()?.login;
+                if (owner) {
+                    errorMessage += `（当前身份 ${owner}；若刚切换过账号，也可能是仓库归属未同步，请到设置里重新同步仓库列表）`;
                 }
-            } else if (e.status === 0) {
-                // 桌面版专属：请求压根没发出去（域名不在白名单/网络失败/超时）
-                errorMessage = '请求未发出（不是权限问题）：' + (e.message || '未知原因');
+            } else if (e.status === 403) {
+                errorMessage = 'Token 权限不足，请确保拥有 repo 和 workflow 权限';
             } else if (e.message) {
                 errorMessage += `: ${e.message}`;
             }

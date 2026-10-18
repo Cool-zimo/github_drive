@@ -55,10 +55,25 @@ class Storage {
     }
     
     // 迁移旧数据到账号隔离的 key
+    //
+    // ★ 这里曾经是「A 账号的仓库被 B 账号继承」的源头。
+    //
+    //   旧写法：oldValue !== null && newValue === null 就复制。
+    //   旧 key 迁移后从不删除，所以这个条件对【每一个新账号】都成立 ——
+    //   A 登录一次之后，B、C、D 登录都会拿到 A 的 drive-storage-* 列表，
+    //   然后拿自己的 token 去写 A 的仓库 → 401 Bad credentials。
+    //   函数末尾那句注释原本写着「新账号从空数据开始」，和代码正好相反。
+    //
+    //   修法：迁移只发生一次，且只迁给【当时正在登录】的那个账号，
+    //   迁完立刻删掉旧 key，后面的账号一律从空开始。
     _migrateToAccountScoped() {
+        const flagKey = this.prefix + '_scoped_migrated';
+        try {
+            if (localStorage.getItem(flagKey)) return;   // 已迁移过，不再迁
+        } catch { /* 读不到就当没迁过，继续 */ }
+
         const accountId = this._getAccountId() || 'default';
-        
-        // 1. 从旧的无前缀 key 迁移（首次升级）
+
         this.accountScopedKeys.forEach(key => {
             const oldKey = this.prefix + key;
             const newKey = this.prefix + 'account_' + accountId + '_' + key;
@@ -67,10 +82,11 @@ class Storage {
             if (oldValue !== null && newValue === null) {
                 localStorage.setItem(newKey, oldValue);
             }
+            // 旧 key 必须清掉，否则下一个账号又会被喂同一份数据
+            localStorage.removeItem(oldKey);
         });
-        
-        // 2. 新账号从空数据开始，不复制其他账号的数据（避免仓库列表混乱导致 401）
-        // 每个账号有自己独立的存储仓库，自动创建即可
+
+        try { localStorage.setItem(flagKey, '1'); } catch { /* 写不进就算了，下一轮再迁 */ }
     }
 
     get(key, defaultValue = null) {

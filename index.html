@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=81&api_v=7"></script>
+    <script src="js/branch-guard.min.js?v=82&api_v=7"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,7 +33,7 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.min.css?v=81&api_v=7">');
+            document.write('<link rel="stylesheet" href="css/style.min.css?v=82&api_v=7">');
         }
     })();
     </script>
@@ -346,7 +346,7 @@
             'task-dock': 'b85747e5e4',
             'theme': 'b0ec742409',
             'ui': 'cff4cd9a0d',
-            'version': 'f9c20dfe1d'
+            'version': '7045d4ff18'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
