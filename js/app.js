@@ -873,12 +873,17 @@ class App {
                 if (!rules) continue;
                 for (const r of rules) {
                     if (r.selectorText === '#gd-css-stamp') {
-                        gotVer = (r.style.getPropertyValue('--stamp') || '').trim().replace(/["']/g, '');
-                        gotApi = (r.style.getPropertyValue('--api-stamp') || '').trim().replace(/["']/g, '');
-                        break;
+                        // ★ 不再找到第一个就 break。
+                        //   --stamp 现在在 index.html 的内联 <style> 里，
+                        //   --api-stamp 在 css 文件里 —— 两者不在同一个样式表，
+                        //   遇到第一个就跳出会漏掉另一个，检测静默失效。
+                        const v = (r.style.getPropertyValue('--stamp') || '').trim().replace(/["']/g, '');
+                        const a = (r.style.getPropertyValue('--api-stamp') || '').trim().replace(/["']/g, '');
+                        if (v && !gotVer) gotVer = v;
+                        if (a && !gotApi) gotApi = a;
                     }
                 }
-                if (gotVer || gotApi) break;
+                if (gotVer && gotApi) break;
             }
 
             const problems = [];
