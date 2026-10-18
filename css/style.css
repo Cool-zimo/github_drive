@@ -3233,6 +3233,30 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     max-width: 860px;
     margin: 0 auto;
 }
+/* 后台进程/任务视图的宿主：必须改回块级。
+   .file-list 是 grid，直接把 .tasks-view 塞进去会被当成 grid item
+   压进第一列，居中失效、内容贴左上。 */
+.file-list.gd-tasks-host {
+    display: block;
+    width: 100%;
+}
+.file-list.gd-tasks-host .tasks-view {
+    width: 100%;
+}
+/* 空状态才垂直居中（有任务时让列表从顶部开始排） */
+.gd-tasks-empty {
+    width: 100%;
+    min-height: 56vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 26px 10px;
+    text-align: center;
+}
+.gd-tasks-empty .tv-ico { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+.gd-tasks-empty .tv-t { font-size: 14px; font-weight: 600; color: var(--text-color, #111827); }
+.gd-tasks-empty .tv-s { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 6px; }
 .tasks-view-title {
     font-size: 16px; font-weight: 700; color: #111827;
     margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
@@ -3248,7 +3272,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "78"; --api-stamp: "7"; }
+#gd-css-stamp { --stamp: "79"; --api-stamp: "7"; }
 
 /* ==================================================================
    动画打磨
@@ -3920,3 +3944,15 @@ body.dark-mode .login-card {
     .btn-primary:active, .btn-secondary:active, .btn-text:active,
     .btn-icon:active, .modal-close:active { transform: none !important; }
 }
+
+/* 令牌显示/隐藏：两张图标常驻 DOM，只切 hidden，避免切换时闪一下 */
+.gd-token-eye .gd-eye-img {
+    width: 18px; height: 18px; display: block;
+    opacity: .75; transition: opacity .18s ease;
+}
+.gd-token-eye:hover .gd-eye-img { opacity: 1; }
+.gd-token-eye .gd-eye-img[hidden] { display: none; }
+body.dark-mode .gd-token-eye .gd-eye-img { filter: invert(1) brightness(1.6); }
+
+/* 顶栏常驻后，与当前视图无关的按钮置灰（不隐藏，避免"点了没反应"） */
+.gd-bar-off { opacity: .38; cursor: not-allowed; }
