@@ -1405,15 +1405,15 @@ class UI {
         let body = '';
         for (const g of GROUPS) {
             body += '<div style="margin-bottom:14px;">'
-                  +   '<div style="font-size:11px;font-weight:700;color:#9ca3af;letter-spacing:0.5px;'
+                  +   '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;'
                   +   'text-transform:uppercase;padding:0 4px 6px;">' + g.title + '</div>';
             for (const it of g.items) {
                 const extraHtml = it.extra ? ' <span style="font-weight:400;font-size:13px;color:#6b7280;">' + it.extra + '</span>' : '';
                 const color = it.danger ? 'color:#dc2626;' : '';
-                const hoverBg = it.danger ? '#fef2f2' : '#f3f4f6';
+                const hoverBg = it.danger ? 'var(--danger-light, #fef2f2)' : 'var(--bg-hover, #f3f4f6)';
                 body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
                 body += '<span style="font-size:20px;">' + it.icon + '</span>';
-                body += '<div><div style="font-weight:600;font-size:14px;">' + it.title + extraHtml + '</div><div style="font-size:12px;color:#6b7280;">' + it.desc + '</div></div></div>';
+                body += '<div><div style="font-weight:600;font-size:14px;color:var(--text-primary);">' + it.title + extraHtml + '</div><div style="font-size:12px;color:var(--text-secondary);">' + it.desc + '</div></div></div>';
             }
             body += '</div>';
         }
@@ -1443,10 +1443,10 @@ class UI {
         fileList.className = 'settings-view';
         fileList.innerHTML =
             '<div style="max-width:760px;margin:0 auto;">'
-          +   '<h2 style="font-size:20px;font-weight:700;margin:0 0 4px;color:#111827;">⚙️ '
-          +   (I18n.t('settings.title') || '设置') + '</h2>'
-          +   '<div style="font-size:12px;color:#9ca3af;margin-bottom:18px;">'
-          +   '设置项已按用途分组</div>'
+          +   '<h2 style="font-size:20px;font-weight:700;margin:0 0 4px;color:var(--text-primary);">'
+          +   (I18n.t('settings.title') || '设置').replace(/^[\u2190-\uFFEF\u2600-\u27BF\s]+/, '') + '</h2>'
+          +   '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:18px;">'
+          +   (I18n.t('settings.groupedHint') || '设置项已按用途分组') + '</div>'
           +   this._settingsGroups()
           + '</div>';
         // 外观控件由 GdCustom 提供；模块没加载就跳过，不能让设置页开不了

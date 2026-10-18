@@ -3617,6 +3617,110 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .gd-look span { min-width: 46px; color: var(--text-secondary, #6b7280); }
 .gd-look select { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-light, #e5e7eb); }
 
+
+/* ==================================================================
+   暗色模式：全局兜底（v75）
+   ------------------------------------------------------------------
+   用户反馈："一处白一处黑，应该全部用暗色"。
+
+   ★ 根因：CSS 里有 23 处硬编码 background:#fff / white，
+     而 body.dark-mode 只逐条覆盖了约 40 个选择器 ——
+     漏掉的那些就露出白底。逐条补是补不完的，以后新增组件还会再漏。
+
+   ★ 所以改成两层：
+     1) 下面这条通配兜底：暗色下凡是还写着白的容器，一律压到暗色底。
+        用 !important 是因为要盖过那些散落各处的硬编码。
+     2) 保留原有的 body.dark-mode 逐条规则（它们负责精细配色）。
+
+   ★ 必须排除的元素：
+     - 用户内容（代码块、日志、预览）本来就该是自己的底色
+     - 图片/图标：压暗底会让透明 PNG 出现色块
+   ================================================================== */
+body.dark-mode :where(
+    .card, .panel, .section, .box, .container, .wrapper,
+    .modal-content, .modal-body, .modal-header, .modal-footer,
+    .dropdown, .dropdown-menu, .popup, .tooltip, .popover,
+    .list, .list-item, .row, .cell, .header, .footer, .sidebar,
+    .toolbar, .breadcrumb, .context-menu, .empty-state,
+    .file-item, .repo-item, .nav-item, .settings-view,
+    .task-item, .stage, .tile, .group, .block, .frame
+) {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+/* 上面那条会把所有 .card 之类压成同一个色，
+   主内容区必须保持最深的底，否则整页平掉没有层次 */
+body.dark-mode .main-content,
+body.dark-mode .app,
+body.dark-mode body {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary);
+}
+
+/* ★ 内联硬编码颜色的兜底
+   标题写的是内联 style="color:#111827"，内联优先级高于任何 CSS 类，
+   body.dark-mode 的规则根本改不动它 —— 这就是"仪表盘/设置字样看不清"的原因。
+   data-gd-force 由 JS 给这些标题打上，见 js/theme.js */
+body.dark-mode [data-gd-force="title"] {
+    color: var(--text-primary) !important;
+}
+body.dark-mode [data-gd-force="sub"] {
+    color: var(--text-secondary) !important;
+}
+body.dark-mode [data-gd-force="muted"] {
+    color: var(--text-tertiary) !important;
+}
+
+/* 暗色下所有硬编码白底一律压暗（兜底第三层） */
+body.dark-mode [style*="background:#fff"],
+body.dark-mode [style*="background: #fff"],
+body.dark-mode [style*="background:white"],
+body.dark-mode [style*="background: white"],
+body.dark-mode [style*="background:#ffffff"],
+body.dark-mode [style*="background: #ffffff"] {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary);
+}
+
+/* 暗色下硬编码深灰文字 → 提亮，保证对比度 */
+body.dark-mode [style*="color:#111827"],
+body.dark-mode [style*="color: #111827"],
+body.dark-mode [style*="color:#1f2328"],
+body.dark-mode [style*="color: #1f2328"],
+body.dark-mode [style*="color:#374151"],
+body.dark-mode [style*="color: #374151"],
+body.dark-mode [style*="color:#111"],
+body.dark-mode [style*="color: #111"] {
+    color: var(--text-primary) !important;
+}
+/* 中灰次要文字 → 用 secondary，比 tertiary 更可读 */
+body.dark-mode [style*="color:#6b7280"],
+body.dark-mode [style*="color: #6b7280"],
+body.dark-mode [style*="color:#4b5563"],
+body.dark-mode [style*="color: #4b5563"] {
+    color: var(--text-secondary) !important;
+}
+/* 浅灰辅助文字（#9ca3af）在暗底上其实够亮，但偏冷，统一成 tertiary */
+body.dark-mode [style*="color:#9ca3af"],
+body.dark-mode [style*="color: #9ca3af"] {
+    color: var(--text-tertiary) !important;
+}
+
+/* 输入框：暗色下必须显式给底色，否则部分浏览器仍按 UA 白底渲染 */
+body.dark-mode input,
+body.dark-mode textarea,
+body.dark-mode select {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+    color: var(--text-tertiary) !important;
+}
+
 /* ---------- 17. 全部尊重「减少动态效果」----------
    ★ 每加一个动画，都要来这里登记一次。漏登记的后果是：
      开了「减少动态效果」的用户仍然看到元素在动，
