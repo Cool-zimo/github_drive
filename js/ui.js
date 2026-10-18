@@ -190,6 +190,11 @@ class UI {
         // 搜索
         document.getElementById('adv-search-btn')?.addEventListener('click', () => this.showAdvancedSearch());
         document.getElementById('search-input').addEventListener('input', (e) => {
+            // ★ 顶栏常驻后搜索框在任何视图都能输入，
+            //   但搜索结果只存在于文件视图 —— 自动切回去，别让人以为坏了。
+            if (this.app && this.app._currentView && this.app._currentView !== 'all-files') {
+                this.switchView('all-files');
+            }
             clearTimeout(this.searchTimeout);
             this.searchTimeout = setTimeout(() => {
                 this.app.searchFiles(e.target.value);
@@ -340,10 +345,15 @@ class UI {
         const emptyState = document.getElementById('empty-state');
         const loadingState = document.getElementById('loading-state');
 
+        // ★ 顶栏全局常驻：不再随视图隐藏。
+        //   以前非文件视图会整排 display:none，切到后台进程/设置时
+        //   上边栏凭空消失，界面像换了个应用。现在只按视图切换可用态。
+        if (toolbarActions) toolbarActions.style.display = '';
+        this._syncToolbarForView(view);
+
         if (view === 'all-files') {
             // 恢复文件浏览器界面
             if (breadcrumb) breadcrumb.style.display = '';
-            if (toolbarActions) toolbarActions.style.display = '';
             if (fileList) fileList.style.display = '';
             // 恢复之前的路径（不保持回收站路径）
             const savedState = this.app.storage.get('last_state', null);
@@ -356,17 +366,15 @@ class UI {
             this.app.fileManager.setCurrentRepo(null);
             this.app.loadFiles();
         } else if (view === 'dashboard') {
-            // 仪表盘视图：隐藏面包屑和工具栏，但显示文件区域
+            // 仪表盘视图：隐藏面包屑，但显示文件区域
             if (breadcrumb) breadcrumb.style.display = 'none';
-            if (toolbarActions) toolbarActions.style.display = 'none';
             if (fileList) fileList.style.display = '';
             if (emptyState) emptyState.classList.add('hidden');
             if (loadingState) loadingState.classList.add('hidden');
             this.app.showDashboard();
         } else {
-            // 非文件视图：隐藏面包屑、工具栏和文件区域
+            // 非文件视图：隐藏面包屑和文件区域
             if (breadcrumb) breadcrumb.style.display = 'none';
-            if (toolbarActions) toolbarActions.style.display = 'none';
             if (fileList) fileList.style.display = 'none';
             if (emptyState) emptyState.classList.add('hidden');
             if (loadingState) loadingState.classList.add('hidden');
@@ -394,7 +402,6 @@ class UI {
                 // 后台进程：占主窗口，不弹窗
                 if (fileList) fileList.style.display = '';
                 if (breadcrumb) breadcrumb.style.display = 'none';
-                if (toolbarActions) toolbarActions.style.display = 'none';
                 if (emptyState) emptyState.classList.add('hidden');
                 if (loadingState) loadingState.classList.add('hidden');
                 this._renderTasksView();
@@ -1659,6 +1666,25 @@ class UI {
     }
 
     /** 主窗口渲染后台进程 */
+    /**
+     * 顶栏常驻后，按视图同步按钮可用态。
+     * 直接隐藏会造成"点了没反应"，所以改成置灰 + 提示。
+     * 用户自己在右键菜单里勾掉的项（hidden）不受影响。
+     */
+    _syncToolbarForView(view) {
+        const isFiles = (view === 'all-files');
+        // 只依赖当前文件列表上下文的按钮
+        const FILE_ONLY = ['#adv-search-btn', '#folder-tree-btn', '#view-toggle-btn'];
+        FILE_ONLY.forEach(sel => {
+            const el = document.querySelector('.toolbar ' + sel)
+                    || document.querySelector(sel);
+            if (!el) return;
+            el.disabled = !isFiles;
+            el.classList.toggle('gd-bar-off', !isFiles);
+            el.title = isFiles ? '' : '切换到「全部文件」后可用';
+        });
+    }
+
     _renderTasksView() {
         const fileList = document.getElementById('file-list');
         if (!fileList) return;
@@ -1667,7 +1693,11 @@ class UI {
         //   内联样式优先级高于 CSS 类，只改 className 不管用
         //   （之前"我的分享"列表空白就是这个原因）。
         fileList.style.display = '';
-        fileList.className = 'file-list';
+        // ★ 不能只给 'file-list'：它是 display:grid（文件格子布局），
+        //   .tasks-view 会变成一个 grid item 被压进第一列（约 180px），
+        //   于是整个后台进程视图挤在左上角，margin:0 auto 也不生效。
+        //   加 gd-tasks-host 把它改回块级，居中才真的居中。
+        fileList.className = 'file-list gd-tasks-host';
         // ★ 插件预览区和任务列表分开：
         //   任务列表每 700ms 刷新一次，预览区不能跟着重建，
         //   否则预览卡会被销毁再生成，插件窗口每 0.7 秒闪一下。
@@ -1724,10 +1754,10 @@ class UI {
         }
         const all = TaskDock.all();
         if (!all.length) {
-            return `<div style="padding:26px 10px;text-align:center;">
-                      <div style="font-size:40px;margin-bottom:10px;">✅</div>
-                      <div style="font-size:14px;font-weight:600;color:#1f2937;">没有正在进行的任务</div>
-                      <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+            return `<div class="gd-tasks-empty">
+                      <div class="tv-ico">✅</div>
+                      <div class="tv-t">没有正在进行的任务</div>
+                      <div class="tv-s">
                         上传、下载、分享、整理仓库都会出现在这里
                       </div></div>`;
         }
