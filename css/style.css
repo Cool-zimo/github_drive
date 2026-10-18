@@ -3248,7 +3248,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "74"; --api-stamp: "5"; }
+#gd-css-stamp { --stamp: "75"; --api-stamp: "6"; }
 
 /* ==================================================================
    动画打磨
@@ -3719,6 +3719,140 @@ body.dark-mode select {
 body.dark-mode input::placeholder,
 body.dark-mode textarea::placeholder {
     color: var(--text-tertiary) !important;
+}
+
+
+/* ==================================================================
+   登录页 UI 大迭代（v75）
+   ------------------------------------------------------------------
+   原来就是一张白卡 + 输入框，确实普通。这版改了这些：
+
+   · 背景：深色渐晕 + 两团缓慢漂移的光斑（纯 CSS，不加载图片）
+   · 卡片：玻璃拟态（毛玻璃 + 细描边），不再是死白一块
+   · Logo：进入时轻微上浮 + 一圈呼吸光环
+   · 输入框：聚焦时描边高亮 + 外发光，右侧加了显示/隐藏按钮
+   · 主按钮：带一道斜向流光，hover 时扫过
+   · 整个卡片：入场时从下方浮起
+
+   ★ 全部尊重 prefers-reduced-motion，见文末的关闭清单。
+   ================================================================== */
+
+/* 背景：两团光斑缓慢漂移。用 radial-gradient 而非图片，零请求。 */
+.login-screen {
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(1200px 600px at 15% -10%, #eef2ff 0%, transparent 60%),
+                radial-gradient(900px 500px at 100% 100%, #fae8ff 0%, transparent 55%),
+                linear-gradient(160deg, #f8fafc 0%, #eef2f7 100%);
+}
+body.dark-mode .login-screen {
+    background: radial-gradient(1200px 600px at 15% -10%, #1b2a4a 0%, transparent 60%),
+                radial-gradient(900px 500px at 100% 100%, #2a1b3d 0%, transparent 55%),
+                linear-gradient(160deg, #0b0f16 0%, #0d1117 100%);
+}
+.login-screen::before,
+.login-screen::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: .35;
+    pointer-events: none;   /* ★ 绝不能挡住点击 */
+    animation: gd-orb 18s ease-in-out infinite alternate;
+}
+.login-screen::before {
+    width: 320px; height: 320px; left: -80px; top: -60px;
+    background: linear-gradient(135deg, #6366f1, #22d3ee);
+}
+.login-screen::after {
+    width: 280px; height: 280px; right: -60px; bottom: -40px;
+    background: linear-gradient(135deg, #a855f7, #f472b6);
+    animation-delay: -6s;
+}
+@keyframes gd-orb {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(40px, 30px) scale(1.12); }
+}
+
+/* 卡片：玻璃拟态 */
+.login-card {
+    position: relative;
+    z-index: 1;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, .6);
+    box-shadow: 0 18px 50px rgba(15, 23, 42, .13),
+                0 2px 8px rgba(15, 23, 42, .06);
+    animation: gd-card-in .55s cubic-bezier(.22, 1, .36, 1) both;
+}
+body.dark-mode .login-card {
+    border-color: var(--border-color);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+}
+@keyframes gd-card-in {
+    from { opacity: 0; transform: translateY(22px) scale(.985); }
+}
+
+/* Logo：上浮 + 呼吸光环 */
+.login-logo { position: relative; animation: gd-logo-in .6s cubic-bezier(.22,1,.36,1) both .05s; }
+.login-logo::after {
+    content: '';
+    position: absolute; left: 50%; top: 50%;
+    width: 100px; height: 100px; margin: -50px 0 0 -50px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,102,241,.28), transparent 70%);
+    animation: gd-halo 3.2s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes gd-logo-in { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes gd-halo {
+    0%, 100% { transform: scale(1); opacity: .5; }
+    50%      { transform: scale(1.16); opacity: .85; }
+}
+
+/* 输入框 + 显示/隐藏按钮 */
+.gd-token-wrap { position: relative; }
+.gd-token-wrap input {
+    width: 100%;
+    padding-right: 44px;     /* 给眼睛按钮留位 */
+    transition: border-color .18s, box-shadow .18s;
+}
+.gd-token-wrap input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--accent-light);
+}
+.gd-token-eye {
+    position: absolute; right: 6px; top: 50%;
+    transform: translateY(-50%);
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none;
+    font-size: 15px; cursor: pointer; opacity: .55;
+    border-radius: 6px;
+    transition: opacity .15s, background .15s;
+}
+.gd-token-eye:hover { opacity: 1; background: var(--bg-hover); }
+
+/* 主按钮：斜向流光 */
+#enter-drive-btn {
+    position: relative; overflow: hidden;
+    transition: transform .15s, box-shadow .2s;
+}
+#enter-drive-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99,102,241,.32); }
+#enter-drive-btn:active { transform: translateY(0); }
+#enter-drive-btn::after {
+    content: '';
+    position: absolute; top: -50%; left: -60%;
+    width: 40%; height: 200%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+    transform: rotate(20deg);
+    animation: gd-shine 4.5s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes gd-shine {
+    0%      { left: -60%; }
+    55%,100%{ left: 130%; }
 }
 
 /* ---------- 17. 全部尊重「减少动态效果」----------
