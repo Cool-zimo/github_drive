@@ -174,23 +174,38 @@ class Storage {
         return account;
     }
     
-    // 清除当前账号的所有本地数据（VFS、收藏、最近使用、分享、仓库列表等）
-    // 切换账号时调用，确保数据严格隔离
-    clearCurrentAccountData() {
-        const accountId = this._getAccountId();
-        if (!accountId) return;
-        
-        console.log(`[Storage] 清除账号 ${accountId} 的所有本地数据`);
+    // 清除指定账号的所有本地数据（VFS、收藏、最近使用、分享、仓库列表等）
+    //
+    // ★ 必须支持【指定账号】，不能只清"当前账号"。
+    //   切换账号的正确顺序是：先清"即将进入的目标账号"，再切过去。
+    //   旧实现只提供 clearCurrentAccountData()，于是调用方只能先清
+    //   （此时 identity 还是旧账号 A）再切换（切到 B）——清掉的是 A，
+    //   而 B 名下早已被历史迁移 bug 写入了 A 的仓库列表和 VFS，
+    //   那些脏数据一次都没被清过，于是"切了账号还是跨账号"。
+    clearAccountData(accountId) {
+        const id = accountId || this._getAccountId();
+        if (!id) return;
+
+        console.log(`[Storage] 清除账号 ${id} 的所有本地数据`);
         this.accountScopedKeys.forEach(key => {
-            const accountKey = this.prefix + 'account_' + accountId + '_' + key;
+            const accountKey = this.prefix + 'account_' + id + '_' + key;
             localStorage.removeItem(accountKey);
         });
-        
+
         // 同时清除全局的旧格式数据（如果有的话）
         this.accountScopedKeys.forEach(key => {
             const oldKey = this.prefix + key;
             localStorage.removeItem(oldKey);
         });
+
+        // 迁移标记也要清：它是全局的，留着会让下一次访问跳过迁移，
+        // 而旧格式的残留数据可能正躺在全局 key 里等着被喂给下一个账号。
+        try { localStorage.removeItem(this.prefix + '_scoped_migrated'); } catch (e) {}
+    }
+
+    // 兼容旧调用点：清除"当前账号"的数据
+    clearCurrentAccountData() {
+        this.clearAccountData(null);
     }
 
 
