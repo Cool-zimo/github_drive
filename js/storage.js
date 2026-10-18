@@ -36,14 +36,57 @@ class Storage {
             this.keys.STORAGE_CONFIG,
             this.keys.SETTINGS,
         ];
+        // 「当前是谁」—— 必须按标签页隔离，否则多标签页互相顶号
+        this.tabScopedKeys = [
+            this.keys.TOKEN,
+            this.keys.USER,
+            this.keys.CURRENT_ACCOUNT,
+        ];
     }
     
-    // 获取当前账号 ID（直接读 localStorage，避免递归）
+    // ============ 标签页隔离（多标签页多账号的关键）============
+    //
+    // localStorage 是同源共享的：同一浏览器开两个标签页，它们读写的
+    // 是同一份数据。如果把「当前 token / 当前账号」存在这里，
+    // 标签页 B 一登录就会把 A 的身份覆盖掉 —— A 刷新后变成 B。
+    //   实测：A 登 Cool，B 登 Feng，回到 A 读到的已是 Feng。
+    //
+    // sessionStorage 则是「每标签页一份」（刷新保留，新标签页独立），
+    // 正好用来承载「本标签页当前是谁」。
+    //
+    // ACCOUNTS（账号列表）刻意仍放 localStorage —— 它是共享的备选名单，
+    // 两个标签页都能看到、都能切换，且不含任何"当前是谁"的含义。
+    _sessKey(key) { return this.prefix + 'tab_' + key; }
+    _sessGet(key) {
+        try { return sessionStorage.getItem(this._sessKey(key)); } catch { return null; }
+    }
+    _sessSet(key, raw) {
+        try { sessionStorage.setItem(this._sessKey(key), raw); } catch { /* 无痕模式等，忽略 */ }
+    }
+    _sessDel(key) {
+        try { sessionStorage.removeItem(this._sessKey(key)); } catch { /* 忽略 */ }
+    }
+    _isTabScoped(key) { return this.tabScopedKeys.includes(key); }
+
+    // 获取当前账号 ID（直接读底层存储，避免递归）
+    //
+    // 优先 sessionStorage（本标签页身份）；读不到才回退 localStorage，
+    // 那是 v85 之前的老数据，取到后顺手搬进 session 并清掉全局残留，
+    // 否则另一个标签页还会被同一份旧值"喂"成同一个账号。
     _getAccountId() {
         try {
+            const s = sessionStorage.getItem(this._sessKey(this.keys.CURRENT_ACCOUNT));
+            if (s) return JSON.parse(s);
+        } catch { /* 读不到继续回退 */ }
+        try {
             const value = localStorage.getItem(this.prefix + this.keys.CURRENT_ACCOUNT);
-            return value ? JSON.parse(value) : null;
-        } catch { return null; }
+            if (value) {
+                this._sessSet(this.keys.CURRENT_ACCOUNT, value);
+                localStorage.removeItem(this.prefix + this.keys.CURRENT_ACCOUNT);
+                return JSON.parse(value);
+            }
+        } catch { /* 忽略 */ }
+        return null;
     }
     
     // 获取带账号前缀的 key
@@ -90,6 +133,21 @@ class Storage {
     }
 
     get(key, defaultValue = null) {
+        // 「当前是谁」走标签页隔离层
+        if (this._isTabScoped(key)) {
+            const s = this._sessGet(key);
+            if (s !== null) {
+                try { return JSON.parse(s); } catch { return defaultValue; }
+            }
+            // 老数据回退（v85 之前存在 localStorage 全局）
+            const old = localStorage.getItem(this.prefix + key);
+            if (old !== null) {
+                this._sessSet(key, old);
+                localStorage.removeItem(this.prefix + key);   // 别再喂给别的标签页
+                try { return JSON.parse(old); } catch { return defaultValue; }
+            }
+            return defaultValue;
+        }
         // 访问账号相关数据时执行迁移检查（幂等，不会重复迁移）
         if (this.accountScopedKeys.includes(key)) {
             try { this._migrateToAccountScoped(); } catch { /* 忽略 */ }
@@ -97,13 +155,26 @@ class Storage {
         try { const value = localStorage.getItem(this.prefix + this._accountKey(key)); return value ? JSON.parse(value) : defaultValue; } catch { return defaultValue; }
     }
     set(key, value) {
-        localStorage.setItem(this.prefix + this._accountKey(key), JSON.stringify(value));
+        const raw = JSON.stringify(value);
+        if (this._isTabScoped(key)) {
+            // 只写本标签页；同时清掉 localStorage 里的旧全局副本，
+            // 否则另一个标签页回退时会读到它，被"顶号"。
+            this._sessSet(key, raw);
+            try { localStorage.removeItem(this.prefix + key); } catch { /* 忽略 */ }
+        } else {
+            localStorage.setItem(this.prefix + this._accountKey(key), raw);
+        }
         if (this.onConfigChange && key !== this.keys.TOKEN && key !== this.keys.USER) {
             this.onConfigChange();
         }
     }
     remove(key) {
-        localStorage.removeItem(this.prefix + this._accountKey(key));
+        if (this._isTabScoped(key)) {
+            this._sessDel(key);
+            try { localStorage.removeItem(this.prefix + key); } catch { /* 忽略 */ }
+        } else {
+            localStorage.removeItem(this.prefix + this._accountKey(key));
+        }
         if (this.onConfigChange && key !== this.keys.TOKEN && key !== this.keys.USER) {
             this.onConfigChange();
         }
