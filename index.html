@@ -14,13 +14,13 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"85"}</style>
+    <style>#gd-css-stamp{--stamp:"86"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=85&api_v=7"></script>
+    <script src="js/branch-guard.min.js?v=86&api_v=7"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -376,11 +376,11 @@
             'maintain': 'b10def0baf',
             'plugin-api': 'ad584338e1',
             'share': '27afaa1375',
-            'storage': 'd7b33481b6',
+            'storage': '5635ff33ec',
             'task-dock': 'b85747e5e4',
             'theme': 'b0ec742409',
             'ui': 'a6e58cbbaf',
-            'version': 'ad1f058f0c'
+            'version': 'f6dd75a402'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
