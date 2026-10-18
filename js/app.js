@@ -99,6 +99,9 @@ class App {
             this.storage.setToken(token);
             this.storage.setUser(user);
             this.storage.addAccount(token, user);
+            // 换人登录 = 换一份干净数据。若这个账号名下还留着历史 bug
+            // 写进去的别的账号的仓名 / VFS，这里一并清掉，避免再次跨账号。
+            this.storage.clearAccountData((user && (user.login || user.id)) || token.substring(0, 8));
             // 同步给仓鼠（同源 localStorage 共享），让对面也是已登录状态
             this.syncTokenToBridge(token, user);
             // 确保当前账号 ID 已设置（addAccount 里已设置，这里双重保险）
@@ -306,7 +309,7 @@ class App {
         try { this.saveLastState(); } catch(e) {}
         // 严格数据隔离：切换账号前清除当前账号的所有本地缓存
         // 这样新账号会从远程重新读取 config，不会和旧账号数据混淆
-        this.storage.clearCurrentAccountData();
+        this.storage.clearAccountData(accountId);
         const account = this.storage.setCurrentAccount(accountId);
         if (account) {
             location.reload();
