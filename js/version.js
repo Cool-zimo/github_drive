@@ -1,7 +1,7 @@
 const APP_VERSION = {
-    internalVersion: '84',
-    formalVersion: '0.0.84',
-    displayVersion: 'v0.0.84',
+    internalVersion: '85',
+    formalVersion: '0.0.85',
+    displayVersion: 'v0.0.85',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
@@ -30,7 +30,7 @@ const APP_VERSION = {
     //        老 CSS 没有 gd-ripple 规则 → 涟漪会是一个不透明的实心色块
     //        盖在按钮上；没有 dash-card → 仪表盘卡片没有入场动画。
     //
-    //   = 7 期间的加载改造（v0.0.84，不涉及契约变化，故不 bump）：
+    //   = 7 期间的加载改造（v0.0.85，不涉及契约变化，故不 bump）：
     //       - index.html 里 15 个 CORE 脚本从 document.write 改成静态
     //         <script defer>，CSS 也改成静态 <link>。目的是让浏览器的
     //         预加载扫描器能看见它们 —— 原来 URL 是 JS 运行时拼的，
