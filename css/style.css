@@ -3248,4 +3248,401 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "72"; --api-stamp: "3"; }
+#gd-css-stamp { --stamp: "74"; --api-stamp: "5"; }
+
+/* ==================================================================
+   动画打磨
+   ------------------------------------------------------------------
+   目标：把"瞬间出现 / 瞬间消失"改成有层级的运动。
+   三条原则：
+   1) 进入用 ease-out（先快后慢，收得稳），退出用 ease-in（先慢后快，走得干脆）
+   2) 只动 transform / opacity，不动 width/height/top/left —— 前者走合成层不重排
+   3) 全部在 prefers-reduced-motion 下关闭（文件末尾统一处理）
+   ================================================================== */
+
+:root {
+    --ease-out: cubic-bezier(.22, 1, .36, 1);
+    --ease-in:  cubic-bezier(.4, 0, 1, 1);
+    --dur-xs: .12s;
+    --dur-sm: .18s;
+    --dur-md: .26s;
+    --dur-lg: .34s;
+}
+
+/* ---------- 1. 弹窗：遮罩淡入 + 面板上浮 ---------- */
+.modal-overlay {
+    animation: gd-mo-in var(--dur-sm) ease-out;
+}
+@keyframes gd-mo-in {
+    from { opacity: 0; }
+}
+.modal {
+    animation: gd-md-in var(--dur-lg) var(--ease-out);
+}
+@keyframes gd-md-in {
+    from { opacity: 0; transform: translateY(16px) scale(.965); }
+}
+
+/* 退场：旧弹窗被挪到独立层播放，不占用 #modal-container
+   —— 否则「closeModal(); 立刻 showModal()」会被延迟清空误伤 */
+#modal-exit-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1900;          /* 低于新弹窗(2000)，新弹窗不会被旧影子盖住 */
+    pointer-events: none;   /* 退场中的弹窗不可点 */
+}
+.modal-overlay.is-closing {
+    animation: gd-mo-out var(--dur-sm) var(--ease-in) forwards;
+}
+.modal-overlay.is-closing .modal {
+    animation: gd-md-out var(--dur-sm) var(--ease-in) forwards;
+}
+@keyframes gd-mo-out { to { opacity: 0; } }
+@keyframes gd-md-out { to { opacity: 0; transform: translateY(8px) scale(.985); } }
+
+/* ---------- 2. 文件列表：错峰入场 ----------
+   切换目录 / 搜索后整块替换，原来是"啪"地一下全出来。
+   现在每个格子晚 24ms 出场，形成从左上到右下的推进感。
+   第 15 个之后统一用 336ms，避免文件多时尾巴拖太久。 */
+.file-item {
+    animation: gd-fi-in .26s var(--ease-out) backwards;
+    animation-delay: calc(var(--fi, 14) * 20ms);
+}
+.file-item:nth-child(1)  { --fi: 0;  }
+.file-item:nth-child(2)  { --fi: 1;  }
+.file-item:nth-child(3)  { --fi: 2;  }
+.file-item:nth-child(4)  { --fi: 3;  }
+.file-item:nth-child(5)  { --fi: 4;  }
+.file-item:nth-child(6)  { --fi: 5;  }
+.file-item:nth-child(7)  { --fi: 6;  }
+.file-item:nth-child(8)  { --fi: 7;  }
+.file-item:nth-child(9)  { --fi: 8;  }
+.file-item:nth-child(10) { --fi: 9;  }
+.file-item:nth-child(11) { --fi: 10; }
+.file-item:nth-child(12) { --fi: 11; }
+.file-item:nth-child(13) { --fi: 12; }
+.file-item:nth-child(14) { --fi: 13; }
+@keyframes gd-fi-in {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+}
+
+/* ---------- 3. 悬停 / 按下 ---------- */
+.file-item .file-icon {
+    transition: transform var(--dur-md) var(--ease-out);
+}
+.file-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(31, 35, 40, .10);
+}
+.file-item:hover .file-icon {
+    transform: scale(1.08);
+}
+.file-item.selected:hover {
+    transform: translateY(-2px);
+}
+/* 按下时轻微下沉，给"按到了"的确认感 */
+.btn-primary:active,
+.btn-secondary:active,
+.btn-text:active,
+.btn-icon:active,
+.modal-close:active {
+    transform: scale(.955);
+    transition: transform var(--dur-xs) ease-out;
+}
+
+/* ---------- 4. 右键菜单：从点击处弹出 ---------- */
+.ctx-menu {
+    transform: scale(.93) translateY(-4px);
+    transition: opacity .13s ease-out, transform .18s var(--ease-out);
+}
+.ctx-menu.on {
+    transform: scale(1) translateY(0);
+}
+
+/* ---------- 5. Toast：入场带轻微回弹，退场干净 ---------- */
+.toast {
+    animation: gd-toast-in .38s var(--ease-out);
+}
+@keyframes gd-toast-in {
+    from { opacity: 0; transform: translateX(110%) scale(.94); }
+}
+.toast.is-out {
+    opacity: 0;
+    transform: translateX(110%) scale(.96);
+    transition: opacity .2s var(--ease-in), transform .22s var(--ease-in);
+}
+
+/* ---------- 6. 移动端抽屉 ----------
+   ★ 原来遮罩是 display:none → block + opacity 0→1 同帧切换，
+     浏览器不会为 display 变化播放过渡，所以遮罩是"硬闪"出来的。
+     改用 visibility（可过渡）+ pointer-events，淡入淡出才真的生效。 */
+.sidebar-overlay {
+    display: block;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity var(--dur-md) ease, visibility 0s linear var(--dur-md);
+}
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity var(--dur-md) ease, visibility 0s;
+}
+@media (max-width: 768px) {
+    .sidebar {
+        transition: transform .3s var(--ease-out);
+    }
+}
+
+/* ---------- 7. 加载指示：双环反向 ---------- */
+.spinner {
+    position: relative;
+}
+.spinner::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border: 2px solid transparent;
+    border-bottom-color: var(--accent-color);
+    border-radius: 50%;
+    opacity: .35;
+    animation: spin 1.4s linear infinite reverse;
+}
+
+/* ---------- 8. 进度条：流动光泽 ---------- */
+.progress-bar-fill {
+    position: relative;
+    overflow: hidden;
+}
+.progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
+    transform: translateX(-100%);
+    animation: gd-sheen 1.5s ease-in-out infinite;
+}
+@keyframes gd-sheen {
+    to { transform: translateX(100%); }
+}
+
+/* ---------- 9. 涟漪：点下去有一圈扩散 ----------
+   由 js/anim.js 在 pointerdown 时给宿主加 .gd-ripple-host 并注入 <span>。
+   ★ 为什么 host 的两个属性必须由 CSS 给而不是行内写：
+     同一个按钮可能被点很多次，行内样式会被反复覆盖，
+     而 class 只加一次，且卸载时不用记得还原。 */
+.gd-ripple-host {
+    position: relative;
+    overflow: hidden;
+}
+.gd-ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: .20;
+    transform: scale(0);
+    pointer-events: none;
+    animation: gd-ripple .52s var(--ease-out) forwards;
+}
+@keyframes gd-ripple {
+    to { transform: scale(1); opacity: 0; }
+}
+
+/* ---------- 10. 骨架屏：加载中的占位 ----------
+   原来是转一个圈，用户不知道接下来会长什么样。
+   骨架屏把"大概有几块、每块多大"先画出来，等待感会短很多。 */
+.gd-skel {
+    background: linear-gradient(90deg, #eceef1 25%, #f6f7f9 37%, #eceef1 63%);
+    background-size: 400% 100%;
+    animation: gd-skel 1.4s ease-in-out infinite;
+    border-radius: 6px;
+}
+@keyframes gd-skel {
+    0%   { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+/* ---------- 11. 空状态：图标轻轻浮着 ----------
+   静止的空状态看着像"卡住了"，轻微浮动表示"这里活着，只是没东西"。 */
+.empty-state .empty-icon {
+    animation: gd-float 3.8s ease-in-out infinite;
+}
+@keyframes gd-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+}
+/* 拖放区图标：hover 时弹一下，提示"可以松手了" */
+.upload-drop-zone:hover .upload-drop-icon {
+    animation: gd-nudge .5s var(--ease-out);
+}
+@keyframes gd-nudge {
+    0%   { transform: translateY(0) scale(1); }
+    35%  { transform: translateY(-7px) scale(1.12); }
+    70%  { transform: translateY(2px) scale(.97); }
+    100% { transform: translateY(0) scale(1); }
+}
+
+/* ---------- 12. 滚动时工具栏浮起 ----------
+   ★ transition 放在 .toolbar 上而不是 .is-scrolled 上：
+     加 class 时才有 transition 的话，离场（滚回顶部）会是硬切。 */
+.toolbar {
+    transition: box-shadow var(--dur-md) ease, border-color var(--dur-md) ease;
+}
+.toolbar.is-scrolled {
+    box-shadow: 0 2px 12px rgba(31, 35, 40, .10);
+    border-bottom-color: transparent;
+}
+
+/* ---------- 13. 导航项：按下去有反馈，激活时有个落定 ---------- */
+.nav-item {
+    transition: background .15s, color .15s, transform var(--dur-xs) var(--ease-out);
+}
+.nav-item:active {
+    transform: scale(.975);
+}
+.nav-item.active {
+    animation: gd-nav-on .34s var(--ease-out);
+}
+@keyframes gd-nav-on {
+    from { background: var(--bg-hover); transform: scale(.98); }
+}
+
+/* ---------- 14. 搜索框：聚焦时展开 ---------- */
+.toolbar .search-box input {
+    transition: width .28s var(--ease-out), box-shadow .2s ease, border-color .2s ease;
+}
+.toolbar .search-box input:focus {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, .16);
+}
+
+/* ---------- 15. 视图切换：整块淡入 ----------
+   切目录/切视图时给容器一次入场，避免"啪"地换脸。
+   ★ 只作用于内容容器，不动 .main-content ——
+     后者带 transform 会成为 fixed 子元素的包含块，任务坞会跟着飘。 */
+.file-area.is-switching {
+    animation: gd-view-in var(--dur-md) var(--ease-out);
+}
+@keyframes gd-view-in {
+    from { opacity: 0; transform: translateY(6px); }
+}
+
+/* ---------- 16. 仪表盘：卡片错峰落位 + 数字滚动 ----------
+   仪表盘是先出 UI 再补数字的，所以卡片入场必须比数字早 ——
+   卡片一张张落位，数字随后从 0 滚上去，才有"正在算给你看"的感觉。 */
+.dash-card, .dash-panel {
+    animation: gd-pop-in .44s var(--ease-out) backwards;
+}
+.dash-card:nth-child(1) { animation-delay: .03s; }
+.dash-card:nth-child(2) { animation-delay: .09s; }
+.dash-card:nth-child(3) { animation-delay: .15s; }
+.dash-card:nth-child(4) { animation-delay: .21s; }
+.dash-panel { animation-delay: .27s; }
+.dash-panel:nth-of-type(2) { animation-delay: .32s; }
+.dash-panel:nth-of-type(3) { animation-delay: .37s; }
+@keyframes gd-pop-in {
+    from { opacity: 0; transform: translateY(14px) scale(.96); }
+}
+.dash-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(31, 35, 40, .18);
+}
+.dash-card {
+    transition: transform var(--dur-md) var(--ease-out), box-shadow var(--dur-md) ease;
+}
+/* 数字滚动时宽度不能抖，否则会左右跳 */
+.dash-num {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 16.5 抽屉跟手（右滑手势用） ----------
+   js/gesture.js 拖动期间会往 .sidebar 上写 inline transform，
+   所以必须先把 transition 摘掉 —— 否则抽屉会滞后手指一大截，
+   松手瞬间的回弹也会和 CSS 过渡打架，出现"闪一下"。 */
+.sidebar.gd-dragging {
+    transition: none !important;
+}
+/* 手势期间遮罩由 JS 直接写 opacity，同样不能再有过渡 */
+.sidebar-overlay.gd-dragging {
+    transition: none !important;
+}
+
+/* ---------- 16.6 自定义：右键菜单 ---------- */
+.gd-ctx-menu {
+    position: fixed;
+    z-index: 2600;
+    min-width: 190px;
+    padding: 6px;
+    background: var(--bg-primary, #fff);
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(31, 35, 40, .16);
+    font-size: 13px;
+    animation: gd-ctx-in .14s var(--ease-out);
+}
+@keyframes gd-ctx-in {
+    from { opacity: 0; transform: scale(.95) translateY(-4px); }
+}
+.gd-ctx-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.gd-ctx-row:hover { background: var(--bg-hover, #f3f4f6); }
+/* 勾选列固定宽度，否则有✓没✓两种行的文字会左右跳 */
+.gd-ctx-chk { width: 14px; color: var(--accent-color, #6366f1); font-weight: 700; }
+.gd-ctx-hr { height: 1px; margin: 5px 6px; background: var(--border-light, #e5e7eb); }
+.gd-ctx-slider {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px 10px;
+}
+.gd-ctx-slider input { flex: 1; }
+.gd-ctx-slider span { min-width: 44px; text-align: right; color: var(--text-secondary, #6b7280); }
+
+/* ---------- 16.7 自定义：外观变量 ----------
+   ★ 三个变量只作用于内容与侧边栏，不作用在 html 上。
+     全站用 rem，改 html 字号会把侧边栏宽度、按钮内边距一起放大。 */
+.main-content, .sidebar {
+    font-size: var(--gd-fs, 14px);
+    line-height: var(--gd-lh, 1.5);
+    letter-spacing: var(--gd-ls, 0px);
+}
+.gd-look { display: flex; flex-direction: column; gap: 12px; }
+.gd-look label { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.gd-look input[type=range] { flex: 1; max-width: 200px; }
+.gd-look span { min-width: 46px; color: var(--text-secondary, #6b7280); }
+.gd-look select { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-light, #e5e7eb); }
+
+/* ---------- 17. 全部尊重「减少动态效果」----------
+   ★ 每加一个动画，都要来这里登记一次。漏登记的后果是：
+     开了「减少动态效果」的用户仍然看到元素在动，
+     而这个开关往往是晕动症用户在开的。 */
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay, .modal,
+    .modal-overlay.is-closing, .modal-overlay.is-closing .modal,
+    .file-item, .toast, .progress-bar-fill::after,
+    .gd-ripple, .gd-skel,
+    .empty-state .empty-icon,
+    .upload-drop-zone:hover .upload-drop-icon,
+    .nav-item.active,
+    .file-area.is-switching,
+    .dash-card, .dash-panel {
+        animation: none !important;
+    }
+    /* 涟漪和骨架屏在关闭动画后必须彻底消失，否则会留一坨色块 */
+    .gd-ripple { display: none !important; }
+    .gd-skel { background: #eceef1 !important; }
+    .spinner::after { animation: none !important; display: none; }
+    .modal-overlay.is-closing, .modal-overlay.is-closing .modal { opacity: 0 !important; }
+    .sidebar, .sidebar-overlay, .ctx-menu, .file-item, .file-item .file-icon,
+    .toolbar, .toolbar .search-box input, .nav-item, .dash-card {
+        transition: none !important;
+    }
+    .file-item:hover, .file-item:hover .file-icon { transform: none !important; }
+    .btn-primary:active, .btn-secondary:active, .btn-text:active,
+    .btn-icon:active, .modal-close:active { transform: none !important; }
+}
