@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.js?v=74&api_v=5"></script>
+    <script src="js/branch-guard.js?v=75&api_v=6"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,12 +33,12 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.css?v=74&api_v=5">');
+            document.write('<link rel="stylesheet" href="css/style.css?v=75&api_v=6">');
         }
     })();
     </script>
 </head>
-<body class="gd-logged-out" data-api-v="5">
+<body class="gd-logged-out" data-api-v="6">
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
@@ -48,7 +48,10 @@
 
             <div class="login-form">
                 <label for="token-input"><span data-i18n="login.tokenLabel">GitHub Personal Access Token</span></label>
-                <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+                <div class="gd-token-wrap">
+                    <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+                    <button type="button" class="gd-token-eye" id="token-eye" aria-label="Show/Hide" title="显示/隐藏">👁</button>
+                </div>
                 <p class="token-hint"><span data-i18n="login.tokenHint">需要</span> <code>repo</code> <span data-i18n="login.and">和</span> <code>workflow</code> <span data-i18n="login.permission">权限</span></p>
                 <button id="enter-drive-btn" type="button"><span data-i18n="login.enter">Enter Drive</span></button>
                 <div id="saved-accounts" class="saved-accounts" style="display:none;margin:16px 0;">
@@ -81,6 +84,12 @@
     // 桥接脚本是同步 document.write 加载的，DOMContentLoaded 时必然已就绪。
     (function() {
         function setup() {
+            // ★ 默认不显示仓鼠联动（用户要求）。
+            //   只有当设置里明确打开时才启用 —— 存 gd_bridge_enabled === '1'。
+            //   没开就直接返回，连 Bridge 都不去碰。
+            try {
+                if (localStorage.getItem('gd_bridge_enabled') !== '1') return;
+            } catch (e) { return; }
             var B = window.Bridge;
             if (!B || !B.other || !B.other() || !B.otherHasToken()) return;
             var box = document.getElementById('bridge-box');
@@ -115,6 +124,21 @@
         } else {
             setup();
         }
+    })();
+    </script>
+    <script>
+    // 令牌显示/隐藏
+    (function() {
+        var eye = document.getElementById('token-eye');
+        var inp = document.getElementById('token-input');
+        if (!eye || !inp) return;
+        eye.addEventListener('click', function() {
+            var show = inp.type === 'password';
+            inp.type = show ? 'text' : 'password';
+            eye.textContent = show ? '🙈' : '👁';
+            // 切完把光标放回末尾，否则会从开头输入
+            try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+        });
     })();
     </script>
     <script>
@@ -282,8 +306,8 @@
     // 根据分支动态加载 JS
     (function() {
         var base = window.__BRANCH_BASE__ || '';
-        var v = window.__BRANCH_BASE__ ? '' : '?v=74&api_v=5';
-        var files = ['bridge', 'icons', 'github-api', 'cangshu-link', 'storage', 'maintain', 'file-manager', 'share', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'anim', 'gesture', 'custom', 'app'];
+        var v = window.__BRANCH_BASE__ ? '' : '?v=75&api_v=6';
+        var files = ['bridge', 'icons', 'github-api', 'cangshu-link', 'storage', 'maintain', 'file-manager', 'share', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'anim', 'gesture', 'custom', 'theme', 'i18n-scan', 'plugin-api', 'app'];
         files.forEach(function(f) {
             document.write('<script src="' + base + 'js/' + f + '.js' + v + '"><\/script>');
         });
