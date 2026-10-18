@@ -1484,6 +1484,58 @@ class UI {
                 window.GdCustom.bindLook(host);
             }
         } catch (e) { /* 设置页不能因为外观控件挂掉 */ }
+        this._renderForeignSection(fileList);
+    }
+
+    /**
+     * ★ 跨账号残留清理入口（v0.0.83）
+     *
+     * VFS 里可能留着旧账号的文件索引（切号、迁移没清干净的结果）。
+     * 它们看得见、点得动，但一操作就拿当前 token 去打别人的仓库 → 401。
+     *
+     * 这里只删【本地索引】，不动远端文件 —— 文件实体仍在原账号的仓库里。
+     * 之所以不自动清：用户看到"我的文件消失"会以为数据丢了，
+     * 而这实际上只是把不属于本账号的指针摘掉。
+     */
+    async _renderForeignSection(fileList) {
+        try {
+            const fm = this.app?.fileManager;
+            if (!fm?.scanForeignFiles) return;
+            const { me, foreign } = await fm.scanForeignFiles();
+            if (!me || !foreign.length) return;
+
+            const owners = [...new Set(foreign.flatMap(f => f.owners))].join('、');
+            const card = document.createElement('div');
+            card.style.cssText =
+                'margin-top:20px;padding:14px 16px;border-radius:12px;' +
+                'border:1px solid var(--border-color,#d0d7de);background:var(--bg-secondary,#f6f8fa);';
+            card.innerHTML =
+                '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">'
+              + '⚠️ 跨账号残留 ' + foreign.length + ' 项</div>'
+              + '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px;">'
+              + '这些文件属于 <b>' + owners + '</b>，当前登录的是 <b>' + me + '</b>。<br>'
+              + '它们能看见但打不开也删不掉 —— 操作会拿当前令牌去访问别人的仓库，必然失败。<br>'
+              + '清理只会移除本机的索引，<b>不会删除 ' + owners + ' 仓库里的实际文件</b>。'
+              + '</div>'
+              + '<button id="gd-purge-foreign" style="padding:7px 14px;border-radius:8px;border:none;'
+              + 'background:#cf222e;color:#fff;font-size:13px;cursor:pointer;">清理这些索引</button>'
+              + '<span id="gd-purge-msg" style="margin-left:10px;font-size:12px;color:var(--text-secondary);"></span>';
+            fileList.firstChild?.appendChild(card);
+
+            card.querySelector('#gd-purge-foreign').addEventListener('click', async () => {
+                const msg = card.querySelector('#gd-purge-msg');
+                if (!confirm('将移除 ' + foreign.length + ' 项索引（不影响远端文件）。确定继续？')) return;
+                try {
+                    const r = await fm.purgeForeignFiles();
+                    msg.textContent = '已清理 ' + r.removed + ' 项，正在刷新…';
+                    setTimeout(() => { this.app.loadFiles(); }, 600);
+                } catch (e) {
+                    msg.textContent = '清理失败: ' + e.message;
+                }
+            });
+        } catch (e) {
+            console.warn('[UI] 跨账号残留区块渲染失败:', e.message);
+        }
     }
 
     /**
