@@ -332,13 +332,47 @@ class App {
             const files = await this.fileManager.listFiles();
             this.currentFiles = files;
             this.ui.renderFileList(files);
+            // ★ 跨账号残留提示（v0.0.83）
+            //
+            //   这些条目是旧账号留在本地 VFS 里的索引，文件实体在别人仓库里，
+            //   打开/删除都会用当前 token 去打别人的仓 → 401。
+            //   不提示的话用户只会以为「token 坏了」，于是反复重申请令牌。
+            this._warnForeignFiles();
         } catch (e) {
             this.ui.showToast('加载文件失败: ' + e.message, 'error');
             document.getElementById('loading-state')?.classList.add('hidden');
         }
     }
 
-    async navigateTo(path) { 
+    /**
+     * ★ 跨账号残留提示（v0.0.83）
+     *
+     * 只提示、不自动删。这些条目背后的文件实体真实存在（在旧账号的仓库里），
+     * 一键清掉等于「我的文件凭空消失」。所以先告诉用户「是什么、为什么」，
+     * 清理动作由用户自己点。
+     */
+    async _warnForeignFiles() {
+        try {
+            if (!this.fileManager?.scanForeignFiles) return;
+            if (this._foreignWarned) return;
+            const { me, foreign } = await this.fileManager.scanForeignFiles();
+            if (!me || !foreign.length) return;
+            this._foreignWarned = true;
+
+            const owners = [...new Set(foreign.flatMap(f => f.owners))].join('、');
+            const names = foreign.slice(0, 3).map(f => f.name).join('、');
+            const more = foreign.length > 3 ? ` 等 ${foreign.length} 项` : '';
+            this.ui.showToast(
+                `有 ${foreign.length} 项属于 ${owners}（如 ${names}${more}），` +
+                `当前账号是 ${me}，打不开也删不掉。到设置 → 清理跨账号残留 可移除这些索引。`,
+                'warning', 12000);
+        } catch (e) {
+            // 扫描失败绝不能影响正常加载 —— 它不是主流程的一部分
+            console.warn('[App] 跨账号残留扫描失败:', e.message);
+        }
+    }
+
+    async navigateTo(path) {
         this.fileManager.setCurrentPath(path); 
         this.saveLastState();
         await this.loadFiles(); 
