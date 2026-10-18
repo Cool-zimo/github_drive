@@ -3248,7 +3248,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --stamp: "75"; --api-stamp: "6"; }
+#gd-css-stamp { --stamp: "76"; --api-stamp: "7"; }
 
 /* ==================================================================
    动画打磨
@@ -3602,6 +3602,39 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 }
 .gd-ctx-slider input { flex: 1; }
 .gd-ctx-slider span { min-width: 44px; text-align: right; color: var(--text-secondary, #6b7280); }
+
+/* 侧边栏拖拽把手：按住右边缘直接改宽度，不用去菜单里输数字。
+   8px 足够手指/鼠标命中，视觉上默认完全透明，hover 才显一条线。 */
+.gd-sb-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    z-index: 20;
+    background: transparent;
+    touch-action: none;      /* 触屏上不要让浏览器把手势吃成滚动 */
+}
+.gd-sb-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    transition: background .15s ease;
+}
+.gd-sb-resizer:hover::after,
+.gd-sb-resizer.is-dragging::after {
+    background: var(--accent-primary, #6366f1);
+}
+/* 移动端右边缘要留给「右滑唤出抽屉」手势，拖把会抢掉触摸，
+   而且手机上侧边栏是全屏抽屉，改宽度没意义 —— 直接不渲染。 */
+@media (max-width: 768px) {
+    .gd-sb-resizer { display: none; }
+}
 
 /* ---------- 16.7 自定义：外观变量 ----------
    ★ 三个变量只作用于内容与侧边栏，不作用在 html 上。

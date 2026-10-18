@@ -215,7 +215,131 @@
         '正在检查': 'Checking', '检查完成': 'Check complete',
         '发现问题': 'Issues found', '一切正常': 'All good',
         '修复': 'Fix', '一键修复': 'One-click fix',
-        '扫描': 'Scan', '扫描中': 'Scanning'
+        '扫描': 'Scan', '扫描中': 'Scanning',
+
+        /* ---- 补充：设置页正文（这些是硬编码长句，词典里没有就整句留中文，
+                 是"换英文后一大堆没翻译"的重灾区）---- */
+        '切换深色/浅色主题': 'Switch between dark and light theme',
+        '界面自定义': 'Customize UI',
+        '侧边栏/顶栏右键可勾选显示项，这里调主题与字号': 'Right-click the sidebar or top bar to toggle items; themes and font size are here',
+        '仓鼠联动': 'Cangshu Link',
+        '默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」': 'Off by default · when on, the login page offers "Use Cangshu account"',
+        '逐仓用量、新建仓库、校准容量登记、整理合并': 'Per-repo usage, create repos, calibrate usage, consolidate',
+        '后台自动填满仓库、删除腾空的仓': 'Auto-fill repos in the background and delete emptied ones',
+        '按文件类型自动整理到文件夹': 'Sort files into folders by type',
+        '查看快捷键和使用提示': 'View shortcuts and usage tips',
+        '体验他人改进的版本': 'Try builds improved by others',
+        '导出所有配置为 JSON 文件': 'Export all settings as a JSON file',
+        '清除 Token 返回登录页': 'Clear the token and return to login',
+        '内容搜索已开启：搜索时也会匹配文本文件内容（更慢）': 'Content search on: also matches text file contents (slower)',
+        '内容搜索已关闭：只匹配文件名': 'Content search off: matches file names only',
+        '满足条件时后台自动执行': 'Runs in the background when conditions are met',
+        '自动删除腾空的仓': 'Auto-delete emptied repos',
+        '会删除': 'Will delete',
+        '保留': 'Keep',
+        '手动触发': 'Run now',
+        '贴边显示': 'Dock to edge',
+        '它们都跑这儿来了': 'They all ended up here',
+        '已开启仓鼠联动，刷新登录页后生效': 'Cangshu link is on — refresh the login page to apply',
+        '已关闭仓鼠联动': 'Cangshu link is off',
+
+        /* ---- 补充：存储与仓库 ---- */
+        '存储满了': 'Storage full',
+        '容量已满': 'Capacity full',
+        '校准用量': 'Calibrate usage',
+        '切分阈值': 'Split threshold',
+        '存储仓库管理': 'Storage Repos',
+        '存储用量统计': 'Storage Usage',
+        '创建存储仓库': 'Create storage repo',
+        '仓库描述': 'Repo description',
+        '已拆分存储': 'Split across repos',
+        '获取仓库体积失败': 'Failed to get repo size',
+        '仓库满了传不进去': 'Repo is full, upload rejected',
+        '将永久删除': 'will be permanently deleted',
+        '个孤儿分片，释放': 'orphan chunks, freeing',
+        '无需清理': 'Nothing to clean',
+        '选仓库和': 'Pick a repo and',
+        '校准用量登记': 'Calibrate usage',
+
+        /* ---- 补充：账号 ---- */
+        '移除账号': 'Remove account',
+        '确定要移除这个账号吗？': 'Remove this account?',
+        '请输入 Token': 'Please enter your token',
+        '项已选': 'selected',
+        '开始下载': 'Start download',
+        '确定删除选中的': 'Delete the selected',
+        '个文件吗？': 'files?',
+        '移动到…': 'Move to…',
+        '复制到…': 'Copy to…',
+        '编辑文件': 'Edit file',
+        '标签管理': 'Manage tags',
+        '版本历史': 'Version history',
+        '取消收藏': 'Remove from favorites',
+        '文件夹导航': 'Folder tree',
+        '高级筛选': 'Advanced filter',
+        '留空则不过滤': 'Leave empty to skip filtering',
+        '没有匹配的文件': 'No matching files',
+        '输入文件夹名称': 'Enter a folder name',
+        '在线编辑器': 'Online editor',
+        '扫描中…': 'Scanning…',
+        '重新扫描': 'Rescan',
+        '确认请输入数字': 'Please enter a number',
+        '数据还没加载完': 'Data is still loading',
+        '没有成功复制任何文件': 'No files were copied',
+        '只增不删，不会覆盖现有文件。继续？': 'Add-only: existing files are never overwritten. Continue?',
+        '跳过（已存在）': 'Skipped (already exists)',
+        '忽略（隐藏文件/空名）': 'Ignored (hidden file / empty name)',
+        '已跳过（同名）': 'Skipped (same name)',
+        '已跳过': 'Skipped',
+        '恢复到 _recovered': 'Restore to _recovered',
+
+        /* ---- 补充：后端服务 ---- */
+        '后端服务管理': 'Backend Service',
+        '后端服务设置': 'Backend Settings',
+        '未知（旧版后端）': 'Unknown (legacy backend)',
+        '加速源': 'Mirror',
+        '下载后端服务': 'Downloading backend',
+        '服务异常': 'Service error',
+        '无法连接': 'Cannot connect',
+        '检查更新失败': 'Failed to check for updates',
+        '已切换到暗色模式': 'Switched to dark mode',
+        '已切换到浅色模式': 'Switched to light mode',
+
+        /* ---- 补充：插件 ---- */
+        '插件在移动端不可用（无法下载插件后端）': 'Plugins are unavailable on mobile (backend cannot be downloaded)',
+        '正在安装': 'Installing',
+        '安装成功': 'Installed',
+        '安装失败': 'Install failed',
+        '收起到侧边': 'Minimize to sidebar',
+        '收进后台进程': 'Send to background',
+        '运行中的插件': 'Running plugins',
+        '下载不了插件后端': 'Cannot download the plugin backend',
+
+        /* ---- 补充：版本广场 ---- */
+        '官方版 (main)': 'Official (main)',
+        '搜索版本 / 作者': 'Search version / author',
+        '版本广场': 'Version Hub',
+        '没有匹配的版本': 'No matching version',
+        '已经是当前版本了': 'Already on this version',
+        '正在检测「': 'Checking 「',
+        '」能否加载…': '」 can be loaded…',
+        '已切换到': 'Switched to',
+        '，正在刷新…': ', reloading…',
+
+        /* ---- 补充：失败提示（带冒号前缀的一律照翻，别让整句留中文）---- */
+        '删除失败': 'Delete failed',
+        '上传失败': 'Upload failed',
+        '下载失败': 'Download failed',
+        '恢复失败': 'Restore failed',
+        '移动失败': 'Move failed',
+        '创建失败': 'Create failed',
+        '未知错误': 'Unknown error',
+        '搜索时同时匹配文件内容': 'Also match file contents when searching',
+        '内容': 'Contents',
+        '匹配': 'Match',
+        '同时': 'Also',
+        '已开启': 'On',
+        '已关闭': 'Off'
     };
 
     /* 长键优先：否则"文件"会先把"文件名"切碎 */
@@ -280,14 +404,46 @@
         }
     }
 
+    /* ---------------------------------------------------------------
+       裸键清洗：界面上露出 "settings.groupedHint" 这种原始 i18n 键名，
+       是 I18n.t() 找不到键时原样返回造成的。
+       判据很严：只有「纯 ASCII 点分串」且「确实能在词典里查到这个键」
+       才认定它是漏翻的键 —— 文件名 app.js、域名 example.com、
+       版本号 v0.0.76 都查不到，因此绝不会被误伤。
+       --------------------------------------------------------------- */
+    function cleanBareKeys(scope) {
+        if (!root.I18n || !root.I18n.translations) return;
+        var cur = (root.I18n.current || '').toLowerCase().indexOf('en') === 0;
+        var en = root.I18n.translations['en'] || {};
+        var zh = root.I18n.translations['zh-CN'] || {};
+        var tw = document.createTreeWalker(
+            scope || document.body,
+            root.NodeFilter ? root.NodeFilter.SHOW_TEXT : 4, null, false
+        );
+        var n, list = [];
+        while ((n = tw.nextNode())) list.push(n);
+        for (var i = 0; i < list.length; i++) {
+            var node = list[i];
+            var v = (node.nodeValue || '').trim();
+            if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(v)) continue;
+            if (isProtected(node.parentElement)) continue;
+            var repl = cur ? (en[v] || zh[v]) : (zh[v] || en[v]);
+            if (repl == null || repl === '') continue;
+            if (node.__gdSrc == null) node.__gdSrc = node.nodeValue;
+            node.nodeValue = repl;
+            node.__gdEn = repl;
+        }
+    }
+
     function apply() {
+        cleanBareKeys(document.body);
         if (!_on) return;
         walk(document.body);
         // 常见动态区再单独走一遍（它们是 innerHTML 重渲染的）
         var ids = ['file-list', 'task-list', 'settings-view', 'login-screen'];
         for (var i = 0; i < ids.length; i++) {
             var el = document.getElementById(ids[i]);
-            if (el) walk(el);
+            if (el) { cleanBareKeys(el); walk(el); }
         }
     }
 

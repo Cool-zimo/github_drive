@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.js?v=75&api_v=6"></script>
+    <script src="js/branch-guard.min.js?v=76&api_v=6"></script>
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
     (function() {
@@ -33,7 +33,7 @@
             // CSS 从 CDN 加载
             document.write('<link rel="stylesheet" href="' + baseUrl + 'css/style.css">');
         } else {
-            document.write('<link rel="stylesheet" href="css/style.css?v=75&api_v=6">');
+            document.write('<link rel="stylesheet" href="css/style.min.css?v=76&api_v=6">');
         }
     })();
     </script>
@@ -304,13 +304,51 @@
 
     <script>
     // 根据分支动态加载 JS
+    //
+    // ★ 分两组：
+    //   CORE   —— 首屏（登录页）就需要的，同步加载。
+    //   DEFER  —— 只有登录后才用得到，等验证完 token 再加载，
+    //             让"打开页面到能点登录"这段时间尽量短。
+    //             登录本身要发请求验证 token，那点时间足够把这几个拉下来。
     (function() {
         var base = window.__BRANCH_BASE__ || '';
-        var v = window.__BRANCH_BASE__ ? '' : '?v=75&api_v=6';
-        var files = ['bridge', 'icons', 'github-api', 'cangshu-link', 'storage', 'maintain', 'file-manager', 'share', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'anim', 'gesture', 'custom', 'theme', 'i18n-scan', 'plugin-api', 'app'];
-        files.forEach(function(f) {
-            document.write('<script src="' + base + 'js/' + f + '.js' + v + '"><\/script>');
+        var CORE = ['icons', 'github-api', 'storage', 'file-manager', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'anim', 'gesture', 'custom', 'theme', 'i18n-scan', 'app'];
+        var DEFER = ['bridge', 'cangshu-link', 'maintain', 'share', 'plugin-api'];
+        // ★ 由 build.py 生成：每个文件的内容 hash。
+        //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
+        var GD_HASH = {
+            anim: 'd823f0bce1',
+            app: 'f59570579f',
+            branch-guard: '2a17031683',
+            bridge: '5cd1cbc1ce',
+            cangshu-link: 'd87df4f3cb',
+            config-sync: '7cbbcc1ecd',
+            custom: '7f8b7f7807',
+            extension: 'ac2832ce10',
+            file-manager: '6d3d9fdb9e',
+            gesture: '4896dd831d',
+            github-api: '389e7c20c9',
+            i18n: '7ea34c4dda',
+            i18n-scan: '04ab5f83ac',
+            icons: 'ec755c29b9',
+            maintain: 'b10def0baf',
+            plugin-api: 'ad584338e1',
+            share: '27afaa1375',
+            storage: 'e360e26265',
+            task-dock: 'b85747e5e4',
+            theme: '89aafc792a',
+            ui: '2a852b92c2',
+            version: '8de8975ee1'
+        };
+        function url(f) {
+            // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
+            if (base) return base + 'js/' + f + '.js';
+            return 'js/' + f + '.min.js?h=' + (GD_HASH[f] || '0');
+        }
+        CORE.forEach(function(f) {
+            document.write('<script src="' + url(f) + '"><\/script>');
         });
+        window.__GD_DEFER__ = { files: DEFER, url: url };
     })();
     </script>
     <!-- 统一<span data-i18n="btn.upload">Upload</span>弹窗 -->

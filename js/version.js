@@ -1,7 +1,7 @@
 const APP_VERSION = {
-    internalVersion: '75',
-    formalVersion: '0.0.75',
-    displayVersion: 'v0.0.75',
+    internalVersion: '76',
+    formalVersion: '0.0.76',
+    displayVersion: 'v0.0.76',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
@@ -19,10 +19,15 @@ const APP_VERSION = {
     //        theme.js 依赖 CSS 里 [data-gd-force="title"] 等规则，
     //        老 CSS 没有 → 打了标记也不生效，暗色下标题依旧看不清。
     //
+    //   = 7：侧边栏右边缘新增拖拽把手 div.gd-sb-resizer（由 js/custom.js
+    //        动态插入）。老 CSS 没有这条规则 → 把手没有尺寸和 col-resize
+    //        光标，表现为「右边缘拖不动」。同时 js/i18n.js 的 t(key, fallback)
+    //        新增第二参数，i18n-scan 新增裸键清洗 —— 这两处 CSS 无依赖。
+    //
     //   = 5：动画行为层 js/anim.js 上线。JS 会往按钮里注入
     //        <span class="gd-ripple"> 并给宿主加 .gd-ripple-host，
     //        同时给仪表盘加 .dash-card / .dash-num[data-count]。
     //        老 CSS 没有 gd-ripple 规则 → 涟漪会是一个不透明的实心色块
     //        盖在按钮上；没有 dash-card → 仪表盘卡片没有入场动画。
-    apiVersion: '6'
+    apiVersion: '7'
 };

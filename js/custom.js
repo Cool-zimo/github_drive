@@ -228,7 +228,7 @@
         });
 
         items.push({
-            label: '↔ 宽度：' + cfg.width + 'px',
+            label: '↔ 宽度 ' + cfg.width + 'px（可直接拖右边缘）',
             keep: true,
             run: function () { widthMenu(x, y); }
         });
@@ -297,6 +297,67 @@
         m.appendChild(wrap);
     }
 
+    /* ---------------------------------------------------------------
+       直接拖侧边栏右边缘改宽度
+       ---------------------------------------------------------------
+       用户原话："调宽度难道不是直接拖动吗，为啥要输数字。"
+       之前只能右键 → 点「宽度」→ 弹滑块，三步才能改一个数。
+       现在右边缘常驻一条 8px 热区，按住就拖，双击复位。
+
+       ★ 为什么用「起点 + 总位移」而不是「当前值 + 增量」：
+         pointermove 的触发频率不固定，累加增量会随事件密度漂移，
+         拖久了实际宽度和手的位置对不上。记起点则永远精确。
+       --------------------------------------------------------------- */
+    var MIN_W = 200, MAX_W = 420, DEF_W = 260;
+
+    function installResizer() {
+        var sb = document.querySelector('.sidebar');
+        if (!sb) return;
+        if (sb.querySelector('.gd-sb-resizer')) return;
+
+        var bar = document.createElement('div');
+        bar.className = 'gd-sb-resizer';
+        bar.title = '拖动调整宽度（双击复位）';
+
+        var startX = 0, startW = 0, dragging = false;
+
+        function clamp(v) {
+            return Math.max(MIN_W, Math.min(MAX_W, Math.round(v / 4) * 4));
+        }
+        function setW(w) {
+            cfg.width = w;
+            sb.style.width = w + 'px';
+            try { document.documentElement.style.setProperty('--sidebar-width', w + 'px'); } catch (e) {}
+        }
+
+        bar.addEventListener('pointerdown', function (e) {
+            if (e.button != null && e.button !== 0) return;
+            dragging = true;
+            startX = e.clientX;
+            startW = sb.getBoundingClientRect().width;
+            bar.classList.add('is-dragging');
+            try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        bar.addEventListener('pointermove', function (e) {
+            if (!dragging) return;
+            setW(clamp(startW + (e.clientX - startX)));
+        });
+        function endDrag() {
+            if (!dragging) return;
+            dragging = false;
+            bar.classList.remove('is-dragging');
+            save();
+        }
+        bar.addEventListener('pointerup', endDrag);
+        bar.addEventListener('pointercancel', endDrag);
+        bar.addEventListener('lostpointercapture', endDrag);
+        bar.addEventListener('dblclick', function () { setW(DEF_W); save(); });
+
+        sb.appendChild(bar);
+    }
+
     /* ---------- 顶栏右键 ---------- */
     function barMenu(x, y) {
         var items = BAR_DEF.map(function (b) {
@@ -361,6 +422,7 @@
 
         var sb = document.querySelector('.sidebar');
         if (sb) {
+            installResizer();
             sb.addEventListener('contextmenu', function (e) {
                 e.preventDefault(); sidebarMenu(e.clientX, e.clientY);
             });

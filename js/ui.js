@@ -1396,7 +1396,6 @@ class UI {
                 title: '关于与账号',
                 items: [
                     {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
-                    {icon:'📖', title:I18n.t('settings.docs'), desc:I18n.t('settings.docsDesc'), action:"window.open('https://cool-zimo.github.io/github_drive_documentation/','_blank');"},
                     {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
                     {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
                     {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
@@ -1464,7 +1463,7 @@ class UI {
           +   '<h2 style="font-size:20px;font-weight:700;margin:0 0 4px;color:var(--text-primary);">'
           +   (I18n.t('settings.title') || '设置').replace(/^[\u2190-\uFFEF\u2600-\u27BF\s]+/, '') + '</h2>'
           +   '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:18px;">'
-          +   (I18n.t('settings.groupedHint') || '设置项已按用途分组') + '</div>'
+          +   (I18n.t('settings.groupedHint', '设置项已按用途分组')) + '</div>'
           +   this._settingsGroups()
           + '</div>';
         // 外观控件由 GdCustom 提供；模块没加载就跳过，不能让设置页开不了

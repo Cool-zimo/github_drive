@@ -92,7 +92,10 @@ class App {
         try {
             this.ui?.showToast(I18n.t('login.validating'), 'info');
             this.api = new GitHubAPI(token);
+            // 趁验证 token 的网络往返把非首屏模块拉下来，两边并行
+            const deferP = this.loadDeferred();
             const user = await this.api.getMe();
+            await deferP;
             this.storage.setToken(token);
             this.storage.setUser(user);
             this.storage.addAccount(token, user);
@@ -142,7 +145,48 @@ class App {
         });
     }
 
+    /**
+     * 加载非首屏模块（bridge / cangshu-link / maintain / share / plugin-api）。
+     *
+     * 这五个只有登录后才用得到，却占了约 141KB 源码。首屏（登录页）不加载它们，
+     * 打开页面的等待时间能短一截。
+     *
+     * ★ 串行插入而不是并行：script 标签并发插入时执行顺序不保证，
+     *   而这几个模块之间有隐式依赖（share 用到 github-api 的实例方法等）。
+     *   串行最多多花几个 RTT，且这段时间正好被 token 验证的网络请求盖住。
+     *
+     * ★ 单个失败只 warn 不 reject：启动流程不能因为一个可选模块 404 就卡死。
+     *   幂等 —— 重复调用返回同一个 Promise。
+     */
+    loadDeferred() {
+        if (this._deferPromise) return this._deferPromise;
+        const d = window.__GD_DEFER__;
+        if (!d || !d.files || !d.files.length) {
+            return (this._deferPromise = Promise.resolve());
+        }
+        this._deferPromise = new Promise((resolve) => {
+            let i = 0;
+            const next = () => {
+                if (i >= d.files.length) return resolve();
+                const name = d.files[i++];
+                const s = document.createElement('script');
+                s.src = d.url(name);
+                s.onload = next;
+                s.onerror = () => {
+                    console.warn('[defer] 模块加载失败，已跳过:', name);
+                    next();
+                };
+                document.head.appendChild(s);
+            };
+            next();
+        });
+        return this._deferPromise;
+    }
+
     async initializeWithToken(token) {
+        // 进入主界面前把非首屏模块补齐。login() 路径下这里通常已经完成了，
+        // 因为那边是和 token 验证并行启动的。
+        await this.loadDeferred();
         this.mountBridgeButton();
         if (!this.api) this.api = new GitHubAPI(token);
         // 设置限流警告回调
