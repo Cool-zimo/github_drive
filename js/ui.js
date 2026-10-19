@@ -1375,7 +1375,7 @@ class UI {
                 title: '外观',
                 items: [
                     {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
-                    {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
+                    {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.toggle();ui.closeModal();'},
                     {icon:'🎨', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
                      action:'ui.closeModal();ui.showLookPanel();'},
                     {icon:'🔗', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
@@ -2660,8 +2660,26 @@ class UI {
         } catch (e) { /* 清单拿不到就只用 API 结果 */ }
 
         const meta = new Map();
+        // ★★ 清单里的分支名同样要过 _safeBranch —— 这一处曾经漏掉。
+        //
+        //   preview-branches.json 是任何人提 PR 都能改的文件（见
+        //   test_plaza_xss）。API 那条路径早就过滤了，唯独清单这条
+        //   只判了 typeof === 'string' 就 set 进 meta，于是恶意分支名
+        //   绕过白名单直接进列表。
+        //
+        //   loadVersion/switchBranch 都有校验（点到会被拦），所以不是
+        //   注入漏洞；但一个带引号和 // 的怪分支名出现在列表里，用户
+        //   会当成真版本去点 —— 过滤比转义更靠前一步。
+        //
+        //   ★ 更要紧的是这处修复被上游同步覆盖过一次：v79 修好 → v83~v87
+        //     的 ui.js 直接覆盖文件 → 漏洞悄悄回来。test_plaza_xss 那两条
+        //     断言就是防这个的，同步后跑测试能立刻发现。
         for (const b of (manifest.branches || [])) {
-            if (b && typeof b.branch === 'string') meta.set(b.branch, b);
+            if (b && typeof b.branch === 'string') {
+                const sb = this._safeBranch(b.branch);
+                if (!sb) continue;
+                meta.set(sb, b);
+            }
         }
 
         // ── 用 API 列出真实存在的 preview/* 分支 ──
