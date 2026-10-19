@@ -487,24 +487,46 @@
 
     root.GdI18nScan = api;
 
-    /* 跟随 I18n.toggle()：它在切中英文，我们跟着开/关 */
+    /* ---------------------------------------------------------------
+       跟随语言切换（v0.0.88）
+       ---------------------------------------------------------------
+       ★ 原来是 hook I18n.toggle()，但设置项的入口已改成 I18n.pick()，
+         而 pick() 走的是 setLang —— 于是扫描器根本不跟随，切完语言
+         硬编码文案纹丝不动。改成 hook setLang 才覆盖所有入口。
+
+       ★ 只在英文下开启，这一点是刻意的：
+         DICT 是「中文 → 英文」词典，只有英文有完整覆盖。
+         如果切到法语/俄语/阿拉伯语时也开着，界面上的硬编码中文会被
+         翻成【英文】—— 用户明明选了法语却看到英文，比留着中文更糟。
+
+         所以非英文一律关闭：那些硬编码文案保持中文。
+         这是诚实的取舍 —— 宁可留一句中文，也不给用户看错的语言。
+         走 I18n.t() 的 335 个键六种语言都已翻译，不受影响。
+       --------------------------------------------------------------- */
+    function shouldBeOn() {
+        return ((root.I18n && root.I18n.current) || '').toLowerCase().indexOf('en') === 0;
+    }
+
+    function sync() {
+        var on = shouldBeOn();
+        if (on) { _on = true; apply(); observe(); }
+        else { api.setEnabled(false); }
+    }
+
     function hook() {
-        if (root.I18n && root.I18n.toggle && !root.I18n.__gdScanHooked) {
-            var orig = root.I18n.toggle.bind(root.I18n);
-            root.I18n.toggle = function () {
-                var r = orig();
-                var en = (root.I18n.current || '').toLowerCase().indexOf('en') === 0;
-                setTimeout(function () { api.setEnabled(en); }, 30);
-                return r;
-            };
-            root.I18n.__gdScanHooked = true;
-        }
+        if (!root.I18n || !root.I18n.setLang || root.I18n.__gdScanHooked) return;
+        var orig = root.I18n.setLang.bind(root.I18n);
+        root.I18n.setLang = function (lang) {
+            var r = orig(lang);
+            setTimeout(sync, 30);
+            return r;
+        };
+        root.I18n.__gdScanHooked = true;
     }
 
     function init() {
         hook();
-        var cur = (root.I18n && root.I18n.current) || '';
-        if (cur.toLowerCase().indexOf('en') === 0) { _on = true; apply(); observe(); }
+        sync();
     }
 
     if (document.readyState === 'loading') {
