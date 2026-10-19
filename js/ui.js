@@ -1527,7 +1527,10 @@ class UI {
                 if (!confirm('将移除 ' + foreign.length + ' 项索引（不影响远端文件）。确定继续？')) return;
                 try {
                     const r = await fm.purgeForeignFiles();
-                    msg.textContent = '已清理 ' + r.removed + ' 项，正在刷新…';
+                    msg.textContent = '已清理 ' + r.removed + ' 项，正在同步…';
+                    // ★ 必须推到远端。远端 config.json 里也存着这些索引，
+                    //   只清本地的话刷新一次就从远端原样恢复了 —— 白清。
+                    try { await this.app.configSync?.pushConfig?.(); } catch (e) { /* 稍后自动同步 */ }
                     setTimeout(() => { this.app.loadFiles(); }, 600);
                 } catch (e) {
                     msg.textContent = '清理失败: ' + e.message;
