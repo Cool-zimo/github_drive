@@ -96,13 +96,56 @@
         }
     }
 
-    /* ---------- 3. 视图切换淡入 ---------- */
+    /* ---------- 3. 视图切换：可打断的滑入 ----------
+       旧写法是 remove → 强制回流 → add，本质上是「重播 animation」。
+       animation 不可打断，快速连续切目录时每次都从头播，观感就是连续闪。
+
+       现在改成 transition：
+         1) 先关掉过渡，把容器瞬间摆到初态（左移 + 透明）
+         2) 交还过渡，下一帧摘掉 class —— 于是从初态平滑滑回常态
+       transition 天然可打断：中途再次触发，会从当前位置接着走，不跳回起点。 */
+    function withWill(el, ms) {
+        if (REDUCED || !el) return;
+        el.classList.add('gd-will');
+        clearTimeout(el.__gdWillT);
+        // ★ 用完必须摘掉：will-change 常驻会占显存，几百个格子会吃爆内存
+        el.__gdWillT = setTimeout(function () {
+            el.classList.remove('gd-will');
+        }, ms);
+    }
+
     function replayViewIn() {
         var area = document.querySelector('.file-area');
         if (!area || REDUCED) return;
-        area.classList.remove('is-switching');
-        void area.offsetWidth;          // 强制回流，否则同名动画不会重播
+
+        /* ★ 为什么不用「加 class → 强制回流 → 删 class」
+           试过：void offsetWidth 只触发重排，并不提交渲染帧。浏览器把
+           「加到 0」和「删回 1」合并进同一帧，初态根本没被渲染过 ——
+           实测采样 14 帧全是 1，过渡完全没跑。
+           改用 Web Animations API，它由浏览器自己排帧，初态一定会被画出来。 */
+        if (area.animate) {
+            /* ★ 正在跑就不重启。快速连续切目录时，每次都从头播一滑动
+               才是"不丝滑"的真正来源 —— 让它播完，中途的新内容自然接上。 */
+            var prev = area.__gdViewAnim;
+            if (prev && prev.playState === 'running') return;
+            if (prev) { try { prev.cancel(); } catch (e) { /* 已结束，忽略 */ } }
+            withWill(area, 320);
+            area.__gdViewAnim = area.animate(
+                [{ opacity: 0, transform: 'translateX(-10px)' },
+                 { opacity: 1, transform: 'none' }],
+                { duration: 200, easing: 'cubic-bezier(0, 0, .2, 1)' }
+            );
+            return;
+        }
+
+        // 退化路径（老浏览器）：初态必须读 computed 才会真正解析，
+        // 读 offsetWidth 不够 —— 它只重排，不算样式。
+        area.style.transition = 'none';
         area.classList.add('is-switching');
+        void getComputedStyle(area).opacity;
+        area.style.transition = '';
+        area.classList.remove('is-switching');
+        withWill(area, 320);
     }
 
     /* ---------- 4. 滚动时工具栏浮起 ---------- */
@@ -136,6 +179,12 @@
 
     /* ---------- 挂载 ---------- */
     function init() {
+        /* ★ 初态门禁：CSS 里 .file-area 的入场初态只写在 .gd-anim-ready 之下。
+           这个 class 由本文件添加 —— 万一 anim.js 没加载成功，容器就是普通
+           可见状态，绝不会因为动画把内容锁在 opacity:0 上变成白屏。
+           （教训：数字滚动那次就定过「静态值兜底，动画只是锦上添花」。） */
+        if (!REDUCED && document.body) document.body.classList.add('gd-anim-ready');
+
         document.addEventListener('pointerdown', spawnRipple, true);
         bindScrollShadow();
 
