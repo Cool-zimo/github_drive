@@ -368,12 +368,81 @@
 
     function hasCJK(s) { return /[\u4e00-\u9fa5]/.test(s); }
 
+    /* ---------------------------------------------------------------
+       ★ v0.0.89：反查翻译 —— 让六种语言都能用，而不是只有英文。
+       ---------------------------------------------------------------
+       原来只有「中文 → 英文」一本词典，所以切法语/俄语/西语/阿语时，
+       硬编码的中文一个都翻不了（实测六种语言残留中文都是 60 多条，
+       一模一样）。再手写四本词典不现实，而且以后每加一句又会漏。
+
+       做法：把中文语言包的「值 → 键」倒过来建索引。
+       界面上任何一段中文，只要它等于某个键的中文值，
+       就能用 I18n.t(键) 拿到当前语言的译文 —— 六种语言同时覆盖，
+       插件注册的新语言也自动生效，无需再维护第二本词典。
+
+       ★ 单字（如"关"）只做整节点匹配，不做子串替换：
+         否则"我关了"会被切成"我Off了"。
+       --------------------------------------------------------------- */
+    var REV = null, REV_KEYS = null;
+
+    /* ---------------------------------------------------------------
+       ★ 取 I18n：不能只写 root.I18n。
+         i18n.js 里是 const I18n = {...} —— 顶层 const 是全局词法绑定，
+         **不会**成为 window 的属性。所以 root.I18n 一直是 undefined，
+         hook() 直接 return，扫描器从上线起就没跑过一次。
+         这里用间接 eval 兜住这种情况（它能在全局作用域里看到 const）。
+       --------------------------------------------------------------- */
+    function getI18n() {
+        if (root.I18n) return root.I18n;
+        try { return (0, eval)('I18n') || null; } catch (e) { return null; }
+    }
+
+    function buildRev() {
+        REV = {};
+        var I = getI18n(); var tr = I && I.translations;
+        var zh = (tr && tr['zh-CN']) || {};
+        for (var k in zh) {
+            if (!Object.prototype.hasOwnProperty.call(zh, k)) continue;
+            var v = zh[k];
+            if (typeof v !== 'string' || !v || !hasCJK(v)) continue;
+            if (!(v in REV)) REV[v] = k;
+        }
+        REV_KEYS = Object.keys(REV).sort(function (a, b) { return b.length - a.length; });
+    }
+
+    function isEn() {
+        var I = getI18n();
+        return ((I && I.current) || '').toLowerCase().indexOf('en') === 0;
+    }
+
     function translate(s) {
-        var out = s, hit = false;
-        for (var i = 0; i < KEYS.length; i++) {
-            if (out.indexOf(KEYS[i]) >= 0) {
-                out = out.split(KEYS[i]).join(DICT[KEYS[i]]);
-                hit = true;
+        var out = s, hit = false, i, k, v;
+        var I18N_REF = getI18n();
+        if (REV_KEYS) {
+            /* 多字：子串替换，长键优先 */
+            for (i = 0; i < REV_KEYS.length; i++) {
+                k = REV_KEYS[i];
+                if (k.length < 2) continue;
+                if (out.indexOf(k) < 0) continue;
+                v = I18N_REF ? I18N_REF.t(REV[k], null) : null;
+                if (v && v !== k) { out = out.split(k).join(v); hit = true; }
+            }
+            /* 单字：仅当整个节点就是这个字时才替换 */
+            for (i = 0; i < REV_KEYS.length; i++) {
+                k = REV_KEYS[i];
+                if (k.length >= 2) continue;
+                if (out !== k) continue;
+                v = I18N_REF ? I18N_REF.t(REV[k], null) : null;
+                if (v && v !== k) { out = v; hit = true; }
+            }
+        }
+        /* 英文额外走一遍手写词典（它只到英文，别的语言没有） */
+        if (isEn()) {
+            for (i = 0; i < KEYS.length; i++) {
+                if (out.indexOf(KEYS[i]) >= 0) {
+                    out = out.split(KEYS[i]).join(DICT[KEYS[i]]);
+                    hit = true;
+                }
             }
         }
         return hit ? out : null;
@@ -392,13 +461,17 @@
         for (var i = 0; i < list.length; i++) {
             var node = list[i];
             var v = node.nodeValue;
-            if (!v || !hasCJK(v)) continue;
+            // ★ 必须从"原文"翻译，不能从当前值翻译。
+            //   否则法语切俄语时，当前值已是法语、不含中文，
+            //   hasCJK 判假直接跳过 —— 界面会停在法语不动。
+            var src = node.__gdSrc || v;
+            if (!src || !hasCJK(src)) continue;
             if (isProtected(node.parentElement)) continue;
             // 已经译过的别再译
             if (node.__gdEn && node.__gdEn === v) continue;
-            var t = translate(v);
+            var t = translate(src);
             if (t === null) continue;
-            node.__gdSrc = node.__gdSrc || v;
+            node.__gdSrc = src;
             node.nodeValue = t;
             node.__gdEn = t;
         }
@@ -412,10 +485,13 @@
        版本号 v0.0.76 都查不到，因此绝不会被误伤。
        --------------------------------------------------------------- */
     function cleanBareKeys(scope) {
-        if (!root.I18n || !root.I18n.translations) return;
-        var cur = (root.I18n.current || '').toLowerCase().indexOf('en') === 0;
-        var en = root.I18n.translations['en'] || {};
-        var zh = root.I18n.translations['zh-CN'] || {};
+        var I = getI18n();
+        if (!I || !I.translations) return;
+        var curCode = I.current || '';
+        var cur = curCode.toLowerCase().indexOf('zh') !== 0;
+        var tgt = I.translations[curCode] || {};
+        var en = I.translations['en'] || {};
+        var zh = I.translations['zh-CN'] || {};
         var tw = document.createTreeWalker(
             scope || document.body,
             root.NodeFilter ? root.NodeFilter.SHOW_TEXT : 4, null, false
@@ -427,7 +503,7 @@
             var v = (node.nodeValue || '').trim();
             if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(v)) continue;
             if (isProtected(node.parentElement)) continue;
-            var repl = cur ? (en[v] || zh[v]) : (zh[v] || en[v]);
+            var repl = cur ? (tgt[v] || en[v] || zh[v]) : (zh[v] || en[v]);
             if (repl == null || repl === '') continue;
             if (node.__gdSrc == null) node.__gdSrc = node.nodeValue;
             node.nodeValue = repl;
@@ -436,6 +512,8 @@
     }
 
     function apply() {
+        // 语言包可能是 setLang 之后才异步到位的，所以每次都重建反查索引
+        if (getI18n()) buildRev();
         cleanBareKeys(document.body);
         if (!_on) return;
         walk(document.body);
@@ -504,7 +582,11 @@
          走 I18n.t() 的 335 个键六种语言都已翻译，不受影响。
        --------------------------------------------------------------- */
     function shouldBeOn() {
-        return ((root.I18n && root.I18n.current) || '').toLowerCase().indexOf('en') === 0;
+        // ★ 原来是「只有英文才开」。现在反查词典六种语言通用，
+        //   所以只要不是中文就开 —— 否则法语/俄语/西语/阿语等于没翻译。
+        var I = getI18n();
+        var c = (I && I.current) || '';
+        return !!c && c.toLowerCase().indexOf('zh') !== 0;
     }
 
     function sync() {
@@ -514,14 +596,15 @@
     }
 
     function hook() {
-        if (!root.I18n || !root.I18n.setLang || root.I18n.__gdScanHooked) return;
-        var orig = root.I18n.setLang.bind(root.I18n);
-        root.I18n.setLang = function (lang) {
+        var I = getI18n();
+        if (!I || !I.setLang || I.__gdScanHooked) return;
+        var orig = I.setLang.bind(I);
+        I.setLang = function (lang) {
             var r = orig(lang);
             setTimeout(sync, 30);
             return r;
         };
-        root.I18n.__gdScanHooked = true;
+        I.__gdScanHooked = true;
     }
 
     function init() {
