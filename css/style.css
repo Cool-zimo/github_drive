@@ -229,7 +229,7 @@ body {
     font-weight: 500;
     border: none;
     border-radius: var(--radius-sm);
-    transition: all 0.15s;
+    transition: transform .15s var(--hm-std), opacity .15s var(--hm-std), box-shadow .15s var(--hm-std), background-color .15s var(--hm-std), border-color .15s var(--hm-std), color .15s var(--hm-std);
     font-family: inherit;
 }
 
@@ -628,7 +628,7 @@ body.resizing {
     font-size: 13px;
     width: 220px;
     background: var(--bg-secondary);
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
 }
 
 .search-box input:focus {
@@ -670,7 +670,7 @@ body.resizing {
     padding: 16px 12px;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: transform .15s var(--hm-std), opacity .15s var(--hm-std), box-shadow .15s var(--hm-std), background-color .15s var(--hm-std), border-color .15s var(--hm-std), color .15s var(--hm-std);
     border: 2px solid transparent;
     position: relative;
 }
@@ -1579,7 +1579,7 @@ body.resizing {
     border: 1px solid #e5e7eb;
     border-radius: 12px;
     padding: 16px;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
 }
 .explore-card:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -1648,7 +1648,7 @@ body.resizing {
     border: 1px solid #e5e7eb;
     border-radius: 12px;
     padding: 16px;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
     display: flex;
     flex-direction: column;
 }
@@ -1727,7 +1727,7 @@ body.resizing {
     color: #374151;
     font-size: 12px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
 }
 .plugin-filter-btn:hover {
     border-color: #667eea;
@@ -1750,7 +1750,7 @@ body.resizing {
     cursor: pointer;
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
 }
 .plugin-source-btn:hover {
     color: #667eea;
@@ -1838,7 +1838,7 @@ body.multi-select-active #file-list {
     padding: 32px 20px;
     text-align: center;
     margin-bottom: 16px;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
     cursor: pointer;
     background: #f6f8fa;
 }
@@ -1997,7 +1997,7 @@ body.multi-select-active #file-list {
     border: 1px solid #e5e7eb;
     border-radius: 10px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
     position: relative;
 }
 .account-item:hover {
@@ -2044,7 +2044,7 @@ body.multi-select-active #file-list {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
 }
 .account-remove:hover {
     background: #fee2e2;
@@ -2199,7 +2199,7 @@ body.dark-mode .modal-close {
     padding: 4px 12px;
     cursor: pointer;
     border-radius: 8px;
-    transition: all 0.2s;
+    transition: transform .2s var(--hm-std), opacity .2s var(--hm-std), box-shadow .2s var(--hm-std), background-color .2s var(--hm-std), border-color .2s var(--hm-std), color .2s var(--hm-std);
     color: #6b7280;
     font-size: 10px;
 }
@@ -2399,7 +2399,7 @@ body.dark-mode .mobile-nav-item.active {
     font-size: 11px;
     font-weight: 700;
     color: #fff;
-    transition: all .25s;
+    transition: transform .25s var(--hm-std), opacity .25s var(--hm-std), box-shadow .25s var(--hm-std), background-color .25s var(--hm-std), border-color .25s var(--hm-std), color .25s var(--hm-std);
 }
 
 /* 已完成 */
@@ -3999,3 +3999,150 @@ body.dark-mode .gd-token-eye .gd-eye-img { filter: invert(1) brightness(1.6); }
    这条专门用来压掉任何历史残留的 display:none（比如早期「移动端不加载插件」
    那条 !important 规则）。勾选是用户意图，优先级高于任何写死的封锁。 */
 .sidebar .nav-item[data-view]:not([hidden]) { display: flex !important; }
+
+/* ==================================================================
+   统一动效系统（v89 · 鸿蒙手感）
+   ------------------------------------------------------------------
+   「不丝滑」的三个真根因，这里逐一处理：
+
+   1) 曲线和时长没有体系。原来 0.15/0.2/0.22/0.25/0.26/0.3/0.34/0.42 散落
+      各处，同类型的动作用着不同的节奏 —— 观感就是"各动各的"。
+      鸿蒙的核心是统一动效语言：同类型动效共用同一条曲线和同一档时长。
+
+   2) transition:all（原 12 处）会监听所有属性，包括 width/height/
+      top/left/margin/padding —— 这些改一个就重排一次，是最卡的来源。
+      已全部换成只动 transform/opacity（合成层）和颜色（只重绘）。
+
+   3) animation 不可打断。快速连续操作时它会从头重播，出现"闪一下"。
+      凡是会被打断的动效（视图切换、抽屉），改用 transition ——
+      transition 天然可打断：中途改目标值，从当前值接着走，不跳回起点。
+   ================================================================== */
+
+:root {
+    /* 四条曲线覆盖全部场景，不再临时手写 cubic-bezier */
+    --hm-std: cubic-bezier(.2, 0, 0, 1);        /* 标准：快响应、慢收尾 */
+    --hm-dec: cubic-bezier(0, 0, .2, 1);        /* 减速：元素入场 */
+    --hm-acc: cubic-bezier(.4, 0, 1, 1);        /* 加速：元素退场 */
+    --hm-spr: cubic-bezier(.34, 1.32, .64, 1);  /* 弹性：确认/回弹，轻微过冲 */
+
+    /* 六档时长，从指间反馈到整页转场 */
+    --t-1: 90ms;    /* 按下反馈 */
+    --t-2: 140ms;   /* 小元素 */
+    --t-3: 200ms;   /* 常规 */
+    --t-4: 280ms;   /* 面板 */
+    --t-5: 380ms;   /* 弹窗 */
+    --t-6: 520ms;   /* 首屏/整页 */
+}
+
+/* ---------- 1. 视图切换：改成可打断 ----------
+   原来是 animation + remove/reflow/add 强制重播，快速切目录时会连续闪。
+   现在用 transition：切走时先淡出，切回来从当前透明度接着淡入，
+   不会跳回起点重来一遍。
+   ★ 初态只在 .gd-anim-ready 下生效 —— 万一 anim.js 没加载，
+     容器就是普通可见状态，绝不会白屏（静态兜底优先于动画）。 */
+.file-area {
+    transition: opacity var(--t-3) var(--hm-dec), transform var(--t-3) var(--hm-dec);
+}
+.file-area.is-switching { animation: none; }   /* 交给 transition，旧的重播式 animation 作废 */
+.gd-anim-ready .file-area.is-switching {
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+/* ---------- 2. 弹窗：弹簧落定 ----------
+   轻微过冲（1.32）产生"落住了"的实感，这是鸿蒙弹窗最明显的特征。
+   退场仍用加速曲线，走得干脆，不拖泥带水。 */
+.modal {
+    animation: gd-md-in var(--t-5) var(--hm-spr);
+}
+@keyframes gd-md-in {
+    from { opacity: 0; transform: translateY(18px) scale(.94); }
+}
+.modal-overlay { animation: gd-mo-in var(--t-3) var(--hm-dec); }
+
+/* ---------- 3. 抽屉：松手回弹用弹簧 ---------- */
+.sidebar {
+    transition: transform var(--t-4) var(--hm-spr);
+}
+@media (max-width: 768px) {
+    .sidebar { transition: transform var(--t-4) var(--hm-spr); }
+}
+
+/* ---------- 4. 列表错峰：支持任意数量 ----------
+   原来用 nth-child 硬编码到第 14 个，第 15 个起统一 336ms，
+   文件多时尾巴会突然"齐步走"，有一道明显的断层。
+   现在延迟由 JS 写成 --fi，超过 12 个后按 12 封顶，
+   推进感连续，且总时长可控（不会加载 200 个文件等 4 秒）。 */
+.file-item {
+    animation: gd-fi-in var(--t-4) var(--hm-dec) backwards;
+    animation-delay: calc(min(var(--fi, 0), 12) * 22ms);
+    contain: layout paint;      /* 限制重排范围，滚动上百个格子不掉帧 */
+}
+@keyframes gd-fi-in {
+    from { opacity: 0; transform: translateY(12px) scale(.985); }
+}
+/* 第 13 个及以后统一延迟，避免长列表尾部拖尾 */
+.file-item:nth-child(n+13) { --fi: 12; }
+
+/* ---------- 5. 指间反馈：统一 90ms ----------
+   按下必须"跟手"，所以比抬升快得多。原来混用 0.1/0.15/0.2，
+   手感不统一。全部收到 --t-1。 */
+.btn-primary, .btn-secondary, .btn-text, .btn-icon,
+.modal-close, .nav-item, .file-item, .gd-ctx-row {
+    transition-property: transform, opacity, box-shadow, background-color, border-color, color;
+    transition-duration: var(--t-1);
+    transition-timing-function: var(--hm-std);
+}
+.btn-primary:active, .btn-secondary:active, .btn-text:active,
+.btn-icon:active, .modal-close:active { transform: scale(.955); }
+.nav-item:active, .gd-ctx-row:active { transform: scale(.975); }
+.file-item:active { transform: scale(.985); }
+
+/* 悬停抬升是"悬浮感"，可以比按下慢一点 */
+.file-item:hover, .dash-card:hover {
+    transition-duration: var(--t-3);
+    transition-timing-function: var(--hm-dec);
+}
+.file-item:hover { transform: translateY(-3px); }
+.dash-card:hover { transform: translateY(-4px); }
+
+/* ---------- 6. 顶栏：滚动时浮起 + 毛玻璃 ----------
+   鸿蒙常用的景深手法：内容从栏下滑过时，栏面轻微虚化。 */
+.toolbar {
+    transition: box-shadow var(--t-3) var(--hm-std), background-color var(--t-3) var(--hm-std);
+}
+.toolbar.is-scrolled {
+    box-shadow: 0 4px 18px rgba(31, 35, 40, .10);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+body.dark-mode .toolbar.is-scrolled {
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
+}
+
+/* ---------- 7. Toast：从上方落下并回弹 ---------- */
+.toast { animation: gd-toast-in var(--t-5) var(--hm-spr); }
+@keyframes gd-toast-in {
+    from { opacity: 0; transform: translateY(-14px) scale(.94); }
+}
+.toast.is-out {
+    opacity: 0;
+    transform: translateY(-10px) scale(.97);
+    transition: opacity var(--t-2) var(--hm-acc), transform var(--t-2) var(--hm-acc);
+}
+
+/* ---------- 8. 合成层提升（由 JS 精确控制生命周期）----------
+   ★ 不能常驻 will-change：每个元素都会占用一块显存，
+     几百个文件格子常驻会直接把内存吃爆，反而更卡。
+     所以只在动画期间挂上，结束立刻摘掉（见 js/anim.js）。 */
+.gd-will { will-change: transform, opacity; }
+
+/* ---------- 9. 减少动态效果：新动效登记 ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .file-area, .file-item, .toast, .modal, .modal-overlay, .sidebar {
+        transition: none !important;
+        animation: none !important;
+    }
+    .file-item, .toast { opacity: 1 !important; transform: none !important; }
+    .toolbar.is-scrolled { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
