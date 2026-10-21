@@ -1,7 +1,29 @@
+// ==================== 第二代版本号（自 0.7.89 起启用）====================
+// 格式：A.B.C = 超级大迭代号 . API版本号 . 小版本号
+//
+//   A 超级大迭代：架构级换代（整体重写、换框架、产品形态变化）。变化时 B、C 归零。
+//   B API 版本  ：契约变化 —— HTML 结构、JS 操作的 class / 元素 id、
+//                 CSS 里被 JS 依赖的规则。变化时 C 归零。
+//   C 小版本    ：内容修复、样式微调、文案翻译、性能优化等。
+//
+// ★ 相对第一代（0.0.N + 独立 api_v）的好处：
+//   第一代要同时维护「应用版本号」和「API 版本号」两个独立递增的数字。
+//   曾经出现过 style.min.css 停在 75/6 而 version.js 已是 76/7 ——
+//   自检因此误报「界面样式是旧版」，而样式其实是最新的。
+//   第二代把 API 版本合成到中段，两者不可能再不同步，也不必分两次命名。
+//
+// 迁移：第一代 v0.0.89 + api_v=7  →  第二代 0.7.89（小版本保持连续）
+// ==========================================================================
 const APP_VERSION = {
-    internalVersion: '89',
-    formalVersion: '0.0.89',
-    displayVersion: 'v0.0.89',
+    // ★ 唯一真值来源；下面 major/api/patch 与兼容字段由 bump 脚本同步
+    version: '0.7.90',
+    scheme: 2,
+    major: '0',
+    api: '7',
+    patch: '90',
+    internalVersion: '0.7.90',
+    formalVersion: '0.7.90',
+    displayVersion: 'v0.7.90',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
@@ -41,5 +63,6 @@ const APP_VERSION = {
     //       - app.js 的版本戳读取改为跨样式表累加：--stamp 在内联、
     //         --api-stamp 在 css 文件，原来遇到第一个就 break 会漏掉
     //         另一个。CSS 无依赖，故不 bump api。
+    // ★ 兼容第一代：等于上面的 api，由 version 中段派生
     apiVersion: '7'
 };
