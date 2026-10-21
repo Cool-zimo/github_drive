@@ -121,7 +121,7 @@ body {
     border-radius: var(--radius-sm);
     font-size: 14px;
     font-family: monospace;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color var(--t-3) var(--hm-std), box-shadow var(--t-3) var(--hm-std);
 }
 
 .login-form input[type="password"]:focus {
@@ -189,7 +189,7 @@ body {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background var(--t-3) var(--hm-std);
     margin-top: 8px;
 }
 .github-oauth-btn:hover {
@@ -213,7 +213,7 @@ body {
     font-family: inherit;
     background: var(--accent-color);
     color: #fff;
-    transition: background 0.15s;
+    transition: background var(--t-2) var(--hm-std);
     margin-top: 8px;
 }
 
@@ -362,7 +362,7 @@ body {
     text-decoration: none;
     font-size: 14px;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background var(--t-2) var(--hm-std);
 }
 
 .nav-item:hover {
@@ -412,7 +412,7 @@ body.dark-theme .nav-icon img { opacity: 1; }
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: 13px;
-    transition: background 0.15s;
+    transition: background var(--t-2) var(--hm-std);
 }
 
 .repo-item:hover {
@@ -484,7 +484,7 @@ body.dark-theme .nav-icon img { opacity: 1; }
     cursor: col-resize;
     background: transparent;
     flex-shrink: 0;
-    transition: background 0.2s;
+    transition: background var(--t-3) var(--hm-std);
     z-index: 101;
 }
 .sidebar-resizer:hover,
@@ -976,7 +976,7 @@ body.resizing {
     border-radius: var(--radius-sm);
     font-size: 14px;
     font-family: inherit;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color var(--t-3) var(--hm-std), box-shadow var(--t-3) var(--hm-std);
 }
 
 .form-group input:focus,
@@ -1144,7 +1144,7 @@ body.resizing {
     height: 100%;
     background: var(--accent-color);
     border-radius: 3px;
-    transition: width 0.3s ease;
+    transition: width var(--t-4) var(--hm-std);
 }
 .upload-item.success .progress-bar-fill { background: #1a7f37; }
 
@@ -1344,7 +1344,7 @@ body.resizing {
     background: rgba(0, 0, 0, 0.4);
     z-index: 99;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity var(--t-3) var(--hm-std);
 }
 .sidebar-overlay.active {
     display: block;
@@ -1359,7 +1359,7 @@ body.resizing {
         bottom: 0;
         z-index: 100;
         transform: translateX(-100%);
-        transition: transform 0.25s ease;
+        transition: transform var(--t-4) var(--hm-std);
         box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
     }
     .sidebar.open {
@@ -1452,7 +1452,7 @@ body.resizing {
     border: 1px solid var(--border-light);
     border-radius: 10px;
     padding: 16px;
-    transition: box-shadow 0.2s;
+    transition: box-shadow var(--t-3) var(--hm-std);
 }
 .share-card:hover {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -1538,7 +1538,7 @@ body.resizing {
     cursor: pointer;
     font-size: 14px;
     border-bottom: 1px solid var(--border-light);
-    transition: background 0.15s;
+    transition: background var(--t-2) var(--hm-std);
 }
 .folder-picker-item:last-child {
     border-bottom: none;
@@ -1775,7 +1775,7 @@ body.resizing {
     gap: 8px;
     z-index: 1000;
     transform: translateY(100%);
-    transition: transform 0.2s ease;
+    transition: transform var(--t-3) var(--hm-std);
     box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
 }
 .multi-select-bar.visible {
@@ -2235,7 +2235,7 @@ body.dark-mode .modal-close {
     }
     .sidebar {
         transform: translateX(-100%);
-        transition: transform 0.3s ease;
+        transition: transform var(--t-4) var(--hm-std);
     }
     .sidebar.open {
         transform: translateX(0);
@@ -2282,7 +2282,7 @@ body.dark-mode .mobile-nav-item.active {
     color: inherit;
     font-size: 13px;
     cursor: pointer;
-    transition: background .15s, border-color .15s;
+    transition: background var(--t-2) var(--hm-std), border-color var(--t-2) var(--hm-std);
 }
 
 .app-switch-btn:hover {
@@ -2332,7 +2332,7 @@ body.dark-mode .mobile-nav-item.active {
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background .15s;
+    transition: background var(--t-2) var(--hm-std);
 }
 
 .bridge-btn:hover {
@@ -2372,7 +2372,7 @@ body.dark-mode .mobile-nav-item.active {
     width: 0;
     background: linear-gradient(90deg, #0969da, #54aeff);
     border-radius: 999px;
-    transition: width .35s cubic-bezier(.4, 0, .2, 1);
+    transition: width var(--t-5) var(--hm-std);
 }
 
 .sp-steps { list-style: none; padding: 0; margin: 0 0 14px; }
@@ -2384,7 +2384,7 @@ body.dark-mode .mobile-nav-item.active {
     padding: 7px 0;
     color: #9ca3af;
     font-size: 13px;
-    transition: color .2s;
+    transition: color var(--t-3) var(--hm-std);
 }
 
 .sp-ico {
@@ -2480,7 +2480,7 @@ body.dark-mode .mobile-nav-item.active {
     padding: 5px;
     opacity: 0;
     transform: scale(.96);
-    transition: opacity .1s, transform .1s;
+    transition: opacity var(--t-1) var(--hm-std), transform var(--t-1) var(--hm-std);
 }
 
 .ctx-menu.on { opacity: 1; transform: scale(1); }
@@ -2616,7 +2616,7 @@ body.dark-mode .mobile-nav-item.active {
     color: #e6edf3;
     font-size: 12px;
     cursor: pointer;
-    transition: background .15s, border-color .15s;
+    transition: background var(--t-2) var(--hm-std), border-color var(--t-2) var(--hm-std);
 }
 
 .plugin-btn:hover { background: #30363d; border-color: #8b949e; }
@@ -2660,7 +2660,7 @@ body.td-dragging-body { user-select: none; cursor: grabbing; }
     border-radius: 12px;
     box-shadow: 0 6px 24px rgba(17, 24, 39, .12);
     cursor: pointer;
-    transition: transform .15s, box-shadow .15s;
+    transition: transform var(--t-2) var(--hm-std), box-shadow var(--t-2) var(--hm-std);
     animation: td-in .18s ease-out;
 }
 .td-mini:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(17, 24, 39, .16); }
@@ -2677,7 +2677,7 @@ body.td-dragging-body { user-select: none; cursor: grabbing; }
 }
 .td-mini-fill {
     height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6);
-    border-radius: 999px; transition: width .25s;
+    border-radius: 999px; transition: width var(--t-4) var(--hm-std);
 }
 .td-mini.is-error .td-mini-fill { background: #ef4444; }
 .td-mini.is-done  .td-mini-fill { background: #10b981; }
@@ -2744,7 +2744,7 @@ body.td-dragging-body { user-select: none; cursor: grabbing; }
     overflow: hidden; margin-top: 5px;
 }
 .td-row-bar > div {
-    height: 100%; background: #6366f1; border-radius: 999px; transition: width .2s;
+    height: 100%; background: #6366f1; border-radius: 999px; transition: width var(--t-3) var(--hm-std);
 }
 .td-row.done .td-row-bar > div { background: #10b981; }
 .td-note { font-size: 12px; color: #6b7280; padding: 4px 0; }
@@ -2754,7 +2754,7 @@ body.td-dragging-body { user-select: none; cursor: grabbing; }
 }
 .td-bar-fill {
     height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6);
-    border-radius: 999px; transition: width .25s;
+    border-radius: 999px; transition: width var(--t-4) var(--hm-std);
 }
 .td-panel.is-done .td-bar-fill { background: #10b981; }
 .td-panel.is-error .td-bar-fill { background: #ef4444; }
@@ -2792,7 +2792,7 @@ body.td-dragging-body { user-select: none; cursor: grabbing; }
     padding: 8px 14px; border-radius: 10px;
     background: rgba(79, 70, 229, .92); color: #fff;
     font-size: 12px; font-weight: 600;
-    opacity: 0; transition: opacity .15s;
+    opacity: 0; transition: opacity var(--t-2) var(--hm-std);
     pointer-events: none;
 }
 .td-dock-hint.show { opacity: 1; }
@@ -3046,7 +3046,7 @@ body.dark .tp-list-row:hover { background: #374151; }
     font-size: 13px;
     color: var(--text-secondary, #4b5563);
     user-select: none;
-    transition: background 0.15s;
+    transition: background var(--t-2) var(--hm-std);
 }
 .nav-group-header:hover { background: var(--bg-hover, #f3f4f6); }
 .nav-group-icon { font-size: 15px; width: 20px; text-align: center; }
@@ -3061,7 +3061,7 @@ body.dark .tp-list-row:hover { background: #374151; }
 .nav-group-arrow {
     font-size: 11px;
     color: #9ca3af;
-    transition: transform 0.2s ease;
+    transition: transform var(--t-3) var(--hm-std);
 }
 .nav-group-header.open .nav-group-arrow { transform: rotate(-90deg); }
 
@@ -3069,7 +3069,7 @@ body.dark .tp-list-row:hover { background: #374151; }
 .nav-group-body {
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.22s ease;
+    transition: grid-template-rows var(--t-3) var(--hm-std);
     overflow: hidden;
 }
 .nav-group-body > * { min-height: 0; }
@@ -3100,7 +3100,7 @@ body.dark-mode .nav-badge { background: #3b82f6; }
     border-radius: 10px;
     margin-bottom: 8px;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background var(--t-2) var(--hm-std), border-color var(--t-2) var(--hm-std);
 }
 .task-mgr-row:hover { background: var(--bg-hover, #f9fafb); border-color: #d1d5db; }
 .task-mgr-row.is-error { border-color: #fecaca; background: #fef2f2; }
@@ -3115,7 +3115,7 @@ body.dark-mode .nav-badge { background: #3b82f6; }
 .task-mgr-bar {
     height: 4px; background: #e5e7eb; border-radius: 999px; margin-top: 7px; overflow: hidden;
 }
-.task-mgr-fill { height: 100%; background: #2563eb; border-radius: 999px; transition: width 0.3s ease; }
+.task-mgr-fill { height: 100%; background: #2563eb; border-radius: 999px; transition: width var(--t-4) var(--hm-std); }
 .task-mgr-row.is-error .task-mgr-fill { background: #dc2626; }
 .task-mgr-row.is-done  .task-mgr-fill { background: #16a34a; }
 .task-mgr-right { text-align: right; font-size: 12px; color: #6b7280; white-space: nowrap; }
@@ -3126,7 +3126,7 @@ body.dark-mode .nav-badge { background: #3b82f6; }
 /* ── 飞入动画：小窗从屏幕边缘飞到进程列表里 ──
    用 transform 合成层做，不改 left/top，避免逐帧重排。 */
 .td-mini.is-flying {
-    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease;
+    transition: transform var(--t-5) var(--hm-std), opacity var(--t-5) var(--hm-std);
     pointer-events: none;
     z-index: 9999;
 }
@@ -3159,7 +3159,7 @@ body.dark-mode .nav-badge { background: #3b82f6; }
         width: 100%;
         max-height: 78vh;
         transform: translateY(100%);
-        transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: transform var(--t-4) var(--hm-std);
         z-index: 1001;
         border-radius: 16px 16px 0 0;
         box-shadow: 0 -8px 28px rgba(0,0,0,0.18);
@@ -3204,7 +3204,7 @@ body.dark-mode .nav-badge { background: #3b82f6; }
     background: rgba(0,0,0,0.35);
     z-index: 1000;
     opacity: 0; pointer-events: none;
-    transition: opacity 0.25s;
+    transition: opacity var(--t-4) var(--hm-std);
 }
 .sheet-overlay.active { opacity: 1; pointer-events: auto; }
 
@@ -3341,10 +3341,6 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .modal {
     animation: gd-md-in var(--dur-lg) var(--ease-out);
 }
-@keyframes gd-md-in {
-    from { opacity: 0; transform: translateY(16px) scale(.965); }
-}
-
 /* 退场：旧弹窗被挪到独立层播放，不占用 #modal-container
    —— 否则「closeModal(); 立刻 showModal()」会被延迟清空误伤 */
 #modal-exit-layer {
@@ -3384,13 +3380,9 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .file-item:nth-child(12) { --fi: 11; }
 .file-item:nth-child(13) { --fi: 12; }
 .file-item:nth-child(14) { --fi: 13; }
-@keyframes gd-fi-in {
-    from { opacity: 0; transform: translateY(10px) scale(.98); }
-}
-
 /* ---------- 3. 悬停 / 按下 ---------- */
 .file-item .file-icon {
-    transition: transform var(--dur-md) var(--ease-out);
+    transition: transform var(--dur-md) var(--var(--hm-dec));
 }
 .file-item:hover {
     transform: translateY(-2px);
@@ -3409,13 +3401,13 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .btn-icon:active,
 .modal-close:active {
     transform: scale(.955);
-    transition: transform var(--dur-xs) ease-out;
+    transition: transform var(--dur-xs) var(--hm-dec);
 }
 
 /* ---------- 4. 右键菜单：从点击处弹出 ---------- */
 .ctx-menu {
     transform: scale(.93) translateY(-4px);
-    transition: opacity .13s ease-out, transform .18s var(--ease-out);
+    transition: opacity var(--t-2) var(--hm-dec), transform var(--t-3) var(--var(--hm-dec));
 }
 .ctx-menu.on {
     transform: scale(1) translateY(0);
@@ -3425,13 +3417,10 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .toast {
     animation: gd-toast-in .38s var(--ease-out);
 }
-@keyframes gd-toast-in {
-    from { opacity: 0; transform: translateX(110%) scale(.94); }
-}
 .toast.is-out {
     opacity: 0;
     transform: translateX(110%) scale(.96);
-    transition: opacity .2s var(--ease-in), transform .22s var(--ease-in);
+    transition: opacity var(--t-3) var(--var(--hm-acc)), transform var(--t-3) var(--var(--hm-acc));
 }
 
 /* ---------- 6. 移动端抽屉 ----------
@@ -3443,17 +3432,17 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity var(--dur-md) ease, visibility 0s linear var(--dur-md);
+    transition: opacity var(--dur-md) var(--hm-std), visibility var(--t-1) linear var(--dur-md) var(--hm-std);
 }
 .sidebar-overlay.active {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transition: opacity var(--dur-md) ease, visibility 0s;
+    transition: opacity var(--dur-md) var(--hm-std), visibility var(--t-1) var(--hm-std);
 }
 @media (max-width: 768px) {
     .sidebar {
-        transition: transform .3s var(--ease-out);
+        transition: transform var(--t-4) var(--var(--hm-dec));
     }
 }
 
@@ -3549,7 +3538,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    ★ transition 放在 .toolbar 上而不是 .is-scrolled 上：
      加 class 时才有 transition 的话，离场（滚回顶部）会是硬切。 */
 .toolbar {
-    transition: box-shadow var(--dur-md) ease, border-color var(--dur-md) ease;
+    transition: box-shadow var(--dur-md) var(--hm-std), border-color var(--dur-md) var(--hm-std);
 }
 .toolbar.is-scrolled {
     box-shadow: 0 2px 12px rgba(31, 35, 40, .10);
@@ -3558,7 +3547,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 
 /* ---------- 13. 导航项：按下去有反馈，激活时有个落定 ---------- */
 .nav-item {
-    transition: background .15s, color .15s, transform var(--dur-xs) var(--ease-out);
+    transition: background var(--t-2) var(--hm-std), color var(--t-2) var(--hm-std), transform var(--dur-xs) var(--var(--hm-dec));
 }
 .nav-item:active {
     transform: scale(.975);
@@ -3572,7 +3561,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 
 /* ---------- 14. 搜索框：聚焦时展开 ---------- */
 .toolbar .search-box input {
-    transition: width .28s var(--ease-out), box-shadow .2s ease, border-color .2s ease;
+    transition: width var(--t-4) var(--var(--hm-dec)), box-shadow var(--t-3) var(--hm-std), border-color var(--t-3) var(--hm-std);
 }
 .toolbar .search-box input:focus {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, .16);
@@ -3610,7 +3599,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     box-shadow: 0 10px 24px rgba(31, 35, 40, .18);
 }
 .dash-card {
-    transition: transform var(--dur-md) var(--ease-out), box-shadow var(--dur-md) ease;
+    transition: transform var(--dur-md) var(--var(--hm-dec)), box-shadow var(--dur-md) var(--hm-std);
 }
 /* 数字滚动时宽度不能抖，否则会左右跳 */
 .dash-num {
@@ -3686,7 +3675,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     left: 3px;
     width: 2px;
     background: transparent;
-    transition: background .15s ease;
+    transition: background var(--t-2) var(--hm-std);
 }
 .gd-sb-resizer:hover::after,
 .gd-sb-resizer.is-dragging::after {
@@ -3913,7 +3902,7 @@ body.dark-mode .login-card {
 .gd-token-wrap input {
     width: 100%;
     padding-right: 44px;     /* 给眼睛按钮留位 */
-    transition: border-color .18s, box-shadow .18s;
+    transition: border-color var(--t-3) var(--hm-std), box-shadow var(--t-3) var(--hm-std);
 }
 .gd-token-wrap input:focus {
     outline: none;
@@ -3928,14 +3917,14 @@ body.dark-mode .login-card {
     background: transparent; border: none;
     font-size: 15px; cursor: pointer; opacity: .55;
     border-radius: 6px;
-    transition: opacity .15s, background .15s;
+    transition: opacity var(--t-2) var(--hm-std), background var(--t-2) var(--hm-std);
 }
 .gd-token-eye:hover { opacity: 1; background: var(--bg-hover); }
 
 /* 主按钮：斜向流光 */
 #enter-drive-btn {
     position: relative; overflow: hidden;
-    transition: transform .15s, box-shadow .2s;
+    transition: transform var(--t-2) var(--hm-std), box-shadow var(--t-3) var(--hm-std);
 }
 #enter-drive-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99,102,241,.32); }
 #enter-drive-btn:active { transform: translateY(0); }
@@ -3986,7 +3975,7 @@ body.dark-mode .login-card {
 /* 令牌显示/隐藏：两张图标常驻 DOM，只切 hidden，避免切换时闪一下 */
 .gd-token-eye .gd-eye-img {
     width: 18px; height: 18px; display: block;
-    opacity: .75; transition: opacity .18s ease;
+    opacity: .75; transition: opacity var(--t-3) var(--hm-std);
 }
 .gd-token-eye:hover .gd-eye-img { opacity: 1; }
 .gd-token-eye .gd-eye-img[hidden] { display: none; }
@@ -4145,4 +4134,48 @@ body.dark-mode .toolbar.is-scrolled {
     }
     .file-item, .toast { opacity: 1 !important; transform: none !important; }
     .toolbar.is-scrolled { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+/* ---------- v0.0.90 新增动效 ---------- */
+
+/* 文件删除：先缩小飞出，再让列表重排，避免"啪"一下消失 */
+@keyframes gd-file-out {
+    0%   { opacity: 1; transform: scale(1) translateY(0); }
+    45%  { opacity: .85; transform: scale(.94) translateY(-4px); }
+    100% { opacity: 0; transform: scale(.72) translateY(10px); }
+}
+.file-item.is-removing {
+    animation: gd-file-out var(--t-4) var(--hm-acc) forwards;
+    pointer-events: none;
+}
+
+/* 上传/操作成功：勾号沿路径描出来 */
+@keyframes gd-check-draw {
+    from { stroke-dashoffset: 32; }
+    to   { stroke-dashoffset: 0; }
+}
+.gd-check-mark {
+    stroke-dasharray: 32;
+    animation: gd-check-draw var(--t-4) var(--hm-dec) forwards;
+}
+
+/* 侧边栏条目：悬浮时图标轻微放大，给一点"可点"的暗示 */
+.nav-item:hover .nav-icon,
+.nav-item:hover .nav-emoji {
+    transform: scale(1.12);
+}
+.nav-icon, .nav-emoji {
+    transition: transform var(--t-3) var(--hm-spr);
+}
+
+/* 窗口形变期间：内容不跟着抖，等动画结束再恢复交互 */
+.tp-win.is-flipping {
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .file-item.is-removing { animation: none; opacity: 0; }
+    .gd-check-mark { animation: none; stroke-dashoffset: 0; }
+    .nav-item:hover .nav-icon,
+    .nav-item:hover .nav-emoji { transform: none; }
 }
