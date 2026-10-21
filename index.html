@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.7.90"></script>
+    <script src="js/branch-guard.min.js?v=0.7.91"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -34,15 +34,15 @@
     <script defer src="js/file-manager.min.js?h=6835a33a91" data-gd-core="file-manager"></script>
     <script defer src="js/config-sync.min.js?h=9d6236d06c" data-gd-core="config-sync"></script>
     <script defer src="js/task-dock.min.js?h=b4af683ae7" data-gd-core="task-dock"></script>
-    <script defer src="js/ui.min.js?h=684c99f483" data-gd-core="ui"></script>
+    <script defer src="js/ui.min.js?h=c2ca6fd1e7" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=7c1ef6dd61" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=9d4de9c80a" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=30f20cada9" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=7dd8cdd4e5" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
-    <script defer src="js/custom.min.js?h=54c27932cc" data-gd-core="custom"></script>
+    <script defer src="js/custom.min.js?h=d3fcd4605c" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=2fa636819e" data-gd-core="i18n-scan"></script>
-    <script defer src="js/app.min.js?h=99f8e73dee" data-gd-core="app"></script>
+    <script defer src="js/app.min.js?h=8bda9b6c20" data-gd-core="app"></script>
 
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
@@ -360,12 +360,12 @@
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
             'anim': '7dd8cdd4e5',
-            'app': '4e9fcc0ccf',
+            'app': '8bda9b6c20',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
             'config-sync': '9d6236d06c',
-            'custom': '54c27932cc',
+            'custom': 'd3fcd4605c',
             'extension': 'ac2832ce10',
             'file-manager': '6835a33a91',
             'gesture': '4896dd831d',
@@ -379,8 +379,8 @@
             'storage': '615394bc55',
             'task-dock': 'b85747e5e4',
             'theme': 'b0ec742409',
-            'ui': '01680a827f',
-            'version': 'b5a6b14337'
+            'ui': 'c2ca6fd1e7',
+            'version': '30f20cada9'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
