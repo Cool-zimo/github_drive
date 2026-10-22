@@ -688,22 +688,68 @@ const TaskDock = (() => {
         const w = pwins.get(id); if (!w) return;
         // ★ 移动端：收起不是"贴边变小窗"，而是收进「后台进程」里的预览卡
         if (isMobile()) { w.view = 'stage'; w.full = false; pwLayout(); return; }
-        w.view = 'mini';
-        w.full = false;
+        pwFlip(id, () => { w.view = 'mini'; w.full = false; });
+    }
+    /* ── 窗口形变动画（全屏 / 展开 / 收起）──────────────────────────
+     * 窗口是 position:absolute + inline left/top/width/height。
+     * 直接给这些属性加 transition 会每帧重排，所以走 FLIP：
+     *   先量旧位置 → 改状态并重新布局 → 量新位置 → 用 transform 把窗口
+     *   "倒回"旧位置，再动画回零。位置部分走合成层，不触发重排。
+     * 尺寸用 WAAPI 直接补间（窗口通常只有 1~3 个，且是用户主动触发的
+     *   一次性操作，这点重排代价可接受），好处是 iframe 内容不会被
+     *   非等比 scale 拉变形。
+     * ─────────────────────────────────────────────────────────── */
+    const PW_FLIP_MS = 300;
+    function _pwReduced() {
+        try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+    }
+    function pwFlip(id, mutate) {
+        const w = pwins.get(id);
+        if (!w || !w.el || typeof w.el.animate !== 'function' || _pwReduced()) {
+            mutate(); pwLayout(); return;
+        }
+        const el = w.el;
+        // stage（收进后台进程）的位置由 pwSyncStages 每帧对齐，动画会打架
+        if (w.view === 'stage') { mutate(); pwLayout(); return; }
+
+        const first = el.getBoundingClientRect();
+        mutate();
+        pwBring(id);
         pwLayout();
+        const last = el.getBoundingClientRect();
+
+        const dx = first.left - last.left;
+        const dy = first.top - last.top;
+        const sameBox = Math.abs(dx) < 1 && Math.abs(dy) < 1 &&
+                        Math.abs(first.width - last.width) < 1 &&
+                        Math.abs(first.height - last.height) < 1;
+        if (sameBox) return;
+
+        // 正在跑就取消：连续点全屏/收起时不该从头重播
+        if (el.__pwFlip) { try { el.__pwFlip.cancel(); } catch (e) { } }
+
+        el.style.transformOrigin = 'top left';
+        el.__pwFlip = el.animate([
+            { transform: 'translate(' + dx + 'px,' + dy + 'px)',
+              width: first.width + 'px', height: first.height + 'px' },
+            { transform: 'translate(0px,0px)',
+              width: last.width + 'px', height: last.height + 'px' }
+        ], { duration: PW_FLIP_MS, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+
+        const done = () => {
+            el.style.transformOrigin = '';
+            el.__pwFlip = null;
+        };
+        el.__pwFlip.onfinish = done;
+        el.__pwFlip.oncancel = done;
     }
     function pwExpand(id) {
         const w = pwins.get(id); if (!w) return;
-        w.view = 'expanded';
-        pwBring(id);
-        pwLayout();
+        pwFlip(id, () => { w.view = 'expanded'; });
     }
     function pwToggleFull(id) {
         const w = pwins.get(id); if (!w) return;
-        w.full = !w.full;
-        if (w.full) w.view = 'expanded';
-        pwBring(id);
-        pwLayout();
+        pwFlip(id, () => { w.full = !w.full; if (w.full) w.view = 'expanded'; });
     }
     function pwClose(id) {
         const w = pwins.get(id); if (!w) return;
