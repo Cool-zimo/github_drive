@@ -55,8 +55,9 @@
     ];
 
     function def() {
-        // 插件广场默认隐藏：用户明确说过移动端用不上，桌面端也少用
-        var hidden = { plugins: true };
+        // 插件广场默认显示：移动端已能用（只是不显示依赖本地后端的条目），
+        // 桌面端也常去。要隐藏就在侧边栏右键里勾掉。
+        var hidden = {};
         return {
             v: KEY_V,
             navHidden: hidden,
