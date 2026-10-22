@@ -3310,7 +3310,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --api-stamp: "7"; }
+#gd-css-stamp { --api-stamp: "8"; }
 
 /* ==================================================================
    动画打磨
@@ -4179,3 +4179,38 @@ body.dark-mode .toolbar.is-scrolled {
     .nav-item:hover .nav-icon,
     .nav-item:hover .nav-emoji { transform: none; }
 }
+
+/* ==================== 内联 SVG 图标 ====================
+   emoji 替换成 SVG 后的对齐规则。
+
+   ★ vertical-align:-0.125em 是图标字体的通用基线修正：
+     不加的话 SVG 底边会贴着文字基线，看起来比旁边的字"沉下去"一截。
+
+   ★ 尺寸用 1em 而不是固定 px：
+     替换是运行时做的，扫到的文本节点字号各不相同
+     （顶栏按钮 14px、设置项 20px、toast 13px），
+     写死 16px 会在大字号处显得小、小字号处显得挤。
+     用 em 就自动跟随所在位置的字号。
+*/
+svg.ico {
+    display: inline-block;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+}
+
+/* 由 emoji 扫描替换产生的图标 */
+svg.gd-emoji-ico {
+    width: 1em;
+    height: 1em;
+}
+
+/* 设置页分组条目的图标（容器已定宽，这里只保证不被压扁） */
+svg.gd-set-ico {
+    width: 20px;
+    height: 20px;
+}
+
+/* 图标跟着文字色走 —— 暗色模式下自动变浅，不需要额外规则 */
+.nav-icon svg.ico,
+.btn-secondary svg.ico,
+.toolbar-btn svg.ico { color: inherit; }
