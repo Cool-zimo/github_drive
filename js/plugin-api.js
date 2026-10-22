@@ -39,7 +39,14 @@
         'ui.navigate':     false,
         'state.get':       false,
         'state.set':       true,
-        'api.request':     true    // 代发 GitHub API，风险最高，需显式声明
+        'api.request':     true,   // 代发 GitHub API，风险最高，需显式声明
+        /* --- 多语言（v0.0.89）：插件可以整门语言注册进来 --- */
+        'i18n.list':       false,
+        'i18n.get':        false,
+        'i18n.register':   true,   // 新增/替换一门语言
+        'i18n.merge':      true,   // 只补词条
+        'i18n.remove':     true,   // 移除自己注册的语言
+        'i18n.setLang':    true    // 切换界面语言
     };
 
     /* 已注册的插件：origin → {caps, frame} */
