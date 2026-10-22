@@ -867,8 +867,22 @@ class UI {
                 break;
             case 'delete':
                 if (confirm('确定删除选中的 ' + files.length + ' 个文件吗？')) {
-                    files.forEach(f => this.app.deleteFile(f));
-                    this.showToast('已删除 ' + files.length + ' 个文件', 'success');
+                    // 先播飞出动画再真正删：直接删会有"啪一下消失"的突兀感。
+                    // 动画只做视觉过渡，不承载删除逻辑——延迟期间出错也不会漏删。
+                    const _reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+                    let _wait = 0;
+                    if (!_reduced) {
+                        let _hit = 0;
+                        files.forEach(f => {
+                            const el = document.querySelector('.file-item[data-path="' + (f.path || '').replace(/"/g, '\\"') + '"]');
+                            if (el) { el.classList.add('is-removing'); _hit++; }
+                        });
+                        _wait = _hit ? 280 : 0;
+                    }
+                    setTimeout(() => {
+                        files.forEach(f => this.app.deleteFile(f));
+                        this.showToast('已删除 ' + files.length + ' 个文件', 'success');
+                    }, _wait);
                 }
                 break;
             case 'move':
@@ -1374,11 +1388,11 @@ class UI {
             {
                 title: '外观',
                 items: [
-                    {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
-                    {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
-                    {icon:'🎨', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
+                    {icon:'moon', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
+                    {icon:'globe', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
+                    {icon:'palette', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
                      action:'ui.closeModal();ui.showLookPanel();'},
-                    {icon:'🔗', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
+                    {icon:'link', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
                      action:'ui.toggleBridge();',
                      extra:(localStorage.getItem('gd_bridge_enabled') === '1' ? '开' : '关')},
                 ]
@@ -1386,27 +1400,27 @@ class UI {
             {
                 title: '存储与仓库',
                 items: [
-                    {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
-                    {icon:'🤖', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
+                    {icon:'stack', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
+                    {icon:'cpu', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
                 ]
             },
             {
                 title: '功能',
                 items: [
-                    {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
+                    {icon:'search', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
                      extra:(localStorage.getItem('gd_search_content') === '1' ? '开' : '关')},
-                    {icon:'🎯', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
-                    {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
+                    {icon:'target', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
+                    {icon:'settings', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
                 ]
             },
             {
                 title: '关于与账号',
                 items: [
-                    {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
-                    {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
-                    {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
-                    {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
-                    {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
+                    {icon:'help', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
+                    {icon:'gitBranch', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
+                    {icon:'save', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
+                    {icon:'tag', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
+                    {icon:'logout', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
                 ]
             }
         ];
@@ -1421,7 +1435,15 @@ class UI {
                 const color = it.danger ? 'color:#dc2626;' : '';
                 const hoverBg = it.danger ? 'var(--danger-light, #fef2f2)' : 'var(--bg-hover, #f3f4f6)';
                 body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
-                body += '<span style="font-size:20px;">' + it.icon + '</span>';
+                // ★ 图标走 SVG 而不是 emoji：emoji 各系统字形不一、暗色下突兀。
+                //   icons.js 是 CORE 第一个加载的，取不到就留空 —— 总比把
+                //   "moon" 当文字显示出来强。
+                var icoHtml = (window.Icons && window.Icons.get)
+                    ? window.Icons.get(it.icon, { size: 20, className: 'gd-set-ico' })
+                    : '';
+                body += '<span style="font-size:20px;line-height:1;display:inline-flex;'
+                      + 'align-items:center;justify-content:center;width:24px;flex:0 0 24px;">'
+                      + icoHtml + '</span>';
                 body += '<div><div style="font-weight:600;font-size:14px;color:var(--text-primary);">' + it.title + extraHtml + '</div><div style="font-size:12px;color:var(--text-secondary);">' + it.desc + '</div></div></div>';
             }
             body += '</div>';
@@ -3910,9 +3932,12 @@ class UI {
                 </div>
             </div>`;
 
-        const filteredPlugins = this._marketFilter === 'all' ? plugins : plugins.filter(p => (p.type || 'plugin') === this._marketFilter);
+        // 移动端：没有本地后端，隐藏后端服务卡片与依赖后端的插件，其余照常显示
+        const _isMobile = !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        const filteredPlugins = (this._marketFilter === 'all' ? plugins : plugins.filter(p => (p.type || 'plugin') === this._marketFilter))
+            .filter(p => !(_isMobile && p.requiresBackend));
         // 后端已连接时隐藏后端服务卡片
-        const showBackendCard = !this._backendConnected;
+        const showBackendCard = !this._backendConnected && !_isMobile;
         const cardsHtml = (showBackendCard ? backendCard : '') + filteredPlugins.map(p => {
             const isInstalled = !!(installed && installed[p.id]);
             const installAction = p.community
