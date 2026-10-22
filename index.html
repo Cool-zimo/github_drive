@@ -9,18 +9,18 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=9e787ff5b8" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=8e975736bd" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.7.91"}</style>
+    <style>#gd-css-stamp{--stamp:"0.8.0"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.7.91"></script>
+    <script src="js/branch-guard.min.js?v=0.8.0"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -28,21 +28,21 @@
          （等价原来 document.write 的同步顺序，ui.js 依赖 i18n.js 等
          跨文件顶层符号，顺序不能乱）。
          放在 head 里是为了让扫描器尽可能早地撞见它们。 -->
-    <script defer src="js/icons.min.js?h=ec755c29b9" data-gd-core="icons"></script>
+    <script defer src="js/icons.min.js?h=bde278015a" data-gd-core="icons"></script>
     <script defer src="js/github-api.min.js?h=389e7c20c9" data-gd-core="github-api"></script>
-    <script defer src="js/storage.min.js?h=615394bc55" data-gd-core="storage"></script>
-    <script defer src="js/file-manager.min.js?h=6835a33a91" data-gd-core="file-manager"></script>
-    <script defer src="js/config-sync.min.js?h=9d6236d06c" data-gd-core="config-sync"></script>
-    <script defer src="js/task-dock.min.js?h=b4af683ae7" data-gd-core="task-dock"></script>
-    <script defer src="js/ui.min.js?h=c2ca6fd1e7" data-gd-core="ui"></script>
-    <script defer src="js/i18n.min.js?h=7c1ef6dd61" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=30f20cada9" data-gd-core="version"></script>
-    <script defer src="js/anim.min.js?h=7dd8cdd4e5" data-gd-core="anim"></script>
+    <script defer src="js/storage.min.js?h=5d5500fc2c" data-gd-core="storage"></script>
+    <script defer src="js/file-manager.min.js?h=e4281a5ab9" data-gd-core="file-manager"></script>
+    <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
+    <script defer src="js/task-dock.min.js?h=4660d2f245" data-gd-core="task-dock"></script>
+    <script defer src="js/ui.min.js?h=7e56f056f0" data-gd-core="ui"></script>
+    <script defer src="js/i18n.min.js?h=d60fb89434" data-gd-core="i18n"></script>
+    <script defer src="js/version.min.js?h=21cd2fed6b" data-gd-core="version"></script>
+    <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=d3fcd4605c" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
-    <script defer src="js/i18n-scan.min.js?h=2fa636819e" data-gd-core="i18n-scan"></script>
-    <script defer src="js/app.min.js?h=8bda9b6c20" data-gd-core="app"></script>
+    <script defer src="js/i18n-scan.min.js?h=9fea523fd1" data-gd-core="i18n-scan"></script>
+    <script defer src="js/app.min.js?h=97708a0fa3" data-gd-core="app"></script>
 
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
@@ -72,7 +72,7 @@
     })();
     </script>
 </head>
-<body class="gd-logged-out" data-api-v="7">
+<body class="gd-logged-out" data-api-v="8">
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
@@ -359,28 +359,28 @@
         // ★ 由 build.py 生成：每个文件的内容 hash。
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
-            'anim': '7dd8cdd4e5',
-            'app': '8bda9b6c20',
+            'anim': '8db9aa997e',
+            'app': '97708a0fa3',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
-            'config-sync': '9d6236d06c',
+            'config-sync': 'd3c84a594e',
             'custom': 'd3fcd4605c',
             'extension': 'ac2832ce10',
-            'file-manager': '6835a33a91',
+            'file-manager': 'e4281a5ab9',
             'gesture': '4896dd831d',
             'github-api': '389e7c20c9',
-            'i18n': '7c1ef6dd61',
-            'i18n-scan': '2fa636819e',
-            'icons': 'ec755c29b9',
+            'i18n': 'd60fb89434',
+            'i18n-scan': '9fea523fd1',
+            'icons': 'bde278015a',
             'maintain': 'b10def0baf',
-            'plugin-api': 'ad584338e1',
+            'plugin-api': 'c3c2940bd5',
             'share': '27afaa1375',
-            'storage': '615394bc55',
-            'task-dock': 'b85747e5e4',
+            'storage': '5d5500fc2c',
+            'task-dock': '4660d2f245',
             'theme': 'b0ec742409',
-            'ui': 'c2ca6fd1e7',
-            'version': '30f20cada9'
+            'ui': '7e56f056f0',
+            'version': '21cd2fed6b'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
