@@ -16,14 +16,14 @@
 // ==========================================================================
 const APP_VERSION = {
     // ★ 唯一真值来源；下面 major/api/patch 与兼容字段由 bump 脚本同步
-    version: '0.7.90',
+    version: '0.8.0',
     scheme: 2,
     major: '0',
-    api: '7',
-    patch: '90',
-    internalVersion: '0.7.90',
-    formalVersion: '0.7.90',
-    displayVersion: 'v0.7.90',
+    api: '8',
+    patch: '0',
+    internalVersion: '0.8.0',
+    formalVersion: '0.8.0',
+    displayVersion: 'v0.8.0',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
@@ -52,6 +52,13 @@ const APP_VERSION = {
     //        老 CSS 没有 gd-ripple 规则 → 涟漪会是一个不透明的实心色块
     //        盖在按钮上；没有 dash-card → 仪表盘卡片没有入场动画。
     //
+    //   = 8：界面图标从 emoji 全面换成内联 SVG（js/icons.js 的 Icons.EMOJI
+    //        映射 + Icons.scan() 运行时扫描）。JS 会往 DOM 里插入
+    //        <svg class="ico gd-emoji-ico">，设置页还会插 .gd-set-ico。
+    //        老 CSS 没有这三条规则 → SVG 默认是 display:inline 且尺寸取
+    //        width 属性的固定 16px，既不随字号缩放、基线也下沉一截，
+    //        表现为"图标大小不一、比旁边的字矮半截"。
+    //
     //   = 7 期间的加载改造（v0.0.88，不涉及契约变化，故不 bump）：
     //       - index.html 里 15 个 CORE 脚本从 document.write 改成静态
     //         <script defer>，CSS 也改成静态 <link>。目的是让浏览器的
@@ -64,5 +71,5 @@ const APP_VERSION = {
     //         --api-stamp 在 css 文件，原来遇到第一个就 break 会漏掉
     //         另一个。CSS 无依赖，故不 bump api。
     // ★ 兼容第一代：等于上面的 api，由 version 中段派生
-    apiVersion: '7'
+    apiVersion: '8'
 };
