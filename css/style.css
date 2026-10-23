@@ -1319,8 +1319,13 @@ body.resizing {
 }
 .sidebar.collapsed .nav-icon {
     margin: 0;
-    /* ★ 收窄到 60px 后图标挤在一起是歪的（图标和文字的基线对不齐），
-         与其调半天对齐，不如收起时干脆不显示 —— 用户要的就是这个 */
+    /* ★ 图标必须留着：收起态唯一还能点的就是这些图标，
+         全隐藏的话侧边栏就成了一条不能用的空条。
+         文字已经隐藏，只剩图标，居中不会歪（.nav-icon 自带 inline-flex 居中）。 */
+    display: inline-flex;
+}
+/* 收起后右边缘的拖拽把手没有意义（宽度固定 60px），留着只会挡住点击 */
+.sidebar.collapsed .gd-sb-resizer {
     display: none;
 }
 .sidebar.collapsed .user-info {
@@ -1361,6 +1366,27 @@ body.resizing {
         transform: translateX(-100%);
         transition: transform var(--t-4) var(--hm-std);
         box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+    }
+    /* ★ 桌面上收起过侧边栏后把窗口缩窄，collapsed 类会残留在 DOM 上。
+         移动端侧边栏是抽屉，不该受它影响 —— 否则抽屉会被压成 60px 宽。 */
+    .sidebar.collapsed {
+        width: var(--sidebar-width);
+    }
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .nav-section-title,
+    .sidebar.collapsed .nav-item span:not(.nav-icon),
+    .sidebar.collapsed .user-info > div,
+    .sidebar.collapsed .sidebar-footer button span:not(:first-child) {
+        display: revert;
+    }
+    .sidebar.collapsed .sidebar-header,
+    .sidebar.collapsed .sidebar-footer button {
+        justify-content: revert;
+        padding: revert;
+    }
+    .sidebar.collapsed .nav-item {
+        justify-content: revert;
+        padding: revert;
     }
     .sidebar.open {
         transform: translateX(0);
