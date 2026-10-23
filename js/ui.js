@@ -223,6 +223,10 @@ class UI {
                 } else {
                     // 电脑端：折叠/展开侧边栏
                     const isCollapsed = sidebar.classList.contains('collapsed');
+                    // ★ inline width 会压过 .sidebar.collapsed{width:60px}，
+                    //   结果就是「只隐藏内容、宽度不变」的一条大空白。
+                    //   历史版本确实往这里写过 inline width，收起前先清掉。
+                    if (!isCollapsed && sidebar.style.width) sidebar.style.width = '';
                     sidebar.classList.toggle('collapsed', !isCollapsed);
                     if (mainContent) mainContent.classList.toggle('sidebar-collapsed', !isCollapsed);
                     // 保存状态
