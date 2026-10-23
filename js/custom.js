@@ -134,8 +134,19 @@
             all[m].hidden = !!cfg.navHidden[v];
         }
 
+        // ★ 只改 CSS 变量，绝不写 inline width。
+        //   写过 inline width 的话，它会压过 .sidebar.collapsed{width:60px}，
+        //   导致「收起侧边栏」只隐藏内容、宽度不变 —— 变成一条 260px 的大空白。
+        setSidebarWidth(cfg.width);
+    }
+
+    /* 统一的宽度写入口：width 只存在于 --sidebar-width 变量里，
+       .sidebar 自己的 width 永远来自 var()，任何类规则都盖得住。 */
+    function setSidebarWidth(w) {
+        if (!w) return;
+        try { document.documentElement.style.setProperty('--sidebar-width', w + 'px'); } catch (e) {}
         var sb = document.querySelector('.sidebar');
-        if (sb) sb.style.width = cfg.width + 'px';
+        if (sb && sb.style.width) sb.style.width = '';   // 清掉历史遗留的 inline width
     }
 
     /* ---------- 应用：顶栏 ---------- */
@@ -299,8 +310,7 @@
         r.addEventListener('input', function () {
             cfg.width = +r.value;
             lab.textContent = cfg.width + 'px';
-            var sb = document.querySelector('.sidebar');
-            if (sb) sb.style.width = cfg.width + 'px';   // 实时预览
+            setSidebarWidth(cfg.width);   // 实时预览
         });
         r.addEventListener('change', function () { save(); });
         wrap.appendChild(r); wrap.appendChild(lab);
@@ -336,8 +346,8 @@
         }
         function setW(w) {
             cfg.width = w;
-            sb.style.width = w + 'px';
             try { document.documentElement.style.setProperty('--sidebar-width', w + 'px'); } catch (e) {}
+            if (sb.style.width) sb.style.width = '';
         }
 
         bar.addEventListener('pointerdown', function (e) {
