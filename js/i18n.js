@@ -9,6 +9,11 @@ const I18n = {
             'nav.starred': '收藏',
             'nav.shared': '我的分享',
             'nav.explore': '发现分享',
+            // ★ 千览入口。0.9.1 加侧边栏时只往 js/lang/ 分包里写了这个词，
+            //   忘了写源。而 zh-CN 是内建语言（BUILTIN），lang 包根本不会被
+            //   下载（loadLang 里 code === BUILTIN 直接 return）→ 界面显示裸键
+            //   "nav.thousand"。改词必须改这个源，分包是产物不是源。
+            'nav.thousand': '千览',
             'nav.plugins': '插件广场',
             'nav.backend': '后端服务',
             'nav.docs': '使用文档',
@@ -294,6 +299,14 @@ const I18n = {
             'api.rateLimit': '⚠️ API 即将限流！剩余 {remaining} 次，{time} 重置',
             // Toast
             'toast.recentCount': '最近使用（{count}个）',
+            'trash.itemCount': '回收站共 {count} 项',
+            'trash.restoreAll': '恢复全部',
+            'trash.emptyTrash': '清空回收站',
+            'trash.confirmRestoreAll': '确定恢复回收站里的 {count} 个项目吗？',
+            'trash.confirmEmpty': '确定永久删除回收站里的 {count} 个项目吗？此操作不可撤销，文件将从 GitHub 仓库彻底删除。',
+            'toast.trashEmpty': '回收站是空的',
+            'toast.restoredAll': '已恢复 {ok} 项，失败 {fail} 项',
+            'toast.emptiedTrash': '已清空 {ok} 项，失败 {fail} 项',
             'toast.listView': '已切换为列表视图',
             'toast.gridView': '已切换为网格视图',
             // 分享
