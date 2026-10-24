@@ -1,0 +1,252 @@
+/**
+ * 新手引导
+ *
+ * 第一次登录成功后自动走一遍：欢迎 → 上传 → 新建文件夹 → 结束。
+ * 每步用「挖洞高亮 + 手指点按 + 按钮涟漪」指给用户看该点哪。
+ *
+ * ★ 为什么是"挖洞"而不是给目标加个发光边框：
+ *   发光边框只是描了个边，用户视线仍会被页面上其它按钮拉走。
+ *   挖洞把四周压暗，只留目标亮着 —— 视线没有别的地方可去。
+ *   洞的实现是一个透明 div + 9999px 的 box-shadow：
+ *   影子负责铺满全屏变暗，洞本身透明所以目标看得见。
+ *
+ * ★ 手指标的是"手指会去按这里"，不是装饰。
+ *   它从右下方滑进来、停住、按下（缩小）、松开、淡出，循环播放。
+ *   循环是必要的：用户可能没在看，一次性的动画等于没播。
+ *   prefers-reduced-motion 下只保留静态手指，不做位移。
+ *
+ * ★ 状态只存一个 localStorage 键。
+ *   引导不是配置，不需要同步到云端；换了设备重看一遍也没坏处。
+ */
+(function () {
+    'use strict';
+
+    var LS_KEY = 'gd_onboard_done_v1';
+
+    /* 文案内置六语，不走 i18n 词典：
+       引导只在首次登录出现一次，为它去改六个语言包 + 重跑拆分脚本
+       的收益不划算，自包含反而不会漏翻。 */
+    var L = {
+        'zh-CN': {
+            welcome: { t: '欢迎使用 GitHub Drive', d: '把 GitHub 仓库当成你的网盘。先花十几秒认一下几个关键按钮。' },
+            upload: { t: '上传文件', d: '点这里把文件传上来。也可以直接把文件或文件夹拖进下面的空白区域。' },
+            folder: { t: '新建文件夹', d: '想分类整理就点它。文件一多，文件夹是唯一能救你的东西。' },
+            thousand: { t: '千览', d: '点开可以用阅读器打开文件，PDF 和电子书会记住你读到第几页。' },
+            finish: { t: '就这些', d: '剩下的自己摸索就好。随时可以在设置里重看这个引导。' },
+            skip: '跳过', next: '下一步', done: '开始使用'
+        },
+        en: {
+            welcome: { t: 'Welcome to GitHub Drive', d: 'Your GitHub repos, used as a cloud drive. Ten seconds to meet the key buttons.' },
+            upload: { t: 'Upload', d: 'Click here to upload files. You can also drag files or folders straight into the area below.' },
+            folder: { t: 'New folder', d: 'Use it to keep things sorted. Once you have many files, folders are the only thing that saves you.' },
+            thousand: { t: 'Reader', d: 'Opens files in the reader — PDFs and ebooks remember which page you were on.' },
+            finish: { t: "That's it", d: 'The rest is easy to pick up. You can replay this guide from Settings any time.' },
+            skip: 'Skip', next: 'Next', done: 'Start'
+        },
+        es: {
+            welcome: { t: 'Bienvenido a GitHub Drive', d: 'Tus repositorios de GitHub como unidad en la nube. Diez segundos para conocer los botones clave.' },
+            upload: { t: 'Subir', d: 'Haz clic aquí para subir archivos. También puedes arrastrar archivos o carpetas al área de abajo.' },
+            folder: { t: 'Nueva carpeta', d: 'Úsala para mantener el orden. Cuando tengas muchos archivos, las carpetas son lo único que te salva.' },
+            thousand: { t: 'Lector', d: 'Abre los archivos en el lector; los PDF y los ebooks recuerdan la página en la que estabas.' },
+            finish: { t: 'Eso es todo', d: 'El resto se descubre sobre la marcha. Puedes repetir esta guía desde Ajustes.' },
+            skip: 'Omitir', next: 'Siguiente', done: 'Empezar'
+        },
+        fr: {
+            welcome: { t: 'Bienvenue dans GitHub Drive', d: 'Vos dépôts GitHub comme disque cloud. Dix secondes pour découvrir les boutons essentiels.' },
+            upload: { t: 'Téléverser', d: 'Cliquez ici pour envoyer des fichiers. Vous pouvez aussi glisser des fichiers ou dossiers dans la zone ci-dessous.' },
+            folder: { t: 'Nouveau dossier', d: 'Pour garder les choses rangées. Avec beaucoup de fichiers, les dossiers sont votre seul salut.' },
+            thousand: { t: 'Lecteur', d: 'Ouvre les fichiers dans le lecteur : PDF et ebooks retiennent la page où vous étiez.' },
+            finish: { t: 'C’est tout', d: 'Le reste s’apprend en pratiquant. Vous pouvez revoir ce guide depuis les Paramètres.' },
+            skip: 'Ignorer', next: 'Suivant', done: 'Commencer'
+        },
+        ru: {
+            welcome: { t: 'Добро пожаловать в GitHub Drive', d: 'Ваши репозитории GitHub как облачный диск. Десять секунд — и вы знаете главные кнопки.' },
+            upload: { t: 'Загрузить', d: 'Нажмите здесь, чтобы загрузить файлы. Файлы и папки можно просто перетащить в область ниже.' },
+            folder: { t: 'Новая папка', d: 'Чтобы держать всё в порядке. Когда файлов станет много, папки — единственное спасение.' },
+            thousand: { t: 'Читалка', d: 'Открывает файл в читалке: PDF и книги запоминают, на какой вы были странице.' },
+            finish: { t: 'Всё', d: 'Остальное освоите по ходу. Этот тур можно перезапустить в Настройках.' },
+            skip: 'Пропустить', next: 'Далее', done: 'Начать'
+        },
+        ar: {
+            welcome: { t: 'مرحباً بك في GitHub Drive', d: 'مستودعات GitHub الخاصة بك كقرص سحابي. عشر ثوانٍ للتعرف على الأزرار المهمة.' },
+            upload: { t: 'رفع', d: 'انقر هنا لرفع الملفات. يمكنك أيضاً سحب الملفات أو المجلدات إلى المساحة أدناه.' },
+            folder: { t: 'مجلد جديد', d: 'استخدمه لترتيب الأشياء. عندما يكثر عدد الملفات، المجلدات هي الشيء الوحيد الذي ينقذك.' },
+            thousand: { t: 'القارئ', d: 'يفتح الملف في القارئ؛ يتذكر ملف PDF والكتب الإلكترونية الصفحة التي كنت عليها.' },
+            finish: { t: 'هذا كل شيء', d: 'الباقي ستتعلمه بالممارسة. يمكنك إعادة هذا الدليل من الإعدادات.' },
+            skip: 'تخطي', next: 'التالي', done: 'ابدأ'
+        }
+    };
+
+    /* 每一步：target 是要高亮的选择器，null 表示居中卡片（不指向任何按钮） */
+    var STEPS = [
+        { id: 'welcome', target: null },
+        { id: 'upload', target: '#upload-btn' },
+        { id: 'folder', target: '#new-folder-btn' },
+        { id: 'thousand', target: '[data-i18n="nav.thousand"]' },
+        { id: 'finish', target: null }
+    ];
+
+    var HAND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M18 11V6a1.6 1.6 0 0 0-3.2 0"/>' +
+        '<path d="M14.8 11V4.8a1.6 1.6 0 0 0-3.2 0V11"/>' +
+        '<path d="M11.6 11V5.6a1.6 1.6 0 0 0-3.2 0V13"/>' +
+        '<path d="M8.4 12.4V9.6a1.6 1.6 0 0 0-3.2 0V15a6 6 0 0 0 6 6h1.4a5 5 0 0 0 5-5v-5"/>' +
+        '</svg>';
+
+    var root = null, idx = 0, cur = null;
+
+    function lang() {
+        var c = (window.I18n && I18n.current) || '';
+        if (L[c]) return c;
+        var n = (navigator.language || 'zh-CN').toLowerCase();
+        if (n.indexOf('zh') === 0) return 'zh-CN';
+        if (n.indexOf('en') === 0) return 'en';
+        if (n.indexOf('es') === 0) return 'es';
+        if (n.indexOf('fr') === 0) return 'fr';
+        if (n.indexOf('ru') === 0) return 'ru';
+        if (n.indexOf('ar') === 0) return 'ar';
+        return 'zh-CN';
+    }
+
+    function txt(k) {
+        var p = L[lang()] || L['zh-CN'];
+        return p[k] || (L['zh-CN'][k] || '');
+    }
+
+    function build() {
+        if (root) return root;
+        root = document.createElement('div');
+        root.className = 'gd-ob-root';
+        root.innerHTML =
+            '<div class="gd-ob-hole"></div>' +
+            '<div class="gd-ob-hand">' + HAND + '</div>' +
+            '<div class="gd-ob-card">' +
+            '  <div class="gd-ob-title"></div>' +
+            '  <div class="gd-ob-desc"></div>' +
+            '  <div class="gd-ob-actions">' +
+            '    <button class="gd-ob-skip btn-text"></button>' +
+            '    <button class="gd-ob-next btn-primary"></button>' +
+            '  </div>' +
+            '</div>';
+        document.body.appendChild(root);
+
+        root.querySelector('.gd-ob-skip').onclick = function (e) {
+            e.stopPropagation();
+            finish();
+        };
+        root.querySelector('.gd-ob-next').onclick = function (e) {
+            e.stopPropagation();
+            next();
+        };
+        // 点空白处不推进：引导没看完就消失比多停留几秒更糟
+        root.querySelector('.gd-ob-card').onclick = function (e) { e.stopPropagation(); };
+        return root;
+    }
+
+    function place(step) {
+        var hole = root.querySelector('.gd-ob-hole');
+        var hand = root.querySelector('.gd-ob-hand');
+        var card = root.querySelector('.gd-ob-card');
+        var el = step.target ? document.querySelector(step.target) : null;
+
+        // ★ 目标不存在时不能报错也不能卡住 —— 直接跳过这一步继续。
+        //   千览入口是 JS 动态写 href 的，DOM 里可能还没渲染出来。
+        if (step.target && !el) { next(); return; }
+
+        if (!el) {
+            hole.style.display = 'none';
+            hand.style.display = 'none';
+            card.className = 'gd-ob-card is-center';
+            return;
+        }
+
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        var r = el.getBoundingClientRect();
+        var pad = 6;
+        hole.style.display = '';
+        hole.style.left = (r.left - pad) + 'px';
+        hole.style.top = (r.top - pad) + 'px';
+        hole.style.width = (r.width + pad * 2) + 'px';
+        hole.style.height = (r.height + pad * 2) + 'px';
+
+        hand.style.display = '';
+        hand.style.left = (r.left + r.width / 2 + 6) + 'px';
+        hand.style.top = (r.top + r.height / 2 + 2) + 'px';
+
+        card.className = 'gd-ob-card' + (r.top > window.innerHeight / 2 ? ' is-above' : '');
+        // 卡片横向跟着目标走，纵向贴在目标上方或下方
+        var cw = 300;
+        var cx = Math.min(Math.max(12, r.left + r.width / 2 - cw / 2),
+            window.innerWidth - cw - 12);
+        card.style.left = cx + 'px';
+        if (r.top > window.innerHeight / 2) {
+            card.style.top = '';
+            card.style.bottom = (window.innerHeight - r.top + 16) + 'px';
+        } else {
+            card.style.bottom = '';
+            card.style.top = (r.bottom + 16) + 'px';
+        }
+    }
+
+    function paint() {
+        cur = STEPS[idx];
+        var s = txt(cur.id);
+        root.querySelector('.gd-ob-title').textContent = s.t;
+        root.querySelector('.gd-ob-desc').textContent = s.d;
+        var last = (idx === STEPS.length - 1);
+        root.querySelector('.gd-ob-next').textContent = last ? txt('done') : txt('next');
+        root.querySelector('.gd-ob-skip').textContent = last ? '' : txt('skip');
+        root.querySelector('.gd-ob-skip').style.display = last ? 'none' : '';
+        place(cur);
+    }
+
+    function next() {
+        if (idx >= STEPS.length - 1) { finish(); return; }
+        idx++;
+        paint();
+    }
+
+    function finish() {
+        try { localStorage.setItem(LS_KEY, '1'); } catch (e) {}
+        teardown();
+    }
+
+    function teardown() {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('keydown', onKey, true);
+        if (root) { root.remove(); root = null; }
+        cur = null;
+    }
+
+    function onResize() { if (cur) place(cur); }
+
+    function onKey(e) {
+        if (e.key === 'Escape') { e.stopPropagation(); finish(); }
+        else if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); next(); }
+    }
+
+    var GdOnboard = {
+        /** 已经看过就不再打扰 */
+        isDone: function () {
+            try { return !!localStorage.getItem(LS_KEY); } catch (e) { return false; }
+        },
+        maybeStart: function () {
+            if (this.isDone()) return;
+            // 等一拍：登录后的文件树还在渲染，立刻定位会拿到错误的坐标
+            setTimeout(function () { GdOnboard.start(); }, 900);
+        },
+        start: function () {
+            idx = 0;
+            build();
+            window.addEventListener('resize', onResize);
+            window.addEventListener('keydown', onKey, true);
+            paint();
+        },
+        reset: function () {
+            try { localStorage.removeItem(LS_KEY); } catch (e) {}
+        }
+    };
+
+    window.GdOnboard = GdOnboard;
+})();
