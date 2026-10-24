@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write     # 用于把诊断输出写回仓库（Actions 日志在沙盒里读不到）
+  contents: write     # 用于把诊断输出写回仓库（Actions 日志存在 Azure blob，外部读不到）
 
 jobs:
   deploy:
@@ -21,11 +21,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── 1. 取 D1 数据库 id，没有就创建 ──────────────────
-      # database_id 必须在 wrangler.toml 里，而 id 只有创建后才知道，
-      # 所以在 CI 里拿到 uuid 再 sed 注入，仓库里只留占位符。
-      - name: 取 D1 数据库 id（不存在就创建）
-        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
+      # D1 的 database_id 只有创建后才知道。两条路：
+      #   a) 在 CF 网页建好、id 已写进 wrangler.toml → 直接用，不碰 API
+      #   b) 还是占位符 → 调 API 创建（需要 token 有 D1 权限，常常没有）
+      # 优先 a)，因为很多 token 只有 Workers 权限、没有 D1 权限（会 401）。
+      - name: 判断是否需要创建 D1
+        id: chk
+        run: |
+          if grep -q '__D1_ID__' worker-beta/wrangler.toml; then
+            echo "need=true" >> $GITHUB_OUTPUT
+            echo "wrangler.toml 仍是占位符，需要创建 D1"
+          else
+            echo "need=false" >> $GITHUB_OUTPUT
+            echo "wrangler.toml 已有真实 database_id，跳过创建"
+          fi
+
+      - name: 调 API 创建 D1
+        if: ${{ steps.chk.outputs.need == 'true' && env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
         run: |
           set +e
           {
@@ -34,7 +46,7 @@ jobs:
               "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
               -H "Authorization: Bearer $CF_TOKEN")
             echo "$LIST" | tail -c 1500
-            UUID=$(echo "$LIST" | jq -r '.result[] | select(.name=="gd-beta") | .uuid' | head -1)
+            UUID=$(echo "$LIST" | head -1 | jq -r '.result[] | select(.name=="gd-beta") | .uuid' 2>/dev/null | head -1)
             echo "uuid_from_list=$UUID"
 
             if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
@@ -44,8 +56,8 @@ jobs:
                 -H "Authorization: Bearer $CF_TOKEN" \
                 -H "Content-Type: application/json" \
                 -d '{"name":"gd-beta"}')
-              echo "$CREATE" | tail -c 1500
-              UUID=$(echo "$CREATE" | jq -r '.result.uuid')
+              echo "$CREATE" | head -1 | tail -c 1500
+              UUID=$(echo "$CREATE" | head -1 | jq -r '.result.uuid' 2>/dev/null)
               echo "uuid_from_create=$UUID"
             fi
             echo "final_uuid=$UUID"
@@ -59,21 +71,8 @@ jobs:
           fi
 
       - name: 安装 wrangler
-        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' && env.DIAG_RESULT != 'fail' }}
-        run: npm i -g wrangler 2>&1 | tail -5 | tee -a /tmp/diag.txt
-
-      - name: 建表
-        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' && env.DIAG_RESULT != 'fail' }}
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
-        run: |
-          set +e
-          {
-            echo "== d1 execute =="
-            npx wrangler d1 execute gd-beta --file=worker-beta/schema.sql --remote --yes
-            echo "exit=$?"
-          } 2>&1 | tee -a /tmp/diag.txt
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
+        run: npm i -g wrangler 2>&1 | tail -3 | tee -a /tmp/diag.txt
 
       - name: 部署
         if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' && env.DIAG_RESULT != 'fail' }}
@@ -88,25 +87,23 @@ jobs:
             echo "exit=$?"
           } 2>&1 | tee -a /tmp/diag.txt
 
-      # 拿不到 uuid 就明确失败，不让 workflow 假装成功
+      # 占位符没换成真 id 就明确失败，不让 workflow 假装成功
       - name: 判定
-        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
+        if: ${{ steps.chk.outputs.need == 'true' && env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
         run: |
           if [ "$DIAG_RESULT" = "fail" ]; then
-            echo "D1 uuid 获取失败，见 worker-beta/_diag.txt"
+            echo "D1 uuid 获取失败，详见 worker-beta/_diag.txt"
             exit 1
           fi
           echo "D1 uuid = $DIAG_RESULT"
 
       # ── 诊断输出写回仓库 ────────────────────────────────
-      # Actions 日志存在 Azure blob，外部工具读不到，只能这样回传
       - name: 保存诊断输出
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ ! -f /tmp/diag.txt ]; then echo "(无诊断输出)" > /tmp/diag.txt; fi
-          # 只保留前 8000 字节，避免把整个 npm 日志塞进仓库
           head -c 8000 /tmp/diag.txt > /tmp/diag_trim.txt
           python3 - <<'PYEOF'
           import os, json, base64, urllib.request

@@ -140,6 +140,39 @@ border-bottom:1px solid #21262d}
     });
 }
 
+// ── 建表 ──────────────────────────────────────────────
+// 不走 wrangler d1 execute，改成运行时惰性建表：
+// 通过 binding 执行 SQL 不需要 D1 的 API 权限，
+// 而 API Token 常常只有 Workers 权限、没有 D1 权限（此时会返回 401）。
+let schemaReady = false;
+
+async function ensureSchema(env) {
+    if (schemaReady) return;
+    await env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS shares (
+            id TEXT PRIMARY KEY,
+            owner TEXT NOT NULL,
+            repo TEXT NOT NULL,
+            path TEXT NOT NULL,
+            files TEXT NOT NULL,
+            password_hash TEXT,
+            expire_at INTEGER,
+            views INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        )`
+    ).run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_shares_owner ON shares(owner)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_shares_expire ON shares(expire_at)').run();
+    await env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS users (
+            login TEXT PRIMARY KEY,
+            config TEXT,
+            updated_at INTEGER NOT NULL
+        )`
+    ).run();
+    schemaReady = true;
+}
+
 // ── 主入口 ────────────────────────────────────────────
 export default {
     async fetch(request, env) {
@@ -151,6 +184,13 @@ export default {
         if (method === 'OPTIONS') {
             if (!originAllowed(origin)) return new Response(null, { status: 403 });
             return new Response(null, { status: 204, headers: corsHeaders(origin) });
+        }
+
+        // 首次访问时建表（幂等，后续请求直接跳过）
+        try {
+            await ensureSchema(env);
+        } catch (e) {
+            return json({ error: 'db_init_failed', detail: String((e && e.message) || e) }, 500, origin);
         }
 
         // ── 状态页 ──
