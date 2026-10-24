@@ -14,13 +14,13 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.8.10"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.1"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.8.10"></script>
+    <script src="js/branch-guard.min.js?v=0.9.1"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -273,6 +273,15 @@
                         <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
                         <span data-i18n="nav.explore">发现分享</span>
                     </a>
+                    <!-- 千览：独立的阅读器页面。
+                         用 target="_blank" 打开新标签而不是切视图 —— 它有自己的
+                         一套状态（当前文件、滚动位置），嵌进 Drive 的视图体系里
+                         反而会和文件列表互相干扰。相对路径能自动适配 Pages 子路径。 -->
+                    <a href="thousand-preview/" class="nav-item" id="thousand-nav"
+                       target="_blank" rel="noopener" title="用阅读器打开文件，自动记住读到哪">
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 4h7l2 2h11v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/><path d="M8 13h8M8 17h5"/></svg></span>
+                        <span data-i18n="nav.thousand">千览</span>
+                    </a>
                 </div>
 
                 <!-- 后台进程：统一管理所有进度任务 -->
@@ -425,7 +434,7 @@
             'task-dock': '022294f637',
             'theme': 'b0ec742409',
             'ui': '8ef77fa861',
-            'version': 'ac8508f684'
+            'version': 'ac3ca09bec'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
