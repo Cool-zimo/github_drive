@@ -56,6 +56,11 @@
             'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
             'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js',
         ],
+        jszip: [
+            'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+            'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+        ],
     };
 
     const libCache = {};
@@ -174,6 +179,209 @@
         const max = el.scrollHeight - el.clientHeight;
         if (max <= 0) return;
         el.scrollTop = max * ratio;
+    }
+
+    // ==================== EPUB ====================
+
+    /**
+     * EPUB 渲染
+     *
+     * ★ 为什么自己解析而不用 epub.js：
+     *   epub.js 自带翻页器和布局体系，和千览「连续滚动 + 记 ratio」的模型
+     *   对不上，位置要另起一套 CFI，和别的文件类型不通用。
+     *   而 epub 本体就是个 zip：META-INF/container.xml 指出 OPF 在哪，
+     *   OPF 里 manifest 是资源清单、spine 是阅读顺序。自己解析只依赖
+     *   JSZip 一个通用库，位置沿用 { chapter, ratio }，和长文完全同构。
+     */
+    function renderEpub(blob, container, opts) {
+        return loadScript('jszip', () => !!window.JSZip)
+            .then(() => blob.arrayBuffer())
+            .then(buf => window.JSZip.loadAsync(buf))
+            .then(zip => openBook(zip, container, opts || {}));
+    }
+
+    /** 把章节里的相对 href 解析成 zip 内的完整路径（吃 ../ 和 #锚点） */
+    function zipPath(dir, href) {
+        const clean = String(href || '').split('#')[0].trim();
+        if (!clean) return '';
+        if (clean[0] === '/') return clean.slice(1);
+        const parts = ((dir ? dir + '/' : '') + clean).split('/');
+        const out = [];
+        for (const p of parts) {
+            if (!p || p === '.') continue;
+            if (p === '..') out.pop(); else out.push(p);
+        }
+        return out.join('/');
+    }
+
+    function dirOf(p) {
+        const i = String(p || '').lastIndexOf('/');
+        return i < 0 ? '' : p.slice(0, i);
+    }
+
+    function openBook(zip, container, opts) {
+        return zip.file('META-INF/container.xml').async('string')
+            .catch(() => { throw new Error('不是有效的 EPUB（缺少 META-INF/container.xml）'); })
+            .then(xml => {
+                const doc = new DOMParser().parseFromString(xml, 'application/xml');
+                const root = doc.querySelector('rootfile');
+                const opfPath = root && root.getAttribute('full-path');
+                if (!opfPath) throw new Error('container.xml 里没有 rootfile');
+                return zip.file(opfPath).async('string').then(s => ({ opfPath, s }));
+            })
+            .then(({ opfPath, s }) => {
+                const opfDir = dirOf(opfPath);
+                const doc = new DOMParser().parseFromString(s, 'application/xml');
+                const manifest = {};
+                doc.querySelectorAll('manifest > item').forEach(it => {
+                    manifest[it.getAttribute('id')] = {
+                        href: it.getAttribute('href') || '',
+                        type: it.getAttribute('media-type') || '',
+                    };
+                });
+                const spine = [];
+                doc.querySelectorAll('spine > itemref').forEach(it => {
+                    const idref = it.getAttribute('idref');
+                    if (manifest[idref]) spine.push(manifest[idref]);
+                });
+                if (!spine.length) throw new Error('OPF 里没有可阅读的章节');
+                const tt = doc.querySelector('metadata > title');
+                return mountEpub(zip, container, {
+                    opfDir, manifest, spine,
+                    title: (tt && tt.textContent || '').trim(),
+                    opts,
+                });
+            });
+    }
+
+    function mountEpub(zip, container, b) {
+        const urls = [];
+        let cur = 0;
+
+        container.innerHTML = '';
+
+        const bar = document.createElement('div');
+        bar.className = 'tp-epub-bar';
+
+        const sel = document.createElement('select');
+        sel.className = 'tp-epub-sel';
+        sel.title = '跳转章节';
+        b.spine.forEach((it, i) => {
+            const o = document.createElement('option');
+            o.value = String(i);
+            // 章节真标题要读了内容才知道，先占位，读到再回填
+            o.textContent = '第 ' + (i + 1) + ' 章';
+            sel.appendChild(o);
+        });
+
+        const prev = document.createElement('button');
+        prev.className = 'tp-btn tp-epub-nav';
+        prev.textContent = '上一章';
+        const next = document.createElement('button');
+        next.className = 'tp-btn tp-epub-nav';
+        next.textContent = '下一章';
+
+        const info = document.createElement('span');
+        info.className = 'tp-epub-info';
+        info.textContent = (b.title ? b.title + ' · ' : '') + b.spine.length + ' 章';
+
+        bar.appendChild(prev);
+        bar.appendChild(sel);
+        bar.appendChild(next);
+        bar.appendChild(info);
+
+        const body = document.createElement('div');
+        body.className = 'tp-epub-body';
+
+        container.appendChild(bar);
+        container.appendChild(body);
+
+        prev.onclick = () => go(cur - 1);
+        next.onclick = () => go(cur + 1);
+        sel.onchange = () => go(parseInt(sel.value, 10));
+
+        function go(i) {
+            if (i < 0 || i >= b.spine.length) return Promise.resolve();
+            cur = i;
+            sel.value = String(i);
+            prev.disabled = (i === 0);
+            next.disabled = (i === b.spine.length - 1);
+            return paint(i).then(() => { container.scrollTop = 0; });
+        }
+
+        function paint(i) {
+            const item = b.spine[i];
+            const path = zipPath(b.opfDir, item.href);
+            const f = zip.file(path);
+            if (!f) {
+                body.innerHTML = '<div class="tp-unsupported"><p>这一章在压缩包里找不到。</p></div>';
+                return Promise.resolve();
+            }
+            return f.async('string').then(html => {
+                // 用 text/html 而不是 xhtml+xml：不少 epub 的 XHTML 并不严格，
+                // 按 XML 解析会直接抛错，整本书都读不了。
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                // 章节里的脚本一律不留（来源不可信，且会干扰阅读器）
+                doc.querySelectorAll('script, iframe, object, embed').forEach(n => n.remove());
+                doc.querySelectorAll('*').forEach(n => {
+                    Array.from(n.attributes).forEach(a => {
+                        if (/^on/i.test(a.name)) n.removeAttribute(a.name);
+                    });
+                });
+
+                const base = dirOf(path);
+                // 外链样式表：zip 里的 css 取出来内联，否则排版全丢
+                const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'));
+                // 图片：zip 里的二进制转 blob URL 再塞回 src
+                const imgs = Array.from(doc.querySelectorAll('img'));
+
+                const jobs = [];
+                links.forEach(l => {
+                    const p = zipPath(base, l.getAttribute('href'));
+                    const cf = p && zip.file(p);
+                    if (!cf) return;
+                    jobs.push(cf.async('string').then(css => {
+                        const st = doc.createElement('style');
+                        st.textContent = css;
+                        (doc.head || doc.body).appendChild(st);
+                    }).catch(() => {}));
+                });
+                imgs.forEach(img => {
+                    const p = zipPath(base, img.getAttribute('src'));
+                    const imf = p && zip.file(p);
+                    if (!imf) return;
+                    jobs.push(imf.async('blob').then(bb => {
+                        const u = URL.createObjectURL(bb);
+                        urls.push(u);
+                        img.setAttribute('src', u);
+                    }).catch(() => {}));
+                });
+
+                return Promise.all(jobs).then(() => {
+                    const inn = doc.body ? doc.body.innerHTML : '';
+                    body.innerHTML = inn;
+                    const h = doc.querySelector('h1, h2, h3, title');
+                    const label = h && h.textContent && h.textContent.trim();
+                    if (label) {
+                        const op = sel.options[i];
+                        // 章节标题可能很长，下拉框里截断显示
+                        op.textContent = (i + 1) + '. ' +
+                            (label.length > 28 ? label.slice(0, 28) + '…' : label);
+                        op.title = label;
+                    }
+                });
+            });
+        }
+
+        return go(0).then(() => ({
+            savePosition: () => ({ chapter: cur, ratio: scrollRatio(container) }),
+            restorePosition: (pos) => {
+                if (!pos) return;
+                const i = typeof pos.chapter === 'number' ? pos.chapter : 0;
+                go(i).then(() => applyRatio(container, pos.ratio));
+            },
+            destroy: () => { while (urls.length) URL.revokeObjectURL(urls.pop()); },
+        }));
     }
 
     // ==================== 图片 ====================
@@ -565,6 +773,7 @@
         const e = ext(name);
         if (IMG_EXT.includes(e)) return 'image';
         if (KIND.pdf.includes(e)) return 'pdf';
+        if (e === 'epub') return 'epub';
         if (KIND.docx.includes(e)) return 'docx';
         if (KIND.xlsx.includes(e)) return 'xlsx';
         if (TEXT_EXT.includes(e)) return 'text';
@@ -583,6 +792,7 @@
         switch (kind) {
             case 'image': return renderImage(blob, container, fileInfo);
             case 'pdf': return renderPdf(blob, container, opts);
+            case 'epub': return renderEpub(blob, container, opts);
             case 'docx': return renderDocx(blob, container, opts);
             case 'xlsx': return renderXlsx(blob, container, opts);
             case 'text': return renderText(blob, container, opts);
@@ -636,6 +846,7 @@
         flac: 'audio/flac', m4a: 'audio/mp4', aac: 'audio/aac',
         mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
         m4v: 'video/mp4',
+        epub: 'application/epub+zip',
         docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         xls: 'application/vnd.ms-excel',
