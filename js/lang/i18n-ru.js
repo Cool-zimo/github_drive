@@ -412,6 +412,14 @@
 's.recent': "Недавние",
 's.bg': "Фон",
 's.move': "Переместить",
+    'trash.itemCount': 'В корзине: {count}',
+    'trash.restoreAll': 'Восстановить всё',
+    'trash.emptyTrash': 'Очистить корзину',
+    'trash.confirmRestoreAll': 'Восстановить {count} элемент(ов) из корзины?',
+    'trash.confirmEmpty': 'Удалить навсегда {count} элемент(ов)? Действие необратимо.',
+    'toast.trashEmpty': 'Корзина пуста',
+    'toast.restoredAll': 'Восстановлено {ok}, ошибок {fail}',
+    'toast.emptiedTrash': 'Удалено {ok}, ошибок {fail}',
 };
 root.GdLangMeta = root.GdLangMeta || {};
     root.GdLangMeta['ru'] = {name: 'Русский',  own: 'Русский',  flag: '🇷🇺', rtl: false};
