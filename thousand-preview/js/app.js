@@ -320,12 +320,17 @@
         let html = '<div class="tp-sec-title">' + icon('clock') + '继续阅读</div><div class="tp-cards">';
         alive.forEach(h => {
             const f = app.files.find(x => TPStore.fingerprint(x) === h.fingerprint);
-            const pct = h.progress != null ? Math.round(h.progress * 100) + '%' : '';
+            // 分页型显示"第 X / Y 页"，滚动型显示百分比
+            const label = (h.page && h.total)
+                ? h.page + ' / ' + h.total + ' 页'
+                : (h.progress != null ? Math.round(h.progress * 100) + '%' : '');
+            const width = h.progress != null
+                ? Math.min(100, Math.round(h.progress * 100)) : 0;
             html += '<button class="tp-card" data-fp="' + TPRender.esc(h.fingerprint) + '">' +
                 '<span class="tp-card-ico">' + icon(KIND_ICON[f.kind] || 'other') + '</span>' +
                 '<span class="tp-card-name">' + TPRender.esc(h.name) + '</span>' +
-                '<span class="tp-card-bar"><i style="width:' + (h.progress ? Math.round(h.progress * 100) : 0) + '%"></i></span>' +
-                '<span class="tp-card-pct">' + pct + '</span>' +
+                '<span class="tp-card-bar"><i style="width:' + width + '%"></i></span>' +
+                '<span class="tp-card-pct">' + label + '</span>' +
                 '</button>';
         });
         html += '</div>';
@@ -461,13 +466,22 @@
             if (!app.handle || !app.handle.savePosition) return;
             const pos = app.handle.savePosition();
             if (!pos) return;
-            const progress = typeof pos.ratio === 'number' ? pos.ratio
-                : (pos.page ? pos.page : null);
+            // ★ 两类进度不能混算：
+            //   滚动型（文本/Word）已有 0~1 的 ratio，直接用；
+            //   分页型（PDF）只有 page/total，得自己除 —— 少了这一步，
+            //   第 5 页会被当成 500%。
+            let progress = null;
+            if (typeof pos.ratio === 'number') progress = pos.ratio;
+            else if (pos.page && pos.total) progress = pos.page / pos.total;
+
             TPStore.setPosition(fp, pos);
             TPStore.addHistory({
                 fingerprint: fp,
                 name: app.current.name,
                 progress: progress,
+                // 分页型记页码，界面上显示"第 5 / 20 页"比"25%"直观
+                page: pos.page || null,
+                total: pos.total || null,
             });
         }
 
