@@ -1,4 +1,4 @@
-name = "gd-oauth"
+name = "gd-oauth2"
 main = "oauth-proxy.js"
 compatibility_date = "2025-01-01"
 
