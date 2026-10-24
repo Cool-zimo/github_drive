@@ -794,7 +794,12 @@ class Storage {
             //
             //   空仓删掉会少一份额度，但空仓随时能自动重建，代价很小。
             autoCompact: true,
-            autoCompactDelete: true,
+            // ★ 默认**不删仓**。删仓库不可逆，而腾出的那点额度随时能靠
+            //   新建空仓拿回来，收益远小于风险。想要自动删的用户自己在
+            //   设置里打开（那条已经标了"不可恢复"）。
+            //   这里原先写 true，和 app.js「自动整理默认不删仓库」的注释相反
+            //   —— 注释说一套、代码做一套，是最容易出事的一类不一致。
+            autoCompactDelete: false,
             autoCompactMaxMoveMB: 300,
             autoCompactCooldownHours: 24,
             lastAutoCompactAt: 0
