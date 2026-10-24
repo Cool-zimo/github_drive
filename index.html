@@ -14,13 +14,13 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.8.3"}</style>
+    <style>#gd-css-stamp{--stamp:"0.8.4"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.8.3"></script>
+    <script src="js/branch-guard.min.js?v=0.8.4"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -34,16 +34,17 @@
     <script defer src="js/file-manager.min.js?h=e4281a5ab9" data-gd-core="file-manager"></script>
     <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
     <script defer src="js/task-dock.min.js?h=4660d2f245" data-gd-core="task-dock"></script>
-    <script defer src="js/ui.min.js?h=0483aa63d6" data-gd-core="ui"></script>
+    <!-- oauth 必须在 ui 之前：ui 构造时会读 GitHubDeviceFlow，晚了类还没定义 -->
+    <script defer src="js/oauth.min.js?h=931dec65c0" data-gd-core="oauth"></script>
+    <script defer src="js/ui.min.js?h=4a93dfd181" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=9d7edf6ad9" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=3e9c64a07e" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=7f182d8f90" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=9fea523fd1" data-gd-core="i18n-scan"></script>
     <script defer src="js/app.min.js?h=e4bf72ccc4" data-gd-core="app"></script>
-    <script defer src="js/oauth.min.js?h=931dec65c0" data-gd-core="oauth"></script>
 
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
@@ -415,8 +416,8 @@
             'storage': '5d5500fc2c',
             'task-dock': '4660d2f245',
             'theme': 'b0ec742409',
-            'ui': '0483aa63d6',
-            'version': '3e9c64a07e'
+            'ui': '4a93dfd181',
+            'version': '7f182d8f90'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
