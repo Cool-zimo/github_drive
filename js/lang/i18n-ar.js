@@ -12,6 +12,7 @@
 'nav.starred': 'المفضلة',
 'nav.shared': 'مشاركاتي',
 'nav.explore': 'استكشاف',
+'nav.thousand': 'القارئ',
 'nav.plugins': 'الإضافات',
 'nav.backend': 'الخادم',
 'nav.docs': 'المستندات',
