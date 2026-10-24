@@ -1651,6 +1651,12 @@ class UI {
                 ]
             },
             {
+                title: '应用接入',
+                html: (typeof AppHub !== 'undefined')
+                    ? AppHub.settingsHTML() + AppHub.urlTokenRowHTML()
+                    : ''
+            },
+            {
                 title: '存储与仓库',
                 items: [
                     {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
@@ -1683,6 +1689,10 @@ class UI {
             body += '<div style="margin-bottom:14px;">'
                   +   '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;'
                   +   'text-transform:uppercase;padding:0 4px 6px;">' + g.title + '</div>';
+            // ★ 分组可以自带整块 HTML（应用接入就是）：
+            //   它的每一行都是运行时状态（开/关），套 items 那套
+            //   {icon,title,action} 结构反而要把状态塞进字符串里绕一圈。
+            if (g.html) { body += g.html + '</div>'; continue; }
             for (const it of g.items) {
                 const extraHtml = it.extra ? ' <span style="font-weight:400;font-size:13px;color:#6b7280;">' + it.extra + '</span>' : '';
                 const color = it.danger ? 'color:#dc2626;' : '';
