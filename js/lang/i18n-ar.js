@@ -412,6 +412,14 @@
 's.recent': "الأخيرة",
 's.bg': "الخلفية",
 's.move': "نقل",
+    'trash.itemCount': '{count} عنصرًا في سلة المهملات',
+    'trash.restoreAll': 'استعادة الكل',
+    'trash.emptyTrash': 'إفراغ السلة',
+    'trash.confirmRestoreAll': 'استعادة {count} عنصرًا من السلة؟',
+    'trash.confirmEmpty': 'حذف {count} عنصرًا نهائيًا؟ لا يمكن التراجع.',
+    'toast.trashEmpty': 'السلة فارغة',
+    'toast.restoredAll': 'تمت الاستعادة {ok}، فشل {fail}',
+    'toast.emptiedTrash': 'تم الحذف {ok}، فشل {fail}',
 };
 root.GdLangMeta = root.GdLangMeta || {};
     root.GdLangMeta['ar'] = {name: 'العربية',  own: 'العربية',  flag: '🇸🇦', rtl: true };
