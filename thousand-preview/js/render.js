@@ -308,7 +308,10 @@
 
             updateLabel();
             return show(1).then(() => ({
-                savePosition: () => ({ page }),
+                // ★ 必须带上 total。
+                //   只存 page 的话，上层算"读了多少"时没有分母，
+                //   会拿页码当百分比 —— 第 5 页变成 500%。
+                savePosition: () => ({ page, total: pdf.numPages }),
                 restorePosition: (pos) => { if (pos && pos.page) show(pos.page); },
                 destroy: () => {
                     document.removeEventListener('keydown', onKey);
