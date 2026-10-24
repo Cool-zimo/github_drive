@@ -1389,19 +1389,21 @@ class FileManager {
     // ==================== 工具方法 ====================
     static formatSize(bytes) { return Storage.formatBytes(bytes); }
 
+    /**
+     * 文件图标。
+     *
+     * ★ 0.9.2 从 emoji 表改成内联 SVG，原因见 0.8.11 那条教训：
+     *   文件列表是高频重绘容器。返回 emoji 的话，每次 render 都要等
+     *   Icons 的 MutationObserver 扫描（带 80ms 防抖）才会变成 SVG，
+     *   这 80ms 就是"图标闪一下"的窗口。源头直接给 SVG，中间态不存在。
+     *
+     * ★ 为什么不再自己维护一张扩展名表
+     *   Icons.forFile() 已经有完整的映射（且和设置页、分享页同一套画风），
+     *   这里再写一份就是第三份重复的真相源，改一处漏两处。
+     */
     static getFileIcon(name, type) {
-        if (type === 'dir') return '📁';
-        const ext = name.split('.').pop().toLowerCase();
-        const icons = {
-            jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', bmp: '🖼️', ico: '🖼️',
-            mp4: '🎬', avi: '🎬', mov: '🎬', wmv: '🎬', flv: '🎬', mkv: '🎬', webm: '🎬',
-            mp3: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', ogg: '🎵', wma: '🎵', m4a: '🎵',
-            pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
-            txt: '📄', md: '📝', json: '📋', xml: '📋', yaml: '📋', yml: '📋',
-            js: '📜', ts: '📜', py: '📜', java: '📜', c: '📜', cpp: '📜', go: '📜', rs: '📜',
-            html: '🌐', css: '🎨', zip: '🗜️', rar: '🗜️', '7z': '🗜️', tar: '🗜️', gz: '🗜️',
-            exe: '⚙️', dmg: '💿', iso: '💿', apk: '📱', ipa: '📱'
-        };
-        return icons[ext] || '📄';
+        if (typeof Icons === 'undefined') return '';
+        if (type === 'dir') return Icons.get('folder', { size: 16 });
+        return Icons.forFile(name, { size: 16 });
     }
 }

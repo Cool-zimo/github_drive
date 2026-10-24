@@ -585,8 +585,11 @@ class ShareManager {
                         </li>`;
     }
 
-    /** 生成期用的图标（与内联脚本里的 getFileIcon 保持一致） */
+    /** 本页用的图标（与内联脚本里的 getFileIcon 视觉保持一致） */
     getFileIcon(name) {
+        // ★ 0.9.2：改用 Icons.forFile()，与文件列表/设置页同一套黑白线性画风。
+        //   注意下面那份内联表（会被写进生成的分享页 HTML）不能改，原因见那里。
+        if (typeof Icons !== 'undefined') return Icons.forFile(name, { size: 16 });
         const ext = String(name).split('.').pop().toLowerCase();
         const icons = {
             jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️',
