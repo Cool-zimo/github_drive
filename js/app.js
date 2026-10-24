@@ -426,6 +426,26 @@ class App {
     }
 
     async previewFile(file) {
+        /* ★ 默认交给千览：它能记住读到第几页、PDF/Office 有真实排版，
+           而直接 window.open(blob) 每次都从头开始，且地址栏是临时
+           blob URL，一刷新就没了。
+           千览不支持的类型（如 epub）或新标签被拦截时，再回退到老路。 */
+        try {
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            const TP_OK = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+                'txt', 'md', 'csv', 'log', 'json', 'js', 'css', 'html', 'htm',
+                'xml', 'yaml', 'yml', 'ini', 'conf', 'py', 'java', 'c', 'cpp',
+                'h', 'go', 'rs', 'ts', 'jsx', 'tsx', 'sh', 'bat', 'sql',
+                'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico',
+                'mp3', 'wav', 'ogg', 'm4a', 'mp4', 'webm', 'mov', 'mkv'];
+            const tp = window.GD_TP_URL;
+            if (tp && !file.isFolder && TP_OK.includes(ext)) {
+                const w = window.open(tp + '?file=' + encodeURIComponent(file.path),
+                    '_blank', 'noopener');
+                if (w) { this.storage.addToRecent(file.path); return; }
+            }
+        } catch (e) { /* 千览打不开就走下面的老路 */ }
+
         try {
             this.ui.showToast(I18n.t('file.previewLoading') || '正在加载预览...', 'info');
             let blob = await this.fileManager.getFileBlob(file.path);
