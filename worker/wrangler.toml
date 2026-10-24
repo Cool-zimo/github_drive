@@ -1,0 +1,6 @@
+name = "gd-oauth"
+main = "oauth-proxy.js"
+compatibility_date = "2025-01-01"
+
+# 无状态 Worker：不绑定 KV / Durable Object / R2。
+# 它不存任何东西，转发完就忘，这是它能被信任的前提。
