@@ -446,8 +446,11 @@ class App {
             const finish = ok => {
                 if (settled) return;
                 settled = true;
+                // 先摘掉 dismiss 钩子再关窗：否则 closeModal() 会把它当
+                // 「用户没点头」再回调一次（不过 settled 已经兜住了）。
                 if (this.ui) this.ui._modalDismissHook = null;
                 try { delete window.__gdFirstRunPick; } catch (e) { window.__gdFirstRunPick = undefined; }
+                if (ok) this.ui?.closeModal();
                 if (!ok) {
                     // 用户没点头：什么都不建，直接退回登录页
                     this.ui?.showToast?.(t('firstRun.dismissed'), 'info');
@@ -462,7 +465,23 @@ class App {
         });
     }
 
-    logout() { this.storage.clearToken(); this.storage.setUser(null); location.reload(); }
+    /**
+     * 退出登录。
+     *
+     * 光清 token 不够：CURRENT_ACCOUNT 还指着刚才那个号，账号切换器一打开
+     * 就会把它当"当前账号"高亮，点一下又用旧 token 登回去了 —— 首次确认
+     * 弹窗里点了「退出，换一个账号」却还在原号上，就是这个原因。
+     * 账号本身保留在列表里（用户可能只是想换号，不是想删号），
+     * 但不再标记成"当前"。
+     */
+    logout() {
+        try {
+            this.storage.clearToken();
+            this.storage.setUser(null);
+            this.storage.remove(this.storage.keys.CURRENT_ACCOUNT);
+        } catch (e) { /* 清不掉也要重载，不能卡在半登出状态 */ }
+        location.reload();
+    }
     
     // 切换账号
     async switchAccount(accountId) {
