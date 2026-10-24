@@ -1,12 +1,11 @@
 == D1 list ==
 {"result":null,"success":false,"errors":[{"code":10000,"message":"Authentication error"}],"messages":[]}
 HTTP:401
-jq: error (at <stdin>:1): Cannot iterate over null (null)
-jq: parse error: Invalid numeric literal at line 2, column 5
 uuid_from_list=
 == D1 create ==
 {"result":null,"success":false,"errors":[{"code":10000,"message":"Authentication error"}],"messages":[]}
-HTTP:401
-jq: parse error: Invalid numeric literal at line 2, column 5
 uuid_from_create=null
 final_uuid=null
+
+7 packages are looking for funding
+  run `npm fund` for details
