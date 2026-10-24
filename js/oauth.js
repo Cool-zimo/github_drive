@@ -54,18 +54,56 @@ class GitHubDeviceFlow {
      * 发 GET 必然 404，那样测出来的是「路径不对」而不是「连不上」。
      */
     async available() {
-        if (!this.configured) return false;
+        const d = await this.diagnose();
+        return d.ok;
+    }
+
+    /**
+     * 探测代理，并返回「卡在哪一步」的结构化结果。
+     *
+     * 原来的 available() 只回 true/false，探测失败时没有任何线索，
+     * 排障只能靠猜。这里把失败拆成三种阶段：
+     *   network     —— fetch 直接抛错（DNS 不通、被墙、被 CORS 拒绝）
+     *   http-status —— 连上了，但状态码不对（代理没部署 / 路径错 / 来源被拒）
+     *   no-config   —— 压根没配
+     *
+     * ⚠️ 一个必须说清的局限：浏览器出于安全考虑，把所有网络层失败
+     *    统一报成 TypeError，不区分「DNS 解析失败」「连接被重置」
+     *    和「CORS 被拒」。所以 network 阶段只能给出可能原因，
+     *    无法精确判定是哪一种。
+     */
+    async diagnose() {
+        if (!this.configured) {
+            return { ok: false, stage: 'no-config', detail: '未配置代理地址或 client_id' };
+        }
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 6000);
+        const t0 = Date.now();
         try {
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 6000);
             const r = await fetch(this._url('/device/code'), {
                 method: 'OPTIONS',
                 signal: ctrl.signal,
             });
             clearTimeout(timer);
-            return r.status === 204 || r.status === 200;
+            const ms = Date.now() - t0;
+            if (r.status === 204 || r.status === 200) {
+                return { ok: true, stage: 'ok', detail: 'HTTP ' + r.status + ' · ' + ms + 'ms' };
+            }
+            return {
+                ok: false,
+                stage: 'http-status',
+                detail: 'HTTP ' + r.status + ' · ' + ms + 'ms',
+            };
         } catch (e) {
-            return false;
+            clearTimeout(timer);
+            const name = (e && e.name) || 'Error';
+            let why = '未知原因';
+            if (name === 'AbortError') {
+                why = '超时（6 秒无响应）—— 多半是网络到不了这个地址';
+            } else if (name === 'TypeError') {
+                why = '请求发不出去。可能是 DNS 解析失败、网络不通，或被 CORS 拒绝（浏览器不细分这几种）';
+            }
+            return { ok: false, stage: 'network', detail: name + ' · ' + why };
         }
     }
 
