@@ -3526,6 +3526,58 @@ svg.gd-set-ico {
 .nav-icon svg.ico,
 .btn-secondary svg.ico,
 .toolbar-btn svg.ico { color: inherit; }
+.gd-oauth-diag {
+    margin-top: 12px;
+    font-size: 12px;
+    text-align: left;
+    background: var(--bg-secondary, #f6f8fa);
+    border: 1px solid var(--border-color, #d0d7de);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.gd-oauth-diag-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    color: var(--text-secondary, #656d76);
+    cursor: pointer;
+    user-select: none;
+}
+.gd-oauth-diag-toggle {
+    flex: none;
+    margin-left: 8px;
+    color: var(--accent-color, #0969da);
+}
+.gd-oauth-diag-body {
+    padding: 0 12px 10px;
+    border-top: 1px solid var(--border-color, #d0d7de);
+}
+.gd-oauth-diag-row {
+    display: flex;
+    gap: 8px;
+    padding: 5px 0;
+    line-height: 1.5;
+}
+.gd-oauth-diag-k {
+    flex: none;
+    width: 68px;
+    color: var(--text-secondary, #656d76);
+}
+.gd-oauth-diag-v {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-primary, #1f2328);
+    word-break: break-all;
+}
+.gd-oauth-diag-hint {
+    margin-top: 6px;
+    padding-top: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary, #656d76);
+    border-top: 1px dashed var(--border-color, #d0d7de);
+}
 .gd-oauth-btn {
     display: flex;
     align-items: center;
