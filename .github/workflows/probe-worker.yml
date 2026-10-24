@@ -1,0 +1,46 @@
+name: Probe Worker
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      W: https://gd-oauth.feng-to-zhang.workers.dev
+      CID: Ov23liuMyWPhGbmCEqDS
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run probes
+        run: |
+          {
+            echo "=== 1. GET / ==="
+            curl -s -w "\nHTTP=%{http_code}\n" --max-time 20 "$W/"
+            echo "=== 2. OPTIONS /device/code (Origin: Pages) ==="
+            curl -s -o /dev/null -D - -X OPTIONS --max-time 20 "$W/device/code" \
+              -H "Origin: https://cool-zimo.github.io" \
+              -H "Access-Control-Request-Method: POST" \
+              -H "Access-Control-Request-Headers: content-type"
+            echo "=== 3. OPTIONS /device/code (Origin: 恶意站) ==="
+            curl -s -o /dev/null -w "HTTP=%{http_code}\n" -X OPTIONS --max-time 20 "$W/device/code" \
+              -H "Origin: https://evil.example.com" \
+              -H "Access-Control-Request-Method: POST"
+            echo "=== 4. POST /device/code (真 client_id) ==="
+            curl -s -w "\nHTTP=%{http_code}\n" --max-time 20 -X POST "$W/device/code" \
+              -H "Origin: https://cool-zimo.github.io" -H "Content-Type: application/json" \
+              -d "{\"client_id\":\"$CID\"}"
+            echo "=== 5. POST /device/code (假 client_id) ==="
+            curl -s -w "\nHTTP=%{http_code}\n" --max-time 20 -X POST "$W/device/code" \
+              -H "Origin: https://cool-zimo.github.io" -H "Content-Type: application/json" \
+              -d '{"client_id":"Iv1.bogus00000000000"}'
+          } > probe-result.txt 2>&1
+          cat probe-result.txt
+
+      - name: Commit result
+        run: |
+          git config user.name "gd-bot"
+          git config user.email "gd-bot@users.noreply.github.com"
+          git add -f probe-result.txt
+          git commit -m "probe: worker 连通性结果" || echo "no change"
+          git push
