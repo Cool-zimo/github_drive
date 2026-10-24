@@ -343,7 +343,10 @@
                     jobs.push(cf.async('string').then(css => {
                         const st = doc.createElement('style');
                         st.textContent = css;
-                        (doc.head || doc.body).appendChild(st);
+                        // ★ 必须插进 body 而不是 head：
+                        //   最后只把 body.innerHTML 搬进阅读区，head 里的
+                        //   <style> 会被留在原地，整本书的排版就丢了。
+                        doc.body.appendChild(st);
                     }).catch(() => {}));
                 });
                 imgs.forEach(img => {
