@@ -106,10 +106,78 @@ class UI {
             return;
         }
 
-        // 后台探测，只写日志。失败不隐藏按钮 —— 否则又是一次静默失败。
-        flow.available().then((ok) => {
-            console.log('[OAuth] 代理探测:', ok ? '通过' : '未通过（点按钮时仍会再试，失败会提示）');
-        }).catch((e) => console.warn('[OAuth] 探测异常:', e && e.message));
+        // ★ 必须定义在 diagnose 之前：diagnose 的回调是异步的，
+        //   如果定义在「btn 找不到就 return」之后，那种情况下回调会
+        //   调一个尚未赋值的属性，直接 TypeError。
+        const _mk = (cls, text) => {
+            const el = document.createElement('div');
+            if (cls) el.className = cls;
+            if (text != null) el.textContent = text;  // textContent，不拼 HTML
+            return el;
+        };
+        const _row = (k, v) => {
+            const r = _mk('gd-oauth-diag-row', null);
+            r.appendChild(_mk('gd-oauth-diag-k', k));
+            r.appendChild(_mk('gd-oauth-diag-v', v));
+            return r;
+        };
+
+        /**
+         * 把探测结果画到登录页底部。
+         *
+         * 存在的理由：移动端没有 F12，控制台日志用户根本看不到，
+         * 之前排障只能靠猜。现在直接显示成文字，念给我或截图都行。
+         *
+         * 只在「不通过」时出现 —— 正常状态下这行字是纯噪音。
+         */
+        this._renderOAuthDiag = (flowObj, d) => {
+            const el = document.getElementById('oauth-diag');
+            if (!el) return;
+            el.innerHTML = '';
+            if (d.ok || !flowObj.configured) { el.style.display = 'none'; return; }
+
+            const brief = d.stage === 'http-status'
+                ? '代理返回了异常状态'
+                : (d.stage === 'network' ? '网络连不上代理' : '配置不完整');
+
+            const head = _mk('gd-oauth-diag-head', '快捷登录暂不可用：' + brief);
+            const toggle = _mk('gd-oauth-diag-toggle', '详情');
+            head.appendChild(toggle);
+
+            const body = _mk('gd-oauth-diag-body', null);
+            body.style.display = 'none';
+            body.appendChild(_row('代理地址', flowObj.proxy.replace(/^https?:\/\//, '').replace(/\/+$/, '')));
+            body.appendChild(_row('Client ID', flowObj.clientId ? flowObj.clientId.slice(0, 6) + '…' : '(空)'));
+            body.appendChild(_row('失败阶段', d.stage));
+            body.appendChild(_row('详细信息', d.detail));
+            body.appendChild(_row('探测时间', new Date().toLocaleString('zh-CN')));
+            body.appendChild(_mk('gd-oauth-diag-hint',
+                '不影响正常登录，用「个人访问令牌」照常进入。把这段发给开发者可帮忙定位。'));
+
+            head.addEventListener('click', () => {
+                const shown = body.style.display !== 'none';
+                body.style.display = shown ? 'none' : '';
+                toggle.textContent = shown ? '详情' : '收起';
+            });
+
+            el.appendChild(head);
+            el.appendChild(body);
+            el.style.display = '';
+        };
+
+        // 后台探测。失败不隐藏按钮 —— 否则又是一次静默失败。
+        // 移动端没有 F12，所以结果同时画到页面上（见 _renderOAuthDiag）。
+        flow.diagnose().then((d) => {
+            console.log('[OAuth] 代理探测:', d.stage, d.detail);
+            this._renderOAuthDiag(flow, d);
+        }).catch((e) => {
+            console.warn('[OAuth] 探测异常:', e && e.message);
+            this._renderOAuthDiag(flow, {
+                ok: false,
+                stage: 'network',
+                detail: '探测本身抛异常：' + ((e && e.message) || e),
+            });
+        });
 
         if (this._oauthBound) return; // 重试可能跑多次，重复绑监听会点一次弹两次
         const btn = document.getElementById('oauth-login-btn');
