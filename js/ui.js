@@ -374,6 +374,13 @@ class UI {
         // 导航
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
+                /* ★ 千览、应用接入这类条目是"真链接"——点了要跳到另一个页面，
+                   它们没有 data-view。这里如果照旧 preventDefault，跳转就被吃
+                   掉了：表现是"点了没反应"（截图的样子），更糟的是
+                   switchView(undefined) 会拿 undefined === undefined 把 active
+                   加到它身上，看着像切了视图，其实主区一片空白。
+                   所以：没有 data-view 或明确是新标签打开的，一律放行。 */
+                if (!item.dataset.view || item.target === '_blank') return;
                 e.preventDefault();
                 this.switchView(item.dataset.view);
             });
@@ -579,7 +586,10 @@ class UI {
         this.app._currentView = view;
         this.app.saveLastState?.();
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.view === view);
+            /* ★ 加 !!view：view 为 undefined 时（比如误点了没有 data-view
+               的条目），undefined === undefined 会把高亮打到它身上，
+               造成"看起来切过去了、主区却空白"的假象。 */
+            item.classList.toggle('active', !!view && item.dataset.view === view);
         });
 
         // 清除仓库选中状态
@@ -1677,6 +1687,7 @@ class UI {
                 ]
             }
         ];
+
 
         let body = '';
         for (const g of GROUPS) {
