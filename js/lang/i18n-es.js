@@ -412,6 +412,14 @@
 's.recent': "Reciente",
 's.bg': "Segundo plano",
 's.move': "Mover",
+    'trash.itemCount': '{count} elementos en la papelera',
+    'trash.restoreAll': 'Restaurar todo',
+    'trash.emptyTrash': 'Vaciar papelera',
+    'trash.confirmRestoreAll': '¿Restaurar {count} elemento(s) de la papelera?',
+    'trash.confirmEmpty': '¿Eliminar definitivamente {count} elemento(s)? No se puede deshacer.',
+    'toast.trashEmpty': 'La papelera está vacía',
+    'toast.restoredAll': 'Restaurados {ok}, fallidos {fail}',
+    'toast.emptiedTrash': 'Eliminados {ok}, fallidos {fail}',
 };
 root.GdLangMeta = root.GdLangMeta || {};
     root.GdLangMeta['es'] = {name: 'Español',  own: 'Español',  flag: '🇪🇸', rtl: false};
