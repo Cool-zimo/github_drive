@@ -1,0 +1,11 @@
+name = "gd-beta"
+main = "beta.js"
+compatibility_date = "2025-01-01"
+
+# database_id 在 CI 里注入（见 .github/workflows/deploy-beta.yml）：
+# 先调 CF API 拿到 uuid，再 sed 替换下面的占位符。
+# 不写死是为了让 fork 的人也能一键部署到自己的账号。
+[[d1_databases]]
+binding = "DB"
+database_name = "gd-beta"
+database_id = "__D1_ID__"

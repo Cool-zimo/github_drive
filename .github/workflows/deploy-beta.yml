@@ -1,0 +1,63 @@
+name: Deploy Beta Worker
+
+# 只在改动 worker-beta/ 或本文件时触发；也可在 Actions 页面手动 Run workflow。
+on:
+  push:
+    paths:
+      - 'worker-beta/**'
+      - '.github/workflows/deploy-beta.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # if 表达式里不允许用 secrets 上下文，先转到 env 再判断
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 未配置 Secrets 时跳过，不让仓库里飘红叉
+      - name: 取 D1 数据库 id（不存在就创建）
+        if: ${{ env.HAS_CF == 'true' }}
+        run: |
+          set -e
+          LIST=$(curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
+            -H "Authorization: Bearer $CF_TOKEN")
+          UUID=$(echo "$LIST" | jq -r '.result[] | select(.name=="gd-beta") | .uuid' | head -1)
+          if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
+            echo "未找到 gd-beta，创建中..."
+            CREATE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
+              -H "Authorization: Bearer $CF_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"gd-beta"}')
+            echo "$CREATE" | jq -r '.errors // empty'
+            UUID=$(echo "$CREATE" | jq -r '.result.uuid')
+          fi
+          if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
+            echo "::error::拿不到 D1 uuid，请检查 API Token 是否有 D1 权限"
+            exit 1
+          fi
+          echo "D1 uuid = $UUID"
+          sed -i "s/__D1_ID__/$UUID/" worker-beta/wrangler.toml
+          grep -q "$UUID" worker-beta/wrangler.toml || { echo "::error::sed 注入失败"; exit 1; }
+
+      - name: 安装 wrangler
+        if: ${{ env.HAS_CF == 'true' }}
+        run: npm i -g wrangler
+
+      - name: 建表
+        if: ${{ env.HAS_CF == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
+        run: npx wrangler d1 execute gd-beta --file=worker-beta/schema.sql --remote --yes
+
+      - name: 部署
+        if: ${{ env.HAS_CF == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
+        run: npx wrangler deploy --config worker-beta/wrangler.toml
