@@ -11,14 +11,18 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # if 表达式里不允许用 secrets 上下文，先转到 env 再判断
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
 
-      # 未配置 Secrets 时跳过这一步，不让仓库里飘红叉
+      # 未配置 Secrets 时跳过，不让仓库里飘红叉
       - name: Deploy to Cloudflare Workers
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ env.CF_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT }}
           workingDirectory: 'worker'
