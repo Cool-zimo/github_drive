@@ -16,14 +16,14 @@
 // ==========================================================================
 const APP_VERSION = {
     // ★ 唯一真值来源；下面 major/api/patch 与兼容字段由 bump 脚本同步
-    version: '0.8.11',
+    version: '0.9.0',
     scheme: 2,
     major: '0',
-    api: '8',
-    patch: 8,
-    internalVersion: '0.8.11',
-    formalVersion: '0.8.11',
-    displayVersion: '0.8.11',
+    api: '9',
+    patch: 0,
+    internalVersion: '0.9.0',
+    formalVersion: '0.9.0',
+    displayVersion: '0.9.0',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
@@ -70,6 +70,14 @@ const APP_VERSION = {
     //       - app.js 的版本戳读取改为跨样式表累加：--stamp 在内联、
     //         --api-stamp 在 css 文件，原来遇到第一个就 break 会漏掉
     //         另一个。CSS 无依赖，故不 bump api。
+    //   = 9：侧边栏 / 移动端底部导航 / 顶栏菜单键 / 「新建文件夹」按钮 /
+    //        「收藏」右键项，图标从位图 PNG 与 emoji 统一换成内联 SVG
+    //        （与设置页同一套 svg.ico 线性画风）。
+    //        HTML 结构变了（nav-icon 内由 <img> 换成 <svg>），CSS 也新增了
+    //        .nav-icon svg.ico 与 .mobile-nav-item .icon 的 flex 规则 ——
+    //        老 CSS 没有这两条，SVG 会按内联属性渲染但不受容器约束，
+    //        在收起态 / 移动端会尺寸失控。
+    //
     // ★ 兼容第一代：等于上面的 api，由 version 中段派生
-    apiVersion: '8'
+    apiVersion: '9'
 };
