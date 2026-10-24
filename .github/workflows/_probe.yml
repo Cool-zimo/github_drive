@@ -1,0 +1,15 @@
+name: Probe Worker
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s -m 20 -o /dev/null -w "GET=%{http_code} time=%{time_total}\n" https://gd-oauth.feng-to-zhang.workers.dev/
+          echo "--- CORS预检 ---"
+          curl -s -m 20 -o /dev/null -w "OPTIONS=%{http_code}\n" -X OPTIONS -H "Origin: https://cool-zimo.github.io" -H "Access-Control-Request-Method: POST" https://gd-oauth.feng-to-zhang.workers.dev/device/code
+          echo "--- 真实申请设备码 ---"
+          curl -s -m 20 -X POST -H "Content-Type: application/json" -H "Origin: https://cool-zimo.github.io" -d '{"client_id":"Ov23liuMyWPhGbmCEqDS"}' https://gd-oauth.feng-to-zhang.workers.dev/device/code
+          echo ""
+          echo "--- 恶意来源 ---"
+          curl -s -m 20 -o /dev/null -w "OPTIONS恶意源=%{http_code}\n" -X OPTIONS -H "Origin: https://evil.com" https://gd-oauth.feng-to-zhang.workers.dev/device/code
