@@ -14,13 +14,13 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.4"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.5"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=092">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.9.4"></script>
+    <script src="js/branch-guard.min.js?v=0.9.5"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -326,6 +326,46 @@
                         <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 4h7l2 2h11v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/><path d="M8 13h8M8 17h5"/></svg></span>
                         <span data-i18n="nav.thousand">千览</span>
                     </a>
+                    <script>
+                    /* ★ URL 直登：github_drive/?with_token=ghp_xxx
+                       同时支持 #with_token=xxx（hash 不会发给服务器，
+                       分享链接时 token 不会出现在任何日志里，更安全）。
+                       app 是异步构造的，这里轮询等它出现再触发登录，
+                       并把 token 从地址栏抹掉，避免被复制/留存。 */
+                    (function () {
+                        var p = new URLSearchParams(location.search);
+                        var t = p.get('with_token') ||
+                                (location.hash.match(/with_token=([^&]+)/) || [])[1] || '';
+                        t = (t || '').trim();
+                        if (!t) return;
+                        try { t = decodeURIComponent(t); } catch (e) {}
+                        if (!/^(ghp_|gho_|github_pat_)/.test(t)) return;
+
+                        // 只跑一次：登录失败也不该无限重试
+                        var flag = 'gd_url_token_used_' + t.slice(-6);
+                        if (sessionStorage.getItem(flag)) return;
+                        sessionStorage.setItem(flag, '1');
+
+                        var n = 0;
+                        var timer = setInterval(function () {
+                            n++;
+                            var app = window.app || window.ui && window.ui.app;
+                            if ((!app || typeof app.login !== 'function') && n < 100) return;
+                            clearInterval(timer);
+                            if (!app || typeof app.login !== 'function') return;
+                            var box = document.getElementById('token-input') ||
+                                      document.querySelector('input[type=password]');
+                            if (box) box.value = t;
+                            app.login(t).then(function () {
+                                // 抹掉地址栏里的 token
+                                history.replaceState(null, '',
+                                    location.pathname + (location.search
+                                        .replace(/[?&]with_token=[^&]*/g, '')
+                                        .replace(/^&/, '?') || ''));
+                            }).catch(function () {});
+                        }, 100);
+                    })();
+                    </script>
                     <script>
                     /* ★ 相对路径在无尾斜杠的 URL 下会解析到根域：
                          /github_drive  + "thousand-preview/" → /thousand-preview/（404）
