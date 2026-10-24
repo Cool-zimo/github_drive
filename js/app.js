@@ -2,6 +2,28 @@
  * 应用主入口 v2
  * 统一目录视图，用户感受不到仓库存在
  */
+
+/**
+ * ★ 图标统一出口：源头直接给 SVG，不写 emoji。
+ *
+ * 为什么不能在模板里写 emoji：
+ *   Icons 的扫描挂在 MutationObserver 上、带 80ms 防抖。innerHTML 写入的
+ *   瞬间页面上是 emoji，80ms 后才被替换成 SVG —— 那一瞬用户看到的就是
+ *   "闪一下 emoji"。仪表盘一进来正好撞上，所以最明显。
+ *   弹窗标题同理：showModal 也是整块 innerHTML 重建。
+ *
+ * ★ 为什么保留空串兜底而不是 emoji 兜底：
+ *   icons.js 是核心脚本，加载失败时返回空串（图标位置空白）不会闪；
+ *   返回 emoji 反而会被 scan 再替换一次，那就又回到闪烁的老路。
+ */
+function gdIco(name, size, extra) {
+    if (typeof Icons === 'undefined' || !Icons.get) return '';
+    return Icons.get(name, {
+        size: size || 16,
+        style: 'vertical-align:-2px;margin-right:6px;' + (extra || '')
+    });
+}
+
 class App {
     constructor() {
         this.api = null;
@@ -885,7 +907,7 @@ class App {
             history.forEach((v, i) => {
                 const date = new Date(v.date).toLocaleString('zh-CN');
                 body += '<div style="padding:12px;border-bottom:1px solid #f3f4f6;display:flex;gap:12px;align-items:flex-start;">';
-                body += '<div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">📝</div>';
+                body += '<div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">' + gdIco('fileText', 16, 'margin-right:0;') + '</div>';
                 body += '<div style="flex:1;"><div style="font-size:13px;font-weight:600;">' + v.message.substring(0, 50) + '</div>';
                 body += '<div style="font-size:11px;color:#6b7280;margin-top:2px;">' + v.author + ' · ' + date + '</div>';
                 body += '<div style="font-size:11px;color:#9ca3af;font-family:monospace;margin-top:2px;">' + v.sha + '</div></div>';
@@ -897,7 +919,7 @@ class App {
                 body += '</div>';
             });
             body += '</div>';
-            this.ui.showModal('📜 版本历史 - ' + file.name, body, '', true);
+            this.ui.showModal(gdIco('history', 16) + '版本历史 - ' + file.name, body, '', true);
         } catch (e) { this.ui.showToast('加载失败: ' + e.message, 'error'); }
     }
     
@@ -1020,6 +1042,13 @@ class App {
         container.style.display = '';
         container.className = 'dashboard-view';
 
+        // ★ 图标直接出 SVG，不再写 emoji。
+        //   仪表盘是整块 innerHTML 一次性重绘的：写 emoji 要等 Icons 的
+        //   MutationObserver（80ms 防抖）扫到才换，那一瞬就是"闪一下 emoji"，
+        //   而进来第一眼正好撞上。源头给 SVG 就没有中间态。
+        const ic = (n, sz, extra) => (typeof Icons !== 'undefined' && Icons.get)
+            ? Icons.get(n, { size: sz || 16, style: 'vertical-align:-2px;margin-right:6px;' + (extra || '') })
+            : '';
         const vfs = this.storage.getVFS();
         const files = Object.entries(vfs.files || {});
         const folders = Object.entries(vfs.folders || {});
@@ -1037,27 +1066,27 @@ class App {
         // ① 先出 UI —— 全部来自本地 VFS，不含任何网络等待
         const fmtGB = mb => (mb >= 1024 ? (mb/1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB');
         container.innerHTML = '<div style="padding:20px;max-width:1200px;margin:0 auto;">' +
-            '<h2 style="font-size:22px;font-weight:700;margin-bottom:20px;color:var(--text-primary);">📊 仪表盘</h2>' +
+            '<h2 style="font-size:22px;font-weight:700;margin-bottom:20px;color:var(--text-primary);">' + ic('barChart', 20) + '仪表盘</h2>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
-            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.3);"><div class="dash-num" data-count="' + files.length + '" style="font-size:32px;font-weight:700;">' + files.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📄 文件总数</div></div>' +
-            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#f093fb,#f5576c);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(240,147,251,0.3);"><div class="dash-num" data-count="' + folders.length + '" style="font-size:32px;font-weight:700;">' + folders.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📁 文件夹</div></div>' +
-            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(79,172,254,0.3);"><div class="dash-num" data-count="' + (totalSize/1024/1024).toFixed(1) + '" data-suffix=" MB" style="font-size:28px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + ' MB</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">📦 文件总大小</div></div>' +
-            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#43e97b,#38f9d7);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(67,233,123,0.3);"><div class="dash-num" data-count="' + favorites.length + '" style="font-size:32px;font-weight:700;">' + favorites.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">⭐ 收藏</div></div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.3);"><div class="dash-num" data-count="' + files.length + '" style="font-size:32px;font-weight:700;">' + files.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">' + ic('fileText', 14) + '文件总数</div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#f093fb,#f5576c);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(240,147,251,0.3);"><div class="dash-num" data-count="' + folders.length + '" style="font-size:32px;font-weight:700;">' + folders.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">' + ic('folder', 14) + '文件夹</div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#4facfe,#00f2fe);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(79,172,254,0.3);"><div class="dash-num" data-count="' + (totalSize/1024/1024).toFixed(1) + '" data-suffix=" MB" style="font-size:28px;font-weight:700;">' + (totalSize/1024/1024).toFixed(1) + ' MB</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">' + ic('package', 14) + '文件总大小</div></div>' +
+            '<div class="dash-card" style="padding:20px;background:linear-gradient(135deg,#43e97b,#38f9d7);border-radius:16px;color:#fff;box-shadow:0 4px 12px rgba(67,233,123,0.3);"><div class="dash-num" data-count="' + favorites.length + '" style="font-size:32px;font-weight:700;">' + favorites.length + '</div><div style="font-size:13px;opacity:0.9;margin-top:4px;">' + ic('star', 14) + '收藏</div></div></div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
             '<div class="dash-panel" style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
-            '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-primary);">📦 GitHub 仓库存储</div>' +
+            '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-primary);">' + ic('package', 16) + 'GitHub 仓库存储</div>' +
             '<div id="dash-repo-box"><div style="font-size:13px;color:#9ca3af;">正在读取仓库容量…</div></div>' +
             '</div>' +
             '<div class="dash-panel" style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
-            '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-primary);">📊 文件类型分布</div>' +
+            '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-primary);">' + ic('barChart', 16) + '文件类型分布</div>' +
             (files.length > 0 ? topTypes.map(([ext, count]) => {
                 const pct = (count/files.length*100).toFixed(1);
                 return '<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span style="color:#374151;">.' + ext + '</span><span style="color:#6b7280;">' + count + ' (' + pct + '%)</span></div><div style="height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:4px;transition:width 0.3s;"></div></div></div>';
             }).join('') : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>') +
             '</div></div>' +
             '<div class="dash-panel" style="margin-top:20px;padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">' +
-            '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-primary);">🕐 最近使用</div>' +
-            (recent.length > 0 ? recent.slice(0,8).map(p => '<div style="display:flex;align-items:center;padding:10px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;cursor:pointer;" onclick="app.openFileByPath(\'' + p + '\')"><span style="margin-right:8px;">📄</span><span style="font-size:13px;color:#374151;">' + p.split('/').pop() + '</span><span style="margin-left:auto;font-size:11px;color:#9ca3af;">' + p + '</span></div>').join('') : '<div style="font-size:13px;color:#9ca3af;text-align:center;padding:20px;">暂无最近文件</div>') +
+            '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text-primary);">' + ic('clock', 16) + '最近使用</div>' +
+            (recent.length > 0 ? recent.slice(0,8).map(p => '<div style="display:flex;align-items:center;padding:10px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;cursor:pointer;" onclick="app.openFileByPath(\'' + p + '\')">' + gdIco('fileText', 14, 'margin-right:8px;') + '<span style="font-size:13px;color:#374151;">' + p.split('/').pop() + '</span><span style="margin-left:auto;font-size:11px;color:#9ca3af;">' + p + '</span></div>').join('') : '<div style="font-size:13px;color:#9ca3af;text-align:center;padding:20px;">暂无最近文件</div>') +
             '</div></div>';
 
         // ② 再补数字 —— 网络好了就填进去，失败也不影响上面已经能看的部分
@@ -1127,7 +1156,7 @@ class App {
         body += '<div><div style="font-size:14px;font-weight:600;margin-bottom:8px;">新建标签</div>';
         body += '<div style="display:flex;gap:8px;"><input id="new-tag-input" type="text" placeholder="输入标签名" style="flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">';
         body += '<button onclick="app.addNewTag(\'' + file.path + '\')" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">添加</button></div></div></div>';
-        this.ui.showModal('🏷️ 标签管理', body, '', false);
+        this.ui.showModal(gdIco('tag', 16) + '标签管理', body, '', false);
     }
     addTag(path, tag) { this.storage.addFileTag(path, tag); this.showTagManager({path, name: path.split('/').pop()}); this.loadFiles(); }
     removeTag(path, tag) { this.storage.removeFileTag(path, tag); this.showTagManager({path, name: path.split('/').pop()}); this.loadFiles(); }
@@ -1673,7 +1702,7 @@ class App {
     async showStorageStats() {
         try {
             // 先显示加载中弹窗
-            this.ui.showModal?.('📊 存储用量统计', '<div style="text-align:center;padding:40px;color:#6b7280;">⏳ 正在统计...</div>', '', true);
+            this.ui.showModal?.(gdIco('barChart', 16) + '存储用量统计', '<div style="text-align:center;padding:40px;color:#6b7280;">' + gdIco('clock', 14, 'margin-right:4px;') + '正在统计...</div>', '', true);
             
             const vfs = this.storage.getVFS();
             const files = Object.entries(vfs.files || {});
@@ -1727,8 +1756,8 @@ class App {
                 '<div style="text-align:center;padding:16px;background:#fef3c7;border-radius:12px;">' +
                 '<div style="font-size:24px;font-weight:700;color:#d97706;">' + (totalSize/1024/1024).toFixed(2) + 'MB</div>' +
                 '<div style="font-size:12px;color:#6b7280;">文件总大小</div></div></div>' +
-                '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📦 仓库存储</div>' + repoHtml + '</div>' +
-                '<div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">📊 文件类型分布</div>' +
+                '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">' + gdIco('package', 15) + '仓库存储</div>' + repoHtml + '</div>' +
+                '<div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">' + gdIco('barChart', 15) + '文件类型分布</div>' +
                 (sortedTypes.length > 0 ? typeHtml : '<div style="font-size:13px;color:#9ca3af;">暂无文件</div>') +
                 '</div></div>';
             
@@ -1737,7 +1766,7 @@ class App {
             if (modalBody) {
                 modalBody.innerHTML = body;
             } else {
-                this.ui.showModal?.('📊 存储用量统计', body, '', true);
+                this.ui.showModal?.(gdIco('barChart', 16) + '存储用量统计', body, '', true);
             }
         } catch (e) {
             this.ui.showToast?.('统计失败: ' + e.message, 'error');
@@ -1770,7 +1799,7 @@ class App {
             color = '#f59e0b';
             warning = ' ⚠️';
         }
-        el.innerHTML = `<span style="color:${color};">📦 ${info.sizeMB} MB${warning}</span>`;
+        el.innerHTML = `<span style="color:${color};">${gdIco('package', 14, 'margin-right:4px;')} ${info.sizeMB} MB${warning}</span>`;
         el.title =
             `${info.repoCount} 个存储仓库，合计 ${info.sizeMB} MB（含 git 历史）\n` +
             `最大的一个：${info.largestName} = ${info.largestMB} MB\n` +
@@ -1895,7 +1924,7 @@ class App {
         if (typeof TaskDock !== 'undefined' && TaskDock.create) {
             const t = TaskDock.create({
                 type: 'compact',
-                title: `🧹 整理仓库（${reason}）`,
+                title: `${gdIco('package', 16, 'margin-right:4px;')} 整理仓库（${reason}）`,
                 items: [...new Set(plan.moves.map(m => `${m.from.repo} → ${m.to.repo}`))],
                 note: `${plan.beforeCount} 个仓 → ${plan.afterCount} 个 · ${MB(plan.moveBytes)} MB`,
                 expand: false   // ★ 后台任务默认收成小窗，不打断当前操作
@@ -1988,15 +2017,15 @@ class App {
         }
 
         h += `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn-primary btn-sm" onclick="app.createStorageRepoNow()">➕ 新建存储仓库</button>
-                <button class="btn-secondary btn-sm" onclick="app.showRepoCompaction()">🧹 整理合并</button>
-                <button class="btn-secondary btn-sm" onclick="app.quickRecalibrate()">🔧 校准用量登记</button>
-                <button class="btn-secondary btn-sm" onclick="ui.closeModal();ui.showStorageOptimizer();">⚡ 清理孤儿</button>
+                <button class="btn-primary btn-sm" onclick="app.createStorageRepoNow()">${gdIco('plus', 14, 'margin-right:4px;')}新建存储仓库</button>
+                <button class="btn-secondary btn-sm" onclick="app.showRepoCompaction()">${gdIco('package', 14, 'margin-right:4px;')}整理合并</button>
+                <button class="btn-secondary btn-sm" onclick="app.quickRecalibrate()">${gdIco('settings', 14, 'margin-right:4px;')}校准用量登记</button>
+                <button class="btn-secondary btn-sm" onclick="ui.closeModal();ui.showStorageOptimizer();">${gdIco('zap', 14, 'margin-right:4px;')}清理孤儿</button>
               </div>`;
         h += `<div style="font-size:12px;color:#9ca3af;margin-top:10px;line-height:1.6;">
                 自动建仓：<b>${cfg.autoCreateRepo ? '已开启' : '已关闭'}</b>，单仓上限 ${Math.round(warnMB)} MB。<br>
                 ★ 自动建仓是「<b>所有仓都满了</b>」才触发 —— 只要还有一个仓有空位就往里写，
-                这是对的，否则会平白多出一堆半空仓库。想要减少仓数用「🧹 整理合并」。</div>`;
+                这是对的，否则会平白多出一堆半空仓库。想要减少仓数用「${gdIco('package', 13, 'margin-right:2px;')}整理合并」。</div>`;
         h += '</div>';
         box.innerHTML = h;
     }
