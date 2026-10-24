@@ -1,0 +1,25 @@
+=== 1. GET / ===
+{"error":"method_not_allowed"}
+HTTP=405
+=== 2. OPTIONS /device/code (Origin: Pages) ===
+HTTP/2 204 
+date: Sat, 24 Oct 2026 04:36:12 GMT
+access-control-allow-origin: https://cool-zimo.github.io
+vary: Origin
+access-control-allow-headers: Content-Type
+access-control-allow-methods: POST, OPTIONS
+access-control-max-age: 86400
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=oWm1H%2FpaO7ZPZzMJjAxcqH%2BNKftoQL7z2303%2BVS2%2F1gDDSujNNjYMT3nDepUkjTPSmBFpbd28rdaOmAGnDPQlIOw4hCqn%2Fd6yYUIIQtHkNt1JEIzjy4ZXD6Udc9EvmYhLkJtQutnji8xbAOTPum3tRAjEMRN"}]}
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+server: cloudflare
+cf-ray: a4f647778d124c7c-SJC
+alt-svc: h3=":443"; ma=86400
+
+=== 3. OPTIONS /device/code (Origin: 恶意站) ===
+HTTP=403
+=== 4. POST /device/code (真 client_id) ===
+{"device_code":"9bdbc9775904d230003e13e4036b631969130034","user_code":"4C77-2D3B","verification_uri":"https://github.com/login/device","expires_in":899,"interval":5}
+HTTP=200
+=== 5. POST /device/code (假 client_id) ===
+{"error":"Not Found"}
+HTTP=404
