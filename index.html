@@ -9,18 +9,18 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=7aa6187dfc" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=74d6eeffc0" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.3"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.4"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=092">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.9.3"></script>
+    <script src="js/branch-guard.min.js?v=0.9.4"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -28,12 +28,21 @@
          （等价原来 document.write 的同步顺序，ui.js 依赖 i18n.js 等
          跨文件顶层符号，顺序不能乱）。
          放在 head 里是为了让扫描器尽可能早地撞见它们。 -->
-    <script defer src="js/icons.min.js?h=9de065dcbb" data-gd-core="icons"></script>
-    <script defer src="js/github-api.min.js?h=11ad4f9870" data-gd-core="github-api"></script>
-    <script defer src="js/storage.min.js?h=e2e7468382" data-gd-core="storage"></script>
-    <script defer src="js/file-manager.min.js?h=fdabc0bd60" data-gd-core="file-manager"></script>
-    <script defer src="js/config-sync.min.js?h=cea9363e9f" data-gd-core="config-sync"></script>
-    <script defer src="js/task-dock.min.js?h=d53f7326d9" data-gd-core="task-dock"></script>
+    <script defer src="js/icons.min.js?h=bde278015a" data-gd-core="icons"></script>
+    <script defer src="js/github-api.min.js?h=389e7c20c9" data-gd-core="github-api"></script>
+    <script defer src="js/storage.min.js?h=915f127e93" data-gd-core="storage"></script>
+    <script defer src="js/file-manager.min.js?h=0790099620" data-gd-core="file-manager"></script>
+    <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
+    <script defer src="js/task-dock.min.js?h=f46795d108" data-gd-core="task-dock"></script>
+    <script defer src="js/ui.min.js?h=8d9d813dca" data-gd-core="ui"></script>
+    <script defer src="js/i18n.min.js?h=0e53f69e73" data-gd-core="i18n"></script>
+    <script defer src="js/version.min.js?h=0abcaa66fc" data-gd-core="version"></script>
+    <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
+    <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
+    <script defer src="js/custom.min.js?h=b49d35fe68" data-gd-core="custom"></script>
+    <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
+    <script defer src="js/i18n-scan.min.js?h=385acf8972" data-gd-core="i18n-scan"></script>
+    <script defer src="js/app.min.js?h=9dbc7f9fd6" data-gd-core="app"></script>
     <!-- oauth 必须在 ui 之前：ui 构造时会读 GitHubDeviceFlow，晚了类还没定义 -->
     <script defer src="js/oauth.min.js?h=d561066e51" data-gd-core="oauth"></script>
     <script defer src="js/ui.min.js?h=7ee0feac5f" data-gd-core="ui"></script>
@@ -195,6 +204,41 @@
     })();
     </script>
     <script>
+    /* ★ 链接直登：github_drive/?with_token=ghp_xxx
+       —— 分享/书签里带 token，点开就进 Drive，不用手敲。
+       做法是填进输入框再触发已有的"进入 Drive"按钮，完全复用现有登录流程
+       （校验、存账号、切视图），不另起一套，避免两条路径行为不一致。
+       ★ 用完后立刻把 token 从地址栏抹掉：否则它会留在历史记录、
+         被人从背后看到、或随"复制网址"一起泄露出去。 */
+    (function() {
+        var m = location.search.match(/[?&]with_token=([^&]+)/);
+        if (!m) return;
+        var tok = decodeURIComponent(m[1]);
+        function fill() {
+            var inp = document.getElementById('token-input');
+            var btn = document.getElementById('enter-drive-btn');
+            if (!inp || !btn) return false;
+            inp.value = tok;
+            btn.click();
+            return true;
+        }
+        function scrub() {
+            // 只删 with_token 这一个参数，其余（如 file=）保留
+            var q = location.search.replace(/[?&]with_token=[^&]*/, '');
+            if (q && q[0] !== '?') q = '?' + q.slice(1);
+            if (q === '?') q = '';
+            try { history.replaceState(null, '', location.pathname + q + location.hash); } catch (e) {}
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { fill(); });
+        } else {
+            fill();
+        }
+        window.addEventListener('load', scrub);
+        setTimeout(scrub, 1500);   // 兜底：load 没触发也要抹掉
+    })();
+    </script>
+    <script>
     // 令牌显示/隐藏
     (function() {
         var eye = document.getElementById('token-eye');
@@ -282,6 +326,23 @@
                         <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 4h7l2 2h11v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/><path d="M8 13h8M8 17h5"/></svg></span>
                         <span data-i18n="nav.thousand">千览</span>
                     </a>
+                    <script>
+                    /* ★ 相对路径在无尾斜杠的 URL 下会解析到根域：
+                         /github_drive  + "thousand-preview/" → /thousand-preview/（404）
+                       你的地址栏正是 /github_drive（无尾斜杠），所以点千览等于跳到
+                       一个不存在的地址 —— 表现就是"没反应"。这里按实际路径算出
+                       项目根再拼，同时也给预览逻辑用（window.GD_TP_URL）。 */
+                    (function () {
+                        var a = document.getElementById('thousand-nav');
+                        var dir = location.pathname.replace(/\/$/, '');
+                        var m = dir.match(/^(.*)\/github_drive$/i);
+                        var root = m ? (m[1] || '') + '/github_drive'
+                                     : dir.replace(/\/[^/]*$/, '');
+                        var url = root + '/thousand-preview/';
+                        window.GD_TP_URL = url;
+                        if (a) a.href = url;
+                    })();
+                    </script>
                 </div>
 
                 <!-- 后台进程：统一管理所有进度任务 -->
@@ -413,28 +474,28 @@
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
             'anim': '8db9aa997e',
-            'app': '1dfefbb6a2',
+            'app': '9dbc7f9fd6',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
             'config-sync': 'd3c84a594e',
-            'custom': '908e5708ce',
+            'custom': 'b49d35fe68',
             'extension': 'ac2832ce10',
-            'file-manager': 'fea1f71b9c',
+            'file-manager': '0790099620',
             'gesture': '4896dd831d',
             'github-api': '389e7c20c9',
-            'i18n': '383370fd89',
-            'i18n-scan': '18e4c90f2f',
+            'i18n': '0e53f69e73',
+            'i18n-scan': '385acf8972',
             'icons': 'bde278015a',
             'maintain': 'b10def0baf',
-            'oauth': '70f11699c3',
+            'oauth': '0482c94889',
             'plugin-api': 'c3c2940bd5',
-            'share': '5b55d64fc9',
-            'storage': 'b806d51c08',
-            'task-dock': '022294f637',
+            'share': 'cc060bd75a',
+            'storage': '915f127e93',
+            'task-dock': 'f46795d108',
             'theme': 'b0ec742409',
-            'ui': 'efbe565c42',
-            'version': 'db2ef2fd15'
+            'ui': '8d9d813dca',
+            'version': '0abcaa66fc'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
