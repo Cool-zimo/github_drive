@@ -12,6 +12,7 @@
 'nav.starred': 'Избранное',
 'nav.shared': 'Мои ссылки',
 'nav.explore': 'Обзор',
+'nav.thousand': 'Читалка',
 'nav.plugins': 'Плагины',
 'nav.backend': 'Сервер',
 'nav.docs': 'Документация',
