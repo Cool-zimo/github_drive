@@ -11,12 +11,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 未配置 Secrets 时静默跳过，不让仓库里飘红叉
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
+      # 未配置 Secrets 时跳过这一步，不让仓库里飘红叉
       - name: Deploy to Cloudflare Workers
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
