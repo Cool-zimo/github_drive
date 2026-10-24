@@ -16,14 +16,14 @@
 // ==========================================================================
 const APP_VERSION = {
     // ★ 唯一真值来源；下面 major/api/patch 与兼容字段由 bump 脚本同步
-    version: '0.9.7',
+    version: '0.9.8',
     scheme: 2,
     major: '0',
     api: '9',
-    patch: 0,
-    internalVersion: '0.9.7',
-    formalVersion: '0.9.7',
-    displayVersion: '0.9.7',
+    patch: 1,
+    internalVersion: '0.9.8',
+    formalVersion: '0.9.8',
+    displayVersion: '0.9.8',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
