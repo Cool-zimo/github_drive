@@ -9,7 +9,7 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=cd0290d48b" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=4726774e1e" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
@@ -30,21 +30,21 @@
          放在 head 里是为了让扫描器尽可能早地撞见它们。 -->
     <script defer src="js/icons.min.js?h=bde278015a" data-gd-core="icons"></script>
     <script defer src="js/github-api.min.js?h=389e7c20c9" data-gd-core="github-api"></script>
-    <script defer src="js/storage.min.js?h=5d5500fc2c" data-gd-core="storage"></script>
-    <script defer src="js/file-manager.min.js?h=e4281a5ab9" data-gd-core="file-manager"></script>
+    <script defer src="js/storage.min.js?h=b806d51c08" data-gd-core="storage"></script>
+    <script defer src="js/file-manager.min.js?h=68fb389efb" data-gd-core="file-manager"></script>
     <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
     <script defer src="js/task-dock.min.js?h=022294f637" data-gd-core="task-dock"></script>
     <!-- oauth 必须在 ui 之前：ui 构造时会读 GitHubDeviceFlow，晚了类还没定义 -->
     <script defer src="js/oauth.min.js?h=70f11699c3" data-gd-core="oauth"></script>
     <script defer src="js/ui.min.js?h=8ef77fa861" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=9d7edf6ad9" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=ecaad9eb67" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=ac8508f684" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=18e4c90f2f" data-gd-core="i18n-scan"></script>
-    <script defer src="js/app.min.js?h=e4bf72ccc4" data-gd-core="app"></script>
+    <script defer src="js/app.min.js?h=1dfefbb6a2" data-gd-core="app"></script>
 
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
@@ -243,21 +243,21 @@
                 <!-- 我的文件 -->
                 <div class="nav-section">
                     <div class="nav-section-title"><span data-i18n="sidebar.myFiles">My Files</span></div>
-                    <a href="#" class="nav-item" id="dashboard-nav" data-view="dashboard"><span class="nav-icon"><img src="assets/icons/dashboard-48.png" alt="" width="20" height="20"></span><span>仪表盘</span></a>
+                    <a href="#" class="nav-item" id="dashboard-nav" data-view="dashboard"><span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/><line x1="3" y1="21" x2="21" y2="21"/></svg></span><span>仪表盘</span></a>
                     <a href="#" class="nav-item active" data-view="all-files">
-                        <span class="nav-icon"><img src="assets/icons/allfiles-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
                         <span data-i18n="nav.allFiles">全部文件</span>
                     </a>
                     <a href="#" class="nav-item" data-view="recent">
-                        <span class="nav-icon"><img src="assets/icons/recent-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
                         <span data-i18n="nav.recent">最近使用</span>
                     </a>
                     <a href="#" class="nav-item" data-view="starred">
-                        <span class="nav-icon"><img src="assets/icons/starred-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
                         <span data-i18n="nav.starred">收藏</span>
                     </a>
                     <a href="#" class="nav-item" data-view="trash">
-                        <span class="nav-icon"><img src="assets/icons/trash-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                         <span data-i18n="nav.trash">回收站</span>
                     </a>
                 </div>
@@ -266,11 +266,11 @@
                 <div class="nav-section">
                     <div class="nav-section-title"><span>分享</span></div>
                     <a href="#" class="nav-item" data-view="shared">
-                        <span class="nav-icon"><img src="assets/icons/shared-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></span>
                         <span data-i18n="nav.shared">我的分享</span>
                     </a>
                     <a href="#" class="nav-item" data-view="explore">
-                        <span class="nav-icon"><img src="assets/icons/explore-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
                         <span data-i18n="nav.explore">发现分享</span>
                     </a>
                 </div>
@@ -279,12 +279,12 @@
                 <div class="nav-section">
                     <div class="nav-section-title"><span>任务</span></div>
                     <a href="#" class="nav-item" id="tasks-nav" data-view="tasks" onclick="ui.showTaskManager();return false;">
-                        <span class="nav-icon"><img src="assets/icons/tasks-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
                         <span>后台进程</span>
                         <span class="nav-badge" id="nav-badge-tasks" style="display:none;"></span>
                     </a>
                     <a href="#" class="nav-item" data-view="plugins" id="plugins-nav">
-                        <span class="nav-icon"><img src="assets/icons/plugins-48.png" alt="" width="20" height="20"></span>
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 3a2 2 0 0 1 4 0v1h3a2 2 0 0 1 2 2v3h1a2 2 0 0 1 0 4h-1v3a2 2 0 0 1-2 2h-3v-1a2 2 0 0 0-4 0v1H7a2 2 0 0 1-2-2v-3H4a2 2 0 0 1 0-4h1V6a2 2 0 0 1 2-2h3z"/></svg></span>
                         <span data-i18n="nav.plugins">插件广场</span>
                     </a>
                 </div>
@@ -293,7 +293,7 @@
                 <div class="app-switch-slot" id="app-switch-slot"></div>
                 <div class="user-info" id="user-info" onclick="ui.showAccountSwitcher()" style="cursor:pointer;" title="点击切换账号"></div>
                 <button onclick="ui.showSettings()" style="width:100%;padding:10px 16px;border:none;background:none;cursor:pointer;color:inherit;font-size:13px;text-align:left;display:flex;align-items:center;gap:8px;border-top:1px solid #e5e7eb;">
-                    <span>⚙️</span><span data-i18n="nav.settings">Settings</span>
+                    <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span data-i18n="nav.settings">Settings</span>
                 </button>
                 <!-- 隐藏元素，保留ID供JS引用 -->
                 <span id="repo-size-display" style="display:none;">📦 --</span>
@@ -307,7 +307,7 @@
         <main class="main-content">
             <!-- 顶部工具栏 -->
             <header class="toolbar">
-                <button class="menu-toggle" id="menu-toggle" aria-label="Menu">☰</button>
+                <button class="menu-toggle" id="menu-toggle" aria-label="Menu"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="breadcrumb" id="breadcrumb"></div>
                 <div class="toolbar-actions">
                     <div class="search-box">
@@ -316,7 +316,7 @@
                     <button class="btn-secondary" id="adv-search-btn" title="高级筛选"><span>⚙️</span></button>
                     <button class="btn-secondary" id="folder-tree-btn" title="文件夹导航"><span>🗂️</span></button>
                     <button class="btn-secondary" id="new-folder-btn" title="New Folder">
-                        <span>📁</span> <span class="btn-text"><span data-i18n="btn.newFolder">New Folder</span></span>
+                        <span><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M2 14l3.5-5.5a2 2 0 0 1 1.7-.9h13.6a1 1 0 0 1 .85 1.5L18 15"/></svg></span> <span class="btn-text"><span data-i18n="btn.newFolder">New Folder</span></span>
                     </button>
                     <button class="btn-secondary" id="upload-btn" title="Upload files/folders">
                         <span>⬆️</span> <span class="btn-text"><span data-i18n="btn.upload">Upload</span></span>
@@ -359,7 +359,7 @@
             <div class="context-menu-item" data-action="rename">✏️ <span data-i18n="menu.rename">Rename</span></div>
             <div class="context-menu-item" data-action="move">📋 <span data-i18n="menu.move">Move to...</span></div>
             <div class="context-menu-item" data-action="copy">📄 <span data-i18n="menu.copy">Copy</span></div>
-            <div class="context-menu-item" data-action="star">⭐ <span data-i18n="menu.star">Star</span></div>
+            <div class="context-menu-item" data-action="star"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> <span data-i18n="menu.star">Star</span></div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item danger" data-action="delete">🗑️ <span data-i18n="menu.delete">Delete</span></div>
         </div>
@@ -404,14 +404,14 @@
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
             'anim': '8db9aa997e',
-            'app': 'e4bf72ccc4',
+            'app': '1dfefbb6a2',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
             'config-sync': 'd3c84a594e',
             'custom': '908e5708ce',
             'extension': 'ac2832ce10',
-            'file-manager': 'e4281a5ab9',
+            'file-manager': '68fb389efb',
             'gesture': '4896dd831d',
             'github-api': '389e7c20c9',
             'i18n': '9d7edf6ad9',
@@ -421,11 +421,11 @@
             'oauth': '70f11699c3',
             'plugin-api': 'c3c2940bd5',
             'share': '27afaa1375',
-            'storage': '5d5500fc2c',
+            'storage': 'b806d51c08',
             'task-dock': '022294f637',
             'theme': 'b0ec742409',
             'ui': '8ef77fa861',
-            'version': 'ecaad9eb67'
+            'version': 'ac8508f684'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
@@ -511,20 +511,20 @@
     <div class="mobile-bottom-nav">
         <div class="mobile-nav-items">
             <div class="mobile-nav-item active" onclick="app.switchView('files')">
-                <span class="icon">📁</span><span>文件</span>
+                <span class="icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span>文件</span>
             </div>
             <div class="mobile-nav-item" onclick="app.switchView('recent')">
-                <span class="icon">🕐</span><span>最近</span>
+                <span class="icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span>最近</span>
             </div>
             <div class="mobile-nav-item" onclick="app.switchView('favorites')">
-                <span class="icon">⭐</span><span>收藏</span>
+                <span class="icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span><span>收藏</span>
             </div>
             <div class="mobile-nav-item" onclick="ui.showTaskManager()">
-                <span class="icon">⚙️</span><span>后台</span>
+                <span class="icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span><span>后台</span>
                 <span class="mobile-nav-badge" id="mobile-badge-tasks" style="display:none;"></span>
             </div>
             <div class="mobile-nav-item" onclick="ui.toggleMobileMenu()">
-                <span class="icon">☰</span><span>更多</span>
+                <span class="icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span><span>更多</span>
             </div>
         </div>
     </div>
