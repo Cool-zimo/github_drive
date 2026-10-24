@@ -796,7 +796,14 @@ class UI {
             <div class="repo-item ${this.app.fileManager.currentRepo?.repo === repo.repo ? 'active' : ''}"
                  data-owner="${repo.owner}" data-repo="${repo.repo}" style="flex-direction:column;align-items:stretch;gap:4px;">
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <span class="repo-icon">${isFull ? '🔴' : (isWarning ? '🟡' : '📦')}</span>
+                    <span class="repo-icon">${(() => {
+                        // ★ 容量指示灯：emoji 圆点（🔴🟡）在高频重绘的仓库列表里
+                        //   同样会踩 0.8.11 那个"先 emoji 后 SVG"的 80ms 闪烁窗口。
+                        //   这里直接出 SVG，颜色用 currentColor 跟随主题。
+                        if (typeof Icons === 'undefined') return '';
+                        const c = isFull ? '#e5534b' : (isWarning ? '#e2a03f' : 'currentColor');
+                        return Icons.get('dot', { size: 14, fill: 'currentColor', stroke: 'none', style: 'color:' + c });
+                    })()}</span>
                     <span class="repo-name" title="${repo.name}" style="flex:1;">${repo.name}</span>
                     ${repo.isDefault ? '<span class="repo-badge">默认</span>' : ''}
                 </div>
@@ -2075,6 +2082,14 @@ class UI {
         try { TaskDock.stopPluginStages && TaskDock.stopPluginStages(); } catch (e) {}
     }
 
+    /** 空状态图标：源头给 SVG，不留 emoji 中间态（Icons 未加载时给空，绝不回 emoji） */
+    _taskEmptyIcon() {
+        if (typeof Icons !== 'undefined' && Icons.get) {
+            return Icons.get('checkCircle', { size: 40, stroke: 'currentColor' });
+        }
+        return '';
+    }
+
     _taskManagerHTML() {
         if (typeof TaskDock === 'undefined' || !TaskDock.all) {
             return '<div style="font-size:13px;color:#6b7280;">任务模块未加载</div>';
@@ -2082,13 +2097,18 @@ class UI {
         const all = TaskDock.all();
         if (!all.length) {
             return `<div class="gd-tasks-empty">
-                      <div class="tv-ico">✅</div>
+                      <div class="tv-ico">${this._taskEmptyIcon()}</div>
                       <div class="tv-t">没有正在进行的任务</div>
                       <div class="tv-s">
                         上传、下载、分享、整理仓库都会出现在这里
                       </div></div>`;
         }
-        const ico = { upload: '📤', download: '⬇️', share: '🔗', compact: '🧹' };
+        const ico = (typeof Icons !== 'undefined' && Icons.get)
+            ? { upload:   Icons.get('upload',   { size: 20 }),
+                download: Icons.get('download', { size: 20 }),
+                share:    Icons.get('share',    { size: 20 }),
+                compact:  Icons.get('broom',    { size: 20 }) }
+            : { upload: '\u2191', download: '\u2193', share: '\u2261', compact: '\u2261' };
         const esc = v => String(v == null ? '' : v)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const ago = ts => {
@@ -2132,7 +2152,7 @@ class UI {
                 }
             }
             h += `<div class="task-mgr-row${cls}" data-id="${t.id}">
-                    <div class="task-mgr-ico">${ico[t.type] || '📋'}</div>
+                    <div class="task-mgr-ico">${ico[t.type] || ((typeof Icons!=='undefined'&&Icons.get)?Icons.get('file',{size:20}):'')}</div>
                     <div class="task-mgr-main">
                         <div class="task-mgr-title">${esc(t.title)}</div>
                         <div class="task-mgr-sub">${sub}</div>
@@ -3875,7 +3895,7 @@ class UI {
             container.className = 'share-list empty';
             container.innerHTML = `
                 <div class="share-empty">
-                    <div class="share-empty-icon">📤</div>
+                    <div class="share-empty-icon">${(typeof Icons!=='undefined'&&Icons.get)?Icons.get('inbox',{size:40}):''}</div>
                     <p class="share-empty-title">还没有分享任何文件</p>
                     <p class="share-empty-desc">右键文件 → 分享，即可创建公开分享链接</p>
                 </div>
@@ -4516,7 +4536,7 @@ window.I18n = {
         modal.innerHTML = `
             <div class="modal" style="max-width:480px;width:90vw;">
                 <div class="modal-header">
-                    <h3>📤 正在上传（${fileList.length} 个文件）</h3>
+                    <h3>${(typeof Icons!=='undefined'&&Icons.get)?Icons.get('upload',{size:16}):''} 正在上传（${fileList.length} 个文件）</h3>
                 </div>
                 <div class="modal-body" style="max-height:400px;overflow-y:auto;">
                     ${filesHtml}
@@ -4703,16 +4723,74 @@ window.I18n = {
 
     showToast(message, type = 'info', duration = 3000) {
         const container = document.getElementById('toast-container');
-        const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+        if (!container) return;
+
+        // ── 同名合并：连续弹同一句话（"最近使用（4个）"被反复触发）
+        //    不再叠加新卡片，而是给已有那张加角标 ×N 并重置倒计时。
+        //    否则一次操作能刷出一屏一模一样的通知。
+        const key = type + '\u0000' + message;
+        // 直接遍历比属性选择器稳：message 里可能有引号/中文，
+        // 拼进选择器要么转义错，要么直接抛异常。
+        let live = null;
+        for (const el of container.children) {
+            if (el.dataset && el.dataset.tkey === key && !el.classList.contains('is-out')) {
+                live = el; break;
+            }
+        }
+        if (live) {
+            const n = (parseInt(live.dataset.tcount || '1', 10) + 1);
+            live.dataset.tcount = String(n);
+            let badge = live.querySelector('.toast-count');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'toast-count';
+                live.insertBefore(badge, live.querySelector('.toast-close'));
+            }
+            badge.textContent = '\u00d7' + n;
+            this._armToastOut(live, duration);
+            return;
+        }
+
+        const ICON = { success: 'checkCircle', error: 'xCircle', warning: 'alert', info: 'info' };
+        // 源头给 SVG：Icons 没加载就留空（也不回 emoji，避免与 i18n/Icons 扫描打架）
+        const glyph = (typeof Icons !== 'undefined' && Icons.get)
+            ? Icons.get(ICON[type] || 'info', { size: 18 })
+            : '';
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
+        toast.dataset.tkey = key;
+        toast.dataset.tcount = '1';
         toast.innerHTML = `
-            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-icon">${glyph}</span>
             <span class="toast-message">${message}</span>
-            <button class="toast-close" onclick="var t=this.parentElement;t.classList.add('is-out');setTimeout(function(){t.remove()},260)">×</button>
+            <button class="toast-close" aria-label="\u5173\u95ed" onclick="var t=this.parentElement;t.classList.add('is-out');setTimeout(function(){t.remove()},260)">\u00d7</button>
         `;
         container.appendChild(toast);
-        setTimeout(() => {
+
+        // 最多同时留 4 张，多出来的从最老的开始退场
+        //
+        // ★ 必须基于快照循环，不能写 while (container.children.length > MAX)。
+        //   退场是 260ms 后才 remove()，期间 children.length 不会变 ——
+        //   那个写法会无限循环，页面直接卡死（实测 SIGTRAP 崩溃）。
+        //   下面这份先取快照、再按超额数量逐个处理，天然有界。
+        const MAX = 4;
+        const kids = Array.from(container.children)
+            .filter(el => !el.classList.contains('is-out'));
+        const over = kids.length - MAX;
+        for (let i = 0; i < over; i++) {
+            const el = kids[i];
+            if (!el || el === toast) continue;
+            el.classList.add('is-out');
+            setTimeout(() => { try { el.remove(); } catch (e) {} }, 260);
+        }
+
+        this._armToastOut(toast, duration);
+    }
+
+    /** 给 toast 挂退场倒计时（同名合并时重置，不会提前消失也不会叠两层定时器） */
+    _armToastOut(toast, duration) {
+        if (toast._gdToastTimer) clearTimeout(toast._gdToastTimer);
+        toast._gdToastTimer = setTimeout(() => {
             // 用 class 而不是内联样式：内联优先级高于 CSS，
             // 会盖掉 prefers-reduced-motion 里"不要动画"的兜底。
             toast.classList.add('is-out');
