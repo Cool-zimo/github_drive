@@ -358,7 +358,10 @@
         var p = el;
         while (p && p !== document.body) {
             var c = typeof p.className === 'string' ? p.className : '';
-            if (/gd-code|terminal|log-box|bm-logs|hljs|file-name|breadcrumb-path/.test(c)) return true;
+            /* gd-oauth-diag：快捷登录的排障信息。它是给开发者看的原始诊断
+               （代理地址、失败阶段、错误类型），被翻成半中半英就完全没法读了。
+               技术信息一律不翻译 —— 跟 gd-code / log-box 同理。 */
+            if (/gd-code|terminal|log-box|bm-logs|hljs|file-name|breadcrumb-path|gd-oauth-diag/.test(c)) return true;
             var pt = p.tagName;
             if (pt === 'CODE' || pt === 'PRE') return true;
             p = p.parentElement;
