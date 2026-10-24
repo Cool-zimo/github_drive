@@ -274,8 +274,36 @@ const TaskDock = (() => {
     }
 
     // ── 图标 ──
+    //
+    // ★ 这里必须直接给出内联 SVG，不能返回 emoji。
+    //
+    //   以前返回 '📤' 这类 emoji，靠 Icons.scan() 事后替换成 SVG。但 scan
+    //   挂在 MutationObserver 上、带 80ms 防抖，而上传过程中 setPercent()
+    //   会高频调用 render()、全量重建 innerHTML —— 于是形成循环：
+    //
+    //     render 写回 emoji → 80ms 后 scan 换成 SVG → 下次 render 又写回 emoji
+    //
+    //   实测 2.5 秒内 emoji/SVG 交替 41 次，用户看到的就是"一闪一闪"。
+    //   源头直接给 SVG，中间态不存在，闪烁自然消失。
+    //
+    // ★ 为什么要保留 emoji 兜底：icons.js 是 CORE 第一个脚本，理论上一定
+    //   先加载；但 task-dock 也可能被插件环境单独引入。拿不到 Icons 时
+    //   退回 emoji，靠 scan 兜底 —— 此时界面不重绘，也不会闪。
     function iconOf(type) {
-        return { upload: '📤', download: '⬇️', share: '🔗' }[type] || '📋';
+        var name = ({ upload: 'outbox', download: 'download', share: 'link' })[type] || 'clipboard';
+        var svg = iconSvg(name, 16);
+        if (svg) return svg;
+        return ({ upload: '📤', download: '⬇️', share: '🔗' })[type] || '📋';
+    }
+
+    /** 内联 SVG 图标；Icons 不可用时返回空串（调用方自行兜底） */
+    function iconSvg(name, size) {
+        try {
+            if (typeof Icons !== 'undefined' && Icons.get) {
+                return Icons.get(name, { size: size || 14 }) || '';
+            }
+        } catch (e) { /* 拿不到就降级，不能让渲染挂掉 */ }
+        return '';
     }
 
     /** 移动端？移动端不显示小窗（屏幕小、挡内容、且难拖动），
@@ -294,6 +322,27 @@ const TaskDock = (() => {
     }
 
     // ── 渲染 ──
+
+    /**
+     * 写入 HTML，并立刻把里面的 emoji 换成 SVG，再绑事件
+     *
+     * ★ 为什么不等 MutationObserver：icons.js 的 observe() 带 80ms 防抖。
+     *   上传时 render() 高频重建这片 DOM，防抖窗口里用户看到的就是
+     *   "emoji 已写回、SVG 还没换上"的中间态，和上一帧的 SVG 交替出现
+     *   —— 表现就是图标一闪一闪。这里同步扫一遍刚写入的子树，把窗口压到 0。
+     *
+     * ★ 它只是兜底不是主力：正常路径上 iconOf() 已经直接给 SVG 了，
+     *   scan 扫不到 emoji 会立刻返回 0，几乎无开销。
+     */
+    function paint(el, html) {
+        el.innerHTML = html;
+        try {
+            if (typeof Icons !== 'undefined' && Icons.scan) Icons.scan(el);
+        } catch (e) { /* 扫描失败不能影响渲染 */ }
+        bindAll();
+        notifyChange();
+    }
+
     function render() {
         const list = Array.from(tasks.values());
         const el = ensureRoot();
@@ -312,9 +361,7 @@ const TaskDock = (() => {
                 const ft = tasks.get(focusId);
                 if (ft) mhtml += panelHTML(ft, true);
             }
-            el.innerHTML = mhtml;
-            bindAll();
-            notifyChange();
+            paint(el, mhtml);
             return;
         }
 
@@ -333,9 +380,7 @@ const TaskDock = (() => {
                 const ft = tasks.get(focusId);
                 if (ft) sh += panelHTML(ft, true);
             }
-            el.innerHTML = sh;
-            bindAll();
-            notifyChange();
+            paint(el, sh);
             return;
         }
 
@@ -352,7 +397,7 @@ const TaskDock = (() => {
             const dockEdge = pos.edge || 'right';
             html += miniCardHTML({
                 cls: 'td-merged',
-                icon: '⚙️',
+                icon: iconSvg('settings', 16) || '⚙️',
                 title: L(`${live.length} 个任务处理中`, `${live.length} tasks running`),
                 sub: (done || err) ? L(`已完成 ${done}${err ? ` · 失败 ${err}` : ''}`,
                                        `${done} done${err ? ` · ${err} failed` : ''}`) : '',
@@ -401,9 +446,7 @@ const TaskDock = (() => {
             if (ft) html += panelHTML(ft, true);
         }
 
-        el.innerHTML = html;
-        bindAll();
-        notifyChange();
+        paint(el, html);
     }
 
     function miniCardHTML(o) {
@@ -452,7 +495,7 @@ const TaskDock = (() => {
                 <button class="td-btn" title="${L('收起到侧边', 'Dock to side')}"
                         onclick="TaskDock.collapse('${t.id}')">─</button>
                 <button class="td-btn" title="${L('关闭', 'Close')}"
-                        onclick="TaskDock.dismiss('${t.id}')">✕</button>
+                        onclick="TaskDock.dismiss('${t.id}')">${iconSvg('x', 12) || '✕'}</button>
             </div>
             <div class="td-body">${body}</div>
             ${t.status === 'error' && t.error ? `<div class="td-err">${esc(t.error)}</div>` : ''}
@@ -476,9 +519,9 @@ const TaskDock = (() => {
         return `
         <div class="td-panel td-list-panel" style="${edge === 'left' ? 'left:12px;' : 'right:12px;'}bottom:12px;">
             <div class="td-head">
-                <span class="td-head-ico">⚙️</span>
+                <span class="td-head-ico">${iconSvg('settings', 16) || '⚙️'}</span>
                 <span class="td-head-title">${L('全部任务', 'All tasks')}（${list.length}）</span>
-                <button class="td-btn" onclick="TaskDock.closeList()">✕</button>
+                <button class="td-btn" onclick="TaskDock.closeList()">${iconSvg('x', 12) || '✕'}</button>
             </div>
             <div class="td-body">${rows}</div>
         </div>`;
