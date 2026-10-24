@@ -370,7 +370,16 @@
             app.handle = null;
 
             $('#tp-body').innerHTML = '';
-            app.handle = await TPRender.render(blob, f, $('#tp-body'), {});
+            app.handle = await TPRender.render(blob, f, $('#tp-body'), {
+                onBigFile: mb => {
+                    // 大 PDF 解析前一秒会卡住主线程，先说清楚在干嘛
+                    const tip = document.createElement('div');
+                    tip.className = 'tp-bigfile-tip';
+                    tip.textContent = '文件 ' + mb.toFixed(1) +
+                        ' MB，正在解析…（页面仍是逐页加载，不会一次读进屏幕）';
+                    $('#tp-body').appendChild(tip);
+                }
+            });
 
             // 恢复位置：记住位置开关打开且有历史记录才跳
             const fp = TPStore.fingerprint(f);
