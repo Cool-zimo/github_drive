@@ -132,6 +132,9 @@ class App {
             this.storage.set(this.storage.keys.CURRENT_ACCOUNT, this.storage._getAccountId());
             await this.initializeWithToken(token);
             this.ui?.showToast(I18n.t('login.success'), 'success');
+            /* ★ 新用户引导：只在没看过时启动。放在登录流程最后，
+               此时文件树已渲染完，定位坐标才准（放太早会指着空气）。 */
+            try { if (window.GdOnboard) window.GdOnboard.maybeStart(); } catch (e) {}
         } catch (e) {
             console.error('登录失败:', e);
             let errorMessage = '登录失败';
@@ -607,10 +610,11 @@ class App {
         /* ★ 默认交给千览：它能记住读到第几页、PDF/Office 有真实排版，
            而直接 window.open(blob) 每次都从头开始，且地址栏是临时
            blob URL，一刷新就没了。
-           千览不支持的类型（如 epub）或新标签被拦截时，再回退到老路。 */
+           千览不支持的类型或新标签被拦截时，再回退到老路。 */
         try {
             const ext = (file.name.split('.').pop() || '').toLowerCase();
             const TP_OK = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+                'epub',
                 'txt', 'md', 'csv', 'log', 'json', 'js', 'css', 'html', 'htm',
                 'xml', 'yaml', 'yml', 'ini', 'conf', 'py', 'java', 'c', 'cpp',
                 'h', 'go', 'rs', 'ts', 'jsx', 'tsx', 'sh', 'bat', 'sql',
