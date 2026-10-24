@@ -9,18 +9,18 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=00bdd57191" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=5eff8bf03c" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.8.1"}</style>
+    <style>#gd-css-stamp{--stamp:"0.8.2"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.8.1"></script>
+    <script src="js/branch-guard.min.js?v=0.8.2"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -34,15 +34,16 @@
     <script defer src="js/file-manager.min.js?h=e4281a5ab9" data-gd-core="file-manager"></script>
     <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
     <script defer src="js/task-dock.min.js?h=4660d2f245" data-gd-core="task-dock"></script>
-    <script defer src="js/ui.min.js?h=39f3d3a076" data-gd-core="ui"></script>
-    <script defer src="js/i18n.min.js?h=d60fb89434" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=9892ae8cc4" data-gd-core="version"></script>
+    <script defer src="js/ui.min.js?h=0483aa63d6" data-gd-core="ui"></script>
+    <script defer src="js/i18n.min.js?h=9d7edf6ad9" data-gd-core="i18n"></script>
+    <script defer src="js/version.min.js?h=2ec2f39d56" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=9fea523fd1" data-gd-core="i18n-scan"></script>
-    <script defer src="js/app.min.js?h=97708a0fa3" data-gd-core="app"></script>
+    <script defer src="js/app.min.js?h=e4bf72ccc4" data-gd-core="app"></script>
+    <script defer src="js/oauth.min.js?h=931dec65c0" data-gd-core="oauth"></script>
 
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
@@ -91,6 +92,31 @@
                 </div>
                 <p class="token-hint"><span data-i18n="login.tokenHint">需要</span> <code>repo</code> <span data-i18n="login.and">和</span> <code>workflow</code> <span data-i18n="login.permission">权限</span></p>
                 <button id="enter-drive-btn" type="button"><span data-i18n="login.enter">Enter Drive</span></button>
+
+                <!-- GitHub 登录（OAuth Device Flow）。
+                     默认隐藏：只有代理和 client_id 都配对、且代理能连通时才显示，
+                     否则老老实实用上面的 PAT 输入框。 -->
+                <button id="oauth-login-btn" type="button" class="gd-oauth-btn" style="display:none">
+                    <svg class="gd-oauth-mark" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                    <span data-i18n="login.oauthSignIn">用 GitHub 账号登录</span>
+                </button>
+
+                <div id="oauth-panel" class="gd-oauth-panel" style="display:none">
+                    <div class="gd-oauth-title" data-i18n="login.oauthTitle">在 GitHub 上完成授权</div>
+                    <div class="gd-oauth-step" data-i18n="login.oauthStep">在打开的页面里输入下面这个码，然后点授权</div>
+                    <div class="gd-oauth-code" id="oauth-code" role="button" tabindex="0" title="点击复制">--------</div>
+                    <button id="oauth-open-btn" type="button" class="gd-oauth-open">
+                        <span data-i18n="login.oauthOpen">打开 GitHub 授权页（已自动复制）</span>
+                    </button>
+                    <div class="gd-oauth-status">
+                        <span class="gd-oauth-spinner" aria-hidden="true"></span>
+                        <span data-i18n="login.oauthWaiting">等待你在 GitHub 上完成授权…</span>
+                        <span id="oauth-countdown" class="gd-oauth-countdown"></span>
+                    </div>
+                    <button id="oauth-cancel-btn" type="button" class="gd-oauth-cancel">
+                        <span data-i18n="login.oauthCancel">取消</span>
+                    </button>
+                </div>
                 <div id="saved-accounts" class="saved-accounts" style="display:none;margin:16px 0;">
                     <div class="saved-accounts-title" style="font-size:12px;color:#6b7280;margin-bottom:8px;text-align:center;"><span data-i18n="login.savedAccounts">已保存的账号</span></div>
                     <div id="accounts-list" class="accounts-list"></div>
@@ -360,7 +386,7 @@
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
             'anim': '8db9aa997e',
-            'app': '97708a0fa3',
+            'app': 'e4bf72ccc4',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
@@ -370,17 +396,18 @@
             'file-manager': 'e4281a5ab9',
             'gesture': '4896dd831d',
             'github-api': '389e7c20c9',
-            'i18n': 'd60fb89434',
+            'i18n': '9d7edf6ad9',
             'i18n-scan': '9fea523fd1',
             'icons': 'bde278015a',
             'maintain': 'b10def0baf',
+            'oauth': '931dec65c0',
             'plugin-api': 'c3c2940bd5',
             'share': '27afaa1375',
             'storage': '5d5500fc2c',
             'task-dock': '4660d2f245',
             'theme': 'b0ec742409',
-            'ui': '39f3d3a076',
-            'version': '9892ae8cc4'
+            'ui': '0483aa63d6',
+            'version': '2ec2f39d56'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
