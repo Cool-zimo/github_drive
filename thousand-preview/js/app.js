@@ -161,10 +161,79 @@
 
     const $ = (s) => document.querySelector(s);
 
+    // ---------- URL 参数：?file=路径&with_token=xxx ----------
+
+    /**
+     * 路径归一：链接里带的是 "Drive Home/a.py"、"+"" 代表空格，
+     * 而 VFS 里存的是 "/drive_home/xxx"。两边对不上就直接打开失败，
+     * 所以统一成小写、去斜杠再比，并且最后退一步按文件名匹配。
+     */
+    function normPath(p) {
+        return String(p || '').replace(/\+/g, ' ').trim()
+            .replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+    }
+
+    function findByPath(p) {
+        if (!p) return null;
+        const want = normPath(p);
+        let hit = app.files.find(f => normPath(f.path) === want);
+        if (hit) return hit;
+        // 去掉首段目录再试一次（链接可能省略 /drive_home）
+        const tail = want.includes('/') ? want.slice(want.indexOf('/') + 1) : want;
+        hit = app.files.find(f => {
+            const fp = normPath(f.path);
+            return fp === tail || fp.endsWith('/' + tail);
+        });
+        if (hit) return hit;
+        // 最后按文件名兜底
+        const base = want.split('/').pop();
+        return app.files.find(f => normPath(f.name) === base) || null;
+    }
+
+    /** URL 里带了 file= 就在列表加载完后自动打开 */
+    function openFromUrl() {
+        const raw = new URLSearchParams(location.search).get('file');
+        if (!raw) return;
+        let target;
+        try { target = decodeURIComponent(raw); } catch (e) { target = raw; }
+        const f = findByPath(target);
+        if (f) {
+            // 文件在子目录里时先切过去，否则左侧列表高亮不到
+            const slash = f.path.lastIndexOf('/');
+            if (slash > 0) app.dir = f.path.slice(0, slash) || '/drive_home';
+            openFile(f);
+        } else {
+            $('#tp-body').innerHTML =
+                '<div class="tp-error"><p>没找到这个文件：' +
+                TPRender.esc(target) + '</p><p class="tp-dim">可能是路径变了，' +
+                '或者这个 token 的仓库里没有它。左侧列表可以继续找。</p></div>';
+        }
+    }
+
+    /** 用 URL 里的 token 静默登录（复用已有账号，不重复创建） */
+    async function loginWithUrlToken(token) {
+        const exist = TPStore.listAccounts().find(a => a.token === token);
+        if (exist) { useAccount(exist); return; }
+        const api = new Api(token);
+        const me = await api.getMe();
+        const id = TPStore.addAccount(token, me);
+        useAccount(TPStore.getAccount(id));
+    }
+
     function boot() {
         app.settings = TPStore.getSettings();
         applySettings();
         bindUI();
+
+        const params = new URLSearchParams(location.search);
+        const urlToken = (params.get('with_token') || '').trim();
+
+        if (urlToken) {
+            loginWithUrlToken(urlToken).then(openFromUrl).catch(e => {
+                showLogin('链接里的 token 无效或已过期：' + e.message);
+            });
+            return;
+        }
 
         const accounts = TPStore.listAccounts();
         if (!accounts.length) { showLogin(); return; }
@@ -172,6 +241,7 @@
         const saved = TPStore.getLastAccountId();
         const acc = (saved && TPStore.getAccount(saved)) || accounts[0];
         useAccount(acc);
+        openFromUrl();
     }
 
     // ---------- 账号 ----------
