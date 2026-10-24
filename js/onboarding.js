@@ -32,7 +32,7 @@
             upload: { t: '上传文件', d: '点这里把文件传上来。也可以直接把文件或文件夹拖进下面的空白区域。' },
             folder: { t: '新建文件夹', d: '想分类整理就点它。文件一多，文件夹是唯一能救你的东西。' },
             thousand: { t: '千览', d: '点开可以用阅读器打开文件，PDF 和电子书会记住你读到第几页。' },
-            finish: { t: '就这些', d: '剩下的自己摸索就好。随时可以在设置里重看这个引导。' },
+            finish: { t: '就这些', d: '剩下的自己摸索就好。想再看一遍，在控制台执行 GdOnboard.start() 即可。' },
             skip: '跳过', next: '下一步', done: '开始使用'
         },
         en: {
@@ -40,7 +40,7 @@
             upload: { t: 'Upload', d: 'Click here to upload files. You can also drag files or folders straight into the area below.' },
             folder: { t: 'New folder', d: 'Use it to keep things sorted. Once you have many files, folders are the only thing that saves you.' },
             thousand: { t: 'Reader', d: 'Opens files in the reader — PDFs and ebooks remember which page you were on.' },
-            finish: { t: "That's it", d: 'The rest is easy to pick up. You can replay this guide from Settings any time.' },
+            finish: { t: "That's it", d: 'The rest is easy to pick up. Run GdOnboard.start() in the console to replay it.' },
             skip: 'Skip', next: 'Next', done: 'Start'
         },
         es: {
@@ -48,7 +48,7 @@
             upload: { t: 'Subir', d: 'Haz clic aquí para subir archivos. También puedes arrastrar archivos o carpetas al área de abajo.' },
             folder: { t: 'Nueva carpeta', d: 'Úsala para mantener el orden. Cuando tengas muchos archivos, las carpetas son lo único que te salva.' },
             thousand: { t: 'Lector', d: 'Abre los archivos en el lector; los PDF y los ebooks recuerdan la página en la que estabas.' },
-            finish: { t: 'Eso es todo', d: 'El resto se descubre sobre la marcha. Puedes repetir esta guía desde Ajustes.' },
+            finish: { t: 'Eso es todo', d: 'El resto se descubre sobre la marcha. Ejecuta GdOnboard.start() en la consola para repetirla.' },
             skip: 'Omitir', next: 'Siguiente', done: 'Empezar'
         },
         fr: {
@@ -56,7 +56,7 @@
             upload: { t: 'Téléverser', d: 'Cliquez ici pour envoyer des fichiers. Vous pouvez aussi glisser des fichiers ou dossiers dans la zone ci-dessous.' },
             folder: { t: 'Nouveau dossier', d: 'Pour garder les choses rangées. Avec beaucoup de fichiers, les dossiers sont votre seul salut.' },
             thousand: { t: 'Lecteur', d: 'Ouvre les fichiers dans le lecteur : PDF et ebooks retiennent la page où vous étiez.' },
-            finish: { t: 'C’est tout', d: 'Le reste s’apprend en pratiquant. Vous pouvez revoir ce guide depuis les Paramètres.' },
+            finish: { t: 'C’est tout', d: 'Le reste s’apprend en pratiquant. Lancez GdOnboard.start() dans la console pour le revoir.' },
             skip: 'Ignorer', next: 'Suivant', done: 'Commencer'
         },
         ru: {
@@ -64,7 +64,7 @@
             upload: { t: 'Загрузить', d: 'Нажмите здесь, чтобы загрузить файлы. Файлы и папки можно просто перетащить в область ниже.' },
             folder: { t: 'Новая папка', d: 'Чтобы держать всё в порядке. Когда файлов станет много, папки — единственное спасение.' },
             thousand: { t: 'Читалка', d: 'Открывает файл в читалке: PDF и книги запоминают, на какой вы были странице.' },
-            finish: { t: 'Всё', d: 'Остальное освоите по ходу. Этот тур можно перезапустить в Настройках.' },
+            finish: { t: 'Всё', d: 'Остальное освоите по ходу. Выполните GdOnboard.start() в консоли, чтобы повторить.' },
             skip: 'Пропустить', next: 'Далее', done: 'Начать'
         },
         ar: {
@@ -72,7 +72,7 @@
             upload: { t: 'رفع', d: 'انقر هنا لرفع الملفات. يمكنك أيضاً سحب الملفات أو المجلدات إلى المساحة أدناه.' },
             folder: { t: 'مجلد جديد', d: 'استخدمه لترتيب الأشياء. عندما يكثر عدد الملفات، المجلدات هي الشيء الوحيد الذي ينقذك.' },
             thousand: { t: 'القارئ', d: 'يفتح الملف في القارئ؛ يتذكر ملف PDF والكتب الإلكترونية الصفحة التي كنت عليها.' },
-            finish: { t: 'هذا كل شيء', d: 'الباقي ستتعلمه بالممارسة. يمكنك إعادة هذا الدليل من الإعدادات.' },
+            finish: { t: 'هذا كل شيء', d: 'الباقي ستتعلمه بالممارسة. نفّذ GdOnboard.start() في الطرفية لإعادته.' },
             skip: 'تخطي', next: 'التالي', done: 'ابدأ'
         }
     };
