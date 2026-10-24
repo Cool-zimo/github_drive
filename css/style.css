@@ -699,7 +699,7 @@ body.resizing {
 }
 
 .file-item .file-icon {
-    font-size: 48px;
+    font-size: 64px;
     margin-bottom: 8px;
     line-height: 1;
 }
@@ -756,7 +756,7 @@ body.resizing {
 }
 
 .file-list.list-view .file-item .file-icon {
-    font-size: 24px;
+    font-size: 36px;
     margin-bottom: 0;
     margin-right: 12px;
 }
