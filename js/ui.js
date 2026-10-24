@@ -75,7 +75,17 @@ class UI {
      * 比没有这个按钮更糟，用户直接用上面的 PAT 输入框就好。
      */
     initOAuth() {
-        if (typeof GitHubDeviceFlow === 'undefined') return;
+        // 类还没定义 = oauth.min.js 还没执行到（脚本顺序问题）。
+        // 不能就此放弃：按钮在不在不该取决于加载顺序，等 DOM 就绪再试一次。
+        if (typeof GitHubDeviceFlow === 'undefined') {
+            if (!this._oauthRetryDone) {
+                this._oauthRetryDone = true;
+                window.addEventListener('DOMContentLoaded', () => this.initOAuth());
+                // DOMContentLoaded 已过的情况下上面这行不会再触发，兜底补一次
+                setTimeout(() => this.initOAuth(), 300);
+            }
+            return;
+        }
         const flow = new GitHubDeviceFlow();
         this.oauthFlow = flow;
         if (!flow.configured) return;
@@ -83,8 +93,10 @@ class UI {
         // 不 await：探测是网络请求，不能拖住 PAT 输入框的可用性
         flow.available().then((ok) => {
             if (!ok) return;
+            if (this._oauthBound) return; // 重试可能跑多次，重复绑监听会点一次弹两次
             const btn = document.getElementById('oauth-login-btn');
             if (!btn) return;
+            this._oauthBound = true;
             btn.style.display = '';
             btn.addEventListener('click', () => this.startOAuth());
 
