@@ -3292,6 +3292,13 @@ class UI {
             this._conflictFallback = null;
             fb();
         }
+        // 门控类弹窗（如首次使用确认）被 × / ESC / 点遮罩关掉时同样要给出决定，
+        // 否则等它的 Promise 永远悬着，登录流程卡死在半路。
+        if (this._modalDismissHook) {
+            const h = this._modalDismissHook;
+            this._modalDismissHook = null;
+            try { h(); } catch (e) { console.warn('[UI] dismiss hook 出错:', e.message); }
+        }
         const container = document.getElementById('modal-container');
         // 先取出旧节点，再立刻腾空容器 —— 顺序不能反，
         // 否则紧跟其后的 showModal 写进来的新弹窗会被退场定时器清掉。
