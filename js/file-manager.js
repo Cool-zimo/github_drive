@@ -794,10 +794,23 @@ class FileManager {
         }
         console.log(`[FileManager] 整理仓库：${totalItems} 个分片待迁移`);
 
+        // ★ 进度必须覆盖**全流程**，不能只算读取。
+        //
+        //   旧写法把 total 定成 totalItems（分片数），但一次迁移的实际工作量是：
+        //     读取 N 次（getBlobBytes）+ 写入 N 次（createBlob）+ 每个目标仓提交 1 次
+        //     + 改索引 1 次 + 删除时每个仓「校验 1 次 + 删除 1 次」。
+        //   只按读取算，进度条会在读到一半就冲到 100%，然后剩下的大半程停着不动；
+        //   反过来分片一多，前几十片都四舍五入成 0%，看着就像"卡在 0% 一万年"。
+        //   这里把每一步都记进去，分母才是真实工作量。
+        const commitSteps = Math.max(1, byTarget.size);
+        const delSteps = deleteSources ? (plan.deletable?.length || 0) * 2 : 0;
+        const totalSteps = totalItems * 2 + commitSteps + 1 + delSteps;
         let done = 0;
         const emit = (stage, msg) => {
-            if (onProgress) onProgress(stage, done, totalItems, msg);
+            if (onProgress) onProgress(stage, done, totalSteps, msg);
         };
+        /** 完成一步并上报 */
+        const tick = (stage, msg) => { done++; emit(stage, msg); };
 
         // ② 逐个目标仓迁移
         const migrated = [];   // {vpath, idx, newChunk}
@@ -835,8 +848,7 @@ class FileManager {
                     } catch (e) {
                         failed.push({ job, err: e });
                     }
-                    done++;
-                    emit('migrate', `读取 ${done}/${totalItems}`);
+                    tick('read', `读取分片 ${done}/${totalSteps}`);
                 }
             }
             await Promise.all(Array.from({ length: Math.min(concurrency, group.items.length || 1) },
@@ -886,6 +898,7 @@ class FileManager {
                             sha: newSha,
                             branch: to.branch
                         };
+                        tick('write', `写入分片 ${done}/${totalSteps}`);
                     } catch (e) {
                         blobFail.push({ i, err: e });
                     }
@@ -917,6 +930,7 @@ class FileManager {
             group.items.forEach((job, i) => {
                 migrated.push({ vpath: job.vpath, idx: job.idx, newChunk: newChunks[i] });
             });
+            tick('commit', `已提交到 ${to.repo}`);
         }
 
         // ③ 全部校验通过才改 VFS
@@ -925,6 +939,7 @@ class FileManager {
             if (f && f.chunks && f.chunks[m.idx]) f.chunks[m.idx] = m.newChunk;
         }
         this.storage.setVFS(vfs);
+        tick('index', '已更新索引');
 
         // ④ 重算用量 —— 必须**全量重算**，不能加减。
         //
@@ -962,12 +977,19 @@ class FileManager {
                 const key = src.key;
                 try {
                     const empty = await this._isRepoUnused(src);
+                    tick('check', `校验空仓 ${key}`);
                     if (!empty.ok) {
                         skipped.push({ key, reason: empty.reason });
                         console.warn(`[FileManager] 跳过删除 ${key}：${empty.reason}`);
                         continue;
                     }
-                    await this.api.deleteRepository(mv.from.owner, mv.from.repo);
+                    // ★ 必须用 src，不能写 mv.from。
+                    //   mv 是①阶段 for-of 的循环变量，出了循环就没了 ——
+                    //   引用它会抛 ReferenceError，被下面的 catch 吞成
+                    //   "删除失败（数据已迁移）"，看着像小毛病，实际是空仓永远删不掉；
+                    //   更糟的是万一引用到残留值，会删掉一个完全不相干的仓库。
+                    await this.api.deleteRepository(src.owner, src.repo);
+                    tick('delete', `已删除空仓 ${key}`);
                     deleted.push(key);
                 } catch (e) {
                     console.warn('[FileManager] 删除源仓失败（数据已迁移，不影响）:', key, e.message);
