@@ -1,0 +1,13 @@
+name: Probe Worker
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: |
+          set -x
+          curl -s -m 20 -o /dev/null -w "GET=%{http_code}\n" https://gd-oauth.feng-to-zhang.workers.dev/
+          curl -s -m 20 -o /dev/null -w "OPTIONS_OK=%{http_code}\n" -X OPTIONS -H "Origin: https://cool-zimo.github.io" -H "Access-Control-Request-Method: POST" https://gd-oauth.feng-to-zhang.workers.dev/device/code
+          curl -s -m 20 -o /dev/null -w "OPTIONS_EVIL=%{http_code}\n" -X OPTIONS -H "Origin: https://evil.com" https://gd-oauth.feng-to-zhang.workers.dev/device/code
+          curl -s -m 20 -X POST -H "Content-Type: application/json" -H "Origin: https://cool-zimo.github.io" -d '{"client_id":"Ov23liuMyWPhGbmCEqDS"}' https://gd-oauth.feng-to-zhang.workers.dev/device/code
