@@ -8,6 +8,9 @@ on:
       - '.github/workflows/deploy-beta.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write     # 用于把诊断输出写回仓库（Actions 日志在沙盒里读不到）
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,49 +18,118 @@ jobs:
     env:
       CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
-      # 未配置 Secrets 时跳过，不让仓库里飘红叉
+      # ── 1. 取 D1 数据库 id，没有就创建 ──────────────────
+      # database_id 必须在 wrangler.toml 里，而 id 只有创建后才知道，
+      # 所以在 CI 里拿到 uuid 再 sed 注入，仓库里只留占位符。
       - name: 取 D1 数据库 id（不存在就创建）
-        if: ${{ env.HAS_CF == 'true' }}
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
         run: |
-          set -e
-          LIST=$(curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
-            -H "Authorization: Bearer $CF_TOKEN")
-          UUID=$(echo "$LIST" | jq -r '.result[] | select(.name=="gd-beta") | .uuid' | head -1)
+          set +e
+          {
+            echo "== D1 list =="
+            LIST=$(curl -s -w '\nHTTP:%{http_code}' \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
+              -H "Authorization: Bearer $CF_TOKEN")
+            echo "$LIST" | tail -c 1500
+            UUID=$(echo "$LIST" | jq -r '.result[] | select(.name=="gd-beta") | .uuid' | head -1)
+            echo "uuid_from_list=$UUID"
+
+            if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
+              echo "== D1 create =="
+              CREATE=$(curl -s -w '\nHTTP:%{http_code}' -X POST \
+                "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
+                -H "Authorization: Bearer $CF_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d '{"name":"gd-beta"}')
+              echo "$CREATE" | tail -c 1500
+              UUID=$(echo "$CREATE" | jq -r '.result.uuid')
+              echo "uuid_from_create=$UUID"
+            fi
+            echo "final_uuid=$UUID"
+          } 2>&1 | tee /tmp/diag.txt
+
           if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
-            echo "未找到 gd-beta，创建中..."
-            CREATE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database" \
-              -H "Authorization: Bearer $CF_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d '{"name":"gd-beta"}')
-            echo "$CREATE" | jq -r '.errors // empty'
-            UUID=$(echo "$CREATE" | jq -r '.result.uuid')
+            echo "DIAG_RESULT=fail" >> $GITHUB_ENV
+          else
+            sed -i "s/__D1_ID__/$UUID/" worker-beta/wrangler.toml
+            echo "DIAG_RESULT=$UUID" >> $GITHUB_ENV
           fi
-          if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
-            echo "::error::拿不到 D1 uuid，请检查 API Token 是否有 D1 权限"
-            exit 1
-          fi
-          echo "D1 uuid = $UUID"
-          sed -i "s/__D1_ID__/$UUID/" worker-beta/wrangler.toml
-          grep -q "$UUID" worker-beta/wrangler.toml || { echo "::error::sed 注入失败"; exit 1; }
 
       - name: 安装 wrangler
-        if: ${{ env.HAS_CF == 'true' }}
-        run: npm i -g wrangler
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' && env.DIAG_RESULT != 'fail' }}
+        run: npm i -g wrangler 2>&1 | tail -5 | tee -a /tmp/diag.txt
 
       - name: 建表
-        if: ${{ env.HAS_CF == 'true' }}
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' && env.DIAG_RESULT != 'fail' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
-        run: npx wrangler d1 execute gd-beta --file=worker-beta/schema.sql --remote --yes
+        run: |
+          set +e
+          {
+            echo "== d1 execute =="
+            npx wrangler d1 execute gd-beta --file=worker-beta/schema.sql --remote --yes
+            echo "exit=$?"
+          } 2>&1 | tee -a /tmp/diag.txt
 
       - name: 部署
-        if: ${{ env.HAS_CF == 'true' }}
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' && env.DIAG_RESULT != 'fail' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
-        run: npx wrangler deploy --config worker-beta/wrangler.toml
+        run: |
+          set +e
+          {
+            echo "== deploy =="
+            npx wrangler deploy --config worker-beta/wrangler.toml
+            echo "exit=$?"
+          } 2>&1 | tee -a /tmp/diag.txt
+
+      # 拿不到 uuid 就明确失败，不让 workflow 假装成功
+      - name: 判定
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
+        run: |
+          if [ "$DIAG_RESULT" = "fail" ]; then
+            echo "D1 uuid 获取失败，见 worker-beta/_diag.txt"
+            exit 1
+          fi
+          echo "D1 uuid = $DIAG_RESULT"
+
+      # ── 诊断输出写回仓库 ────────────────────────────────
+      # Actions 日志存在 Azure blob，外部工具读不到，只能这样回传
+      - name: 保存诊断输出
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -f /tmp/diag.txt ]; then echo "(无诊断输出)" > /tmp/diag.txt; fi
+          # 只保留前 8000 字节，避免把整个 npm 日志塞进仓库
+          head -c 8000 /tmp/diag.txt > /tmp/diag_trim.txt
+          python3 - <<'PYEOF'
+          import os, json, base64, urllib.request
+          tok = os.environ['GH_TOKEN']
+          repo = os.environ['GITHUB_REPOSITORY']
+          path = 'worker-beta/_diag.txt'
+          url = f'https://api.github.com/repos/{repo}/contents/{path}'
+          hdr = {'Authorization': f'token {tok}', 'Accept': 'application/vnd.github+json'}
+          sha = None
+          try:
+              r = urllib.request.Request(url, headers=hdr)
+              sha = json.loads(urllib.request.urlopen(r).read()).get('sha')
+          except Exception:
+              pass
+          body = {'message': 'chore: 更新部署诊断输出',
+                  'content': base64.b64encode(open('/tmp/diag_trim.txt','rb').read()).decode()}
+          if sha:
+              body['sha'] = sha
+          r = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                     headers=dict(hdr, **{'Content-Type': 'application/json'}), method='PUT')
+          try:
+              urllib.request.urlopen(r).read()
+              print('diag 已写入', path)
+          except Exception as e:
+              print('diag 写入失败:', e)
+          PYEOF
