@@ -397,6 +397,20 @@ body {
     opacity: .92;
 }
 
+/* 侧边栏图标：矢量版（与设置页同一套 svg.ico）。
+   ★ 原来这里是一整套 <img src="assets/icons/*.png"> 位图，而设置页用的
+     是线性 SVG —— 两套画风并排出现在同一个界面里（位图圆润带渐变、
+     SVG 细线单色），看着像两个产品拼起来的。
+     现已把侧边栏全部换成内联 SVG，画风统一到「黑白线性」这一套，
+     并且 currentColor 让它在深色主题下自动变浅，不需要 opacity 兜底。
+     上面的 img 规则保留只是为了兼容老缓存，实际已不再命中。 */
+.nav-icon svg.ico {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+}
+
 /* 深色主题：图标提亮，否则描边在深底上发灰 */
 body.dark-theme .nav-icon img { opacity: 1; }
 
@@ -2236,6 +2250,12 @@ body.dark-mode .modal-close {
 
 .mobile-nav-item .icon {
     font-size: 20px;
+    /* 图标已从 emoji 换成内联 SVG（与侧边栏同一套画风）。
+       font-size 对 SVG 无效，尺寸由内联 width/height 决定；
+       这两条让它在 flex 排布里不被压扁、不跟着文字基线跑。 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .mobile-nav-item:active {
