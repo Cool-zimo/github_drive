@@ -152,9 +152,13 @@ class UI {
         const codeEl = document.getElementById('oauth-code');
         const cdEl = document.getElementById('oauth-countdown');
 
-        // ★ 必须在 await 之前开窗口。浏览器只认「用户手势的同步调用栈」，
-        //   await 之后 window.open 会被判定为弹窗并拦截。
-        const w = window.open('about:blank', '_blank');
+        // 这里曾经在 await 之前 window.open('about:blank')，理由是
+        // 「浏览器只认用户手势的同步调用栈」。方向没错，但代价是：
+        // 一旦后面请求失败，那个空白标签页就永远留在那儿关不掉
+        // （移动端尤其明显，用户看到的是一片空白）。
+        // 改成：先拿码，再开真实地址。拿到码说明流程走到这了，
+        // 此刻再开即便被拦截也只是没开成，不会留下空白页。
+        let w = null;
 
         try {
             if (btn) { btn.disabled = true; btn.style.display = 'none'; }
@@ -162,11 +166,19 @@ class UI {
             const r = await flow.requestCode();
             if (codeEl) codeEl.textContent = r.userCode;
             if (panel) panel.style.display = '';
-            this._copyText(r.userCode);
+            const copied = this._copyText(r.userCode);
 
-            // 窗口开着就导航过去；被拦截的话用户点面板里的按钮即可
-            if (w) {
-                try { w.location.href = r.verifyUrl; } catch (e) { /* 跨域读不到，忽略 */ }
+            // 拿到真实地址后再开。被拦截返回 null，此时提示手动点按钮。
+            try {
+                w = window.open(r.verifyUrl, '_blank');
+            } catch (e) {
+                w = null;
+            }
+            if (!w) {
+                this.showToast(
+                    copied ? '已复制授权码，请点下方按钮去授权' : '请点下方按钮去授权',
+                    'info'
+                );
             }
 
             const deadline = Date.now() + r.expiresIn * 1000;
@@ -182,6 +194,7 @@ class UI {
             this._oauthTick = null;
             if (panel) panel.style.display = 'none';
             if (btn) { btn.disabled = false; btn.style.display = ''; }
+            try { if (w) w.close(); } catch (e) { /* 已经关了就算了 */ }
 
             // gho_ 开头的 token，app.login 已放行
             await this.app.login(token);
@@ -190,6 +203,7 @@ class UI {
             flow.cancel();
             if (panel) panel.style.display = 'none';
             if (btn) { btn.disabled = false; btn.style.display = ''; }
+            try { if (w) w.close(); } catch (err) { /* 已经关了就算了 */ }
             try { if (w) w.close(); } catch (err) { /* 已经关了就算了 */ }
             this.showToast((e && e.message) || '授权失败', 'error');
         }
