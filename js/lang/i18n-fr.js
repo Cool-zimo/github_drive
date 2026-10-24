@@ -412,6 +412,14 @@
 's.recent': "Récent",
 's.bg': "Arrière-plan",
 's.move': "Déplacer",
+    'trash.itemCount': '{count} éléments dans la corbeille',
+    'trash.restoreAll': 'Tout restaurer',
+    'trash.emptyTrash': 'Vider la corbeille',
+    'trash.confirmRestoreAll': 'Restaurer {count} élément(s) depuis la corbeille ?',
+    'trash.confirmEmpty': 'Supprimer définitivement {count} élément(s) ? Irréversible.',
+    'toast.trashEmpty': 'La corbeille est vide',
+    'toast.restoredAll': 'Restaurés {ok}, échecs {fail}',
+    'toast.emptiedTrash': 'Supprimés {ok}, échecs {fail}',
 };
 root.GdLangMeta = root.GdLangMeta || {};
     root.GdLangMeta['fr'] = {name: 'Français', own: 'Français', flag: '🇫🇷', rtl: false};
