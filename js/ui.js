@@ -62,6 +62,138 @@ class UI {
         }
 
         console.log('[GitHub Drive] 登录事件绑定完成');
+
+        // 探测 OAuth 代理，通了才显示「用 GitHub 登录」按钮
+        this.initOAuth();
+    }
+
+    /**
+     * GitHub 登录（OAuth Device Flow）
+     *
+     * 只有「代理地址 + client_id 都配了」且「代理真的连得上」才显示按钮。
+     * 任何一环不满足就维持隐藏 —— 一个点下去必然失败的按钮，
+     * 比没有这个按钮更糟，用户直接用上面的 PAT 输入框就好。
+     */
+    initOAuth() {
+        if (typeof GitHubDeviceFlow === 'undefined') return;
+        const flow = new GitHubDeviceFlow();
+        this.oauthFlow = flow;
+        if (!flow.configured) return;
+
+        // 不 await：探测是网络请求，不能拖住 PAT 输入框的可用性
+        flow.available().then((ok) => {
+            if (!ok) return;
+            const btn = document.getElementById('oauth-login-btn');
+            if (!btn) return;
+            btn.style.display = '';
+            btn.addEventListener('click', () => this.startOAuth());
+
+            const cancel = document.getElementById('oauth-cancel-btn');
+            const openBtn = document.getElementById('oauth-open-btn');
+            const codeEl = document.getElementById('oauth-code');
+
+            if (cancel) cancel.addEventListener('click', () => this.cancelOAuth());
+            if (openBtn) {
+                openBtn.addEventListener('click', () => {
+                    this._copyText(codeEl ? codeEl.textContent.trim() : '');
+                    window.open('https://github.com/login/device', '_blank');
+                });
+            }
+            if (codeEl) {
+                const doCopy = () => {
+                    const ok = this._copyText(codeEl.textContent.trim());
+                    this.showToast(ok ? '已复制' : '复制失败，请手动选中', ok ? 'success' : 'error');
+                };
+                codeEl.addEventListener('click', doCopy);
+                codeEl.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doCopy(); }
+                });
+            }
+        }).catch(() => { /* 探测失败 = 不显示按钮，静默 */ });
+    }
+
+    async startOAuth() {
+        const flow = this.oauthFlow;
+        if (!flow) return;
+        const btn = document.getElementById('oauth-login-btn');
+        const panel = document.getElementById('oauth-panel');
+        const codeEl = document.getElementById('oauth-code');
+        const cdEl = document.getElementById('oauth-countdown');
+
+        // ★ 必须在 await 之前开窗口。浏览器只认「用户手势的同步调用栈」，
+        //   await 之后 window.open 会被判定为弹窗并拦截。
+        const w = window.open('about:blank', '_blank');
+
+        try {
+            if (btn) { btn.disabled = true; btn.style.display = 'none'; }
+
+            const r = await flow.requestCode();
+            if (codeEl) codeEl.textContent = r.userCode;
+            if (panel) panel.style.display = '';
+            this._copyText(r.userCode);
+
+            // 窗口开着就导航过去；被拦截的话用户点面板里的按钮即可
+            if (w) {
+                try { w.location.href = r.verifyUrl; } catch (e) { /* 跨域读不到，忽略 */ }
+            }
+
+            const deadline = Date.now() + r.expiresIn * 1000;
+            this._oauthTick = setInterval(() => {
+                const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+                if (cdEl) cdEl.textContent = left > 0 ? left + 's' : '';
+                if (left <= 0) clearInterval(this._oauthTick);
+            }, 1000);
+
+            const token = await flow.pollForToken(() => {});
+
+            clearInterval(this._oauthTick);
+            this._oauthTick = null;
+            if (panel) panel.style.display = 'none';
+            if (btn) { btn.disabled = false; btn.style.display = ''; }
+
+            // gho_ 开头的 token，app.login 已放行
+            await this.app.login(token);
+        } catch (e) {
+            if (this._oauthTick) { clearInterval(this._oauthTick); this._oauthTick = null; }
+            flow.cancel();
+            if (panel) panel.style.display = 'none';
+            if (btn) { btn.disabled = false; btn.style.display = ''; }
+            try { if (w) w.close(); } catch (err) { /* 已经关了就算了 */ }
+            this.showToast((e && e.message) || '授权失败', 'error');
+        }
+    }
+
+    cancelOAuth() {
+        if (this.oauthFlow) this.oauthFlow.cancel();
+        if (this._oauthTick) { clearInterval(this._oauthTick); this._oauthTick = null; }
+        const panel = document.getElementById('oauth-panel');
+        const btn = document.getElementById('oauth-login-btn');
+        if (panel) panel.style.display = 'none';
+        if (btn) { btn.disabled = false; btn.style.display = ''; }
+    }
+
+    /** 复制。clipboard API 在非 HTTPS 下不可用，退回 execCommand */
+    _copyText(text) {
+        if (!text) return false;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(() => {});
+                return true;
+            }
+        } catch (e) { /* 走下面的兜底 */ }
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+        } catch (e) {
+            return false;
+        }
     }
 
     init() {
@@ -223,10 +355,6 @@ class UI {
                 } else {
                     // 电脑端：折叠/展开侧边栏
                     const isCollapsed = sidebar.classList.contains('collapsed');
-                    // ★ inline width 会压过 .sidebar.collapsed{width:60px}，
-                    //   结果就是「只隐藏内容、宽度不变」的一条大空白。
-                    //   历史版本确实往这里写过 inline width，收起前先清掉。
-                    if (!isCollapsed && sidebar.style.width) sidebar.style.width = '';
                     sidebar.classList.toggle('collapsed', !isCollapsed);
                     if (mainContent) mainContent.classList.toggle('sidebar-collapsed', !isCollapsed);
                     // 保存状态
@@ -1392,11 +1520,11 @@ class UI {
             {
                 title: '外观',
                 items: [
-                    {icon:'moon', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
-                    {icon:'globe', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
-                    {icon:'palette', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
+                    {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
+                    {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
+                    {icon:'🎨', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
                      action:'ui.closeModal();ui.showLookPanel();'},
-                    {icon:'link', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
+                    {icon:'🔗', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
                      action:'ui.toggleBridge();',
                      extra:(localStorage.getItem('gd_bridge_enabled') === '1' ? '开' : '关')},
                 ]
@@ -1404,27 +1532,27 @@ class UI {
             {
                 title: '存储与仓库',
                 items: [
-                    {icon:'stack', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
-                    {icon:'cpu', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
+                    {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
+                    {icon:'🤖', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
                 ]
             },
             {
                 title: '功能',
                 items: [
-                    {icon:'search', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
+                    {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
                      extra:(localStorage.getItem('gd_search_content') === '1' ? '开' : '关')},
-                    {icon:'target', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
-                    {icon:'settings', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
+                    {icon:'🎯', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
+                    {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
                 ]
             },
             {
                 title: '关于与账号',
                 items: [
-                    {icon:'help', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
-                    {icon:'gitBranch', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
-                    {icon:'save', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
-                    {icon:'tag', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
-                    {icon:'logout', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
+                    {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
+                    {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
+                    {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
+                    {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
+                    {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
                 ]
             }
         ];
@@ -1439,15 +1567,7 @@ class UI {
                 const color = it.danger ? 'color:#dc2626;' : '';
                 const hoverBg = it.danger ? 'var(--danger-light, #fef2f2)' : 'var(--bg-hover, #f3f4f6)';
                 body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
-                // ★ 图标走 SVG 而不是 emoji：emoji 各系统字形不一、暗色下突兀。
-                //   icons.js 是 CORE 第一个加载的，取不到就留空 —— 总比把
-                //   "moon" 当文字显示出来强。
-                var icoHtml = (window.Icons && window.Icons.get)
-                    ? window.Icons.get(it.icon, { size: 20, className: 'gd-set-ico' })
-                    : '';
-                body += '<span style="font-size:20px;line-height:1;display:inline-flex;'
-                      + 'align-items:center;justify-content:center;width:24px;flex:0 0 24px;">'
-                      + icoHtml + '</span>';
+                body += '<span style="font-size:20px;">' + it.icon + '</span>';
                 body += '<div><div style="font-weight:600;font-size:14px;color:var(--text-primary);">' + it.title + extraHtml + '</div><div style="font-size:12px;color:var(--text-secondary);">' + it.desc + '</div></div></div>';
             }
             body += '</div>';
