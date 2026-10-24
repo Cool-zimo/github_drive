@@ -601,3 +601,67 @@ audio.tp-media { max-width: 480px; }
     border-left: 3px solid var(--tp-accent, #4f46e5);
     border-radius: 0 6px 6px 0;
 }
+
+/* ── EPUB ──────────────────────────────────────────────
+   章节工具条吸顶：正文可能很长，翻章的入口不能跟着滚走。
+   正文沿用 --tp-font / --tp-lh，这样调字号、行距的操作对电子书也生效。 */
+.tp-epub-bar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin: 0 auto 14px;
+    max-width: var(--tp-maxw);
+    background: var(--tp-bg-soft);
+    border: 1px solid var(--tp-line);
+    border-radius: 10px;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+.tp-epub-sel {
+    flex: 1 1 140px;
+    min-width: 0;
+    max-width: 320px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: var(--tp-fg);
+    background: var(--tp-bg);
+    border: 1px solid var(--tp-line);
+    border-radius: 8px;
+}
+.tp-epub-nav {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+.tp-epub-nav:disabled { opacity: .45; cursor: not-allowed; }
+.tp-epub-info {
+    color: var(--tp-fg-dim);
+    flex: 0 0 auto;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tp-epub-body {
+    max-width: var(--tp-maxw);
+    margin: 0 auto;
+    font-size: var(--tp-font);
+    line-height: var(--tp-lh);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+}
+/* 电子书自带的排版只管正文，图片太宽会撑破版面 */
+.tp-epub-body img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 14px auto;
+}
+.tp-epub-body p { margin: 0 0 1em; }
+.tp-epub-body h1, .tp-epub-body h2, .tp-epub-body h3 {
+    line-height: 1.35;
+    margin: 1.6em 0 .6em;
+}
