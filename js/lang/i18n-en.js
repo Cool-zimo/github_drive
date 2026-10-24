@@ -12,6 +12,7 @@
 'nav.starred': 'Starred',
 'nav.shared': 'My Shares',
 'nav.explore': 'Explore',
+'nav.thousand': 'Reader',
 'nav.plugins': 'Plugins',
 'nav.backend': 'Backend',
 'nav.docs': 'Docs',
