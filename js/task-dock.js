@@ -473,8 +473,10 @@ const TaskDock = (() => {
     function panelHTML(t, fromList) {
         const rows = t.items.map((it, i) => `
             <div class="td-row ${it.status}">
-                <span class="td-row-name">${esc(it.name)}</span>
-                <span class="td-row-pct">${it.status === 'done' ? L('完成', 'Done') : it.percent + '%'}</span>
+                <div class="td-row-head">
+                    <span class="td-row-name">${esc(it.name)}</span>
+                    <span class="td-row-pct">${it.status === 'done' ? L('完成', 'Done') : it.percent + '%'}</span>
+                </div>
                 <div class="td-row-bar"><div style="width:${it.percent}%"></div></div>
             </div>`).join('');
         const body = t.single ? `
