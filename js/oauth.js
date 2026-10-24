@@ -74,11 +74,21 @@ class GitHubDeviceFlow {
     }
 
     async _post(path, body) {
-        const r = await fetch(this._url(path), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
+        let r;
+        try {
+            r = await fetch(this._url(path), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+        } catch (e) {
+            // fetch 抛异常 = 请求根本没到服务器：DNS 失败、被墙、或 CORS 被拒。
+            // 浏览器统一报 "Failed to fetch"，看不出是哪一种，这里补上排查方向。
+            throw new Error(
+                '连不上代理（' + this.proxy + '）。可能是地址写错、代理没部署，' +
+                '或者浏览器拦掉了跨域响应。按 F12 看网络面板能确认是哪一种。'
+            );
+        }
         let data = {};
         try {
             data = await r.json();
