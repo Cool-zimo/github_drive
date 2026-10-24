@@ -330,6 +330,12 @@ body {
     display: block;
     opacity: .92;
 }
+.nav-icon svg.ico {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+}
 body.dark-theme .nav-icon img { opacity: 1; }
 .repo-list {
     margin-top: 4px;
@@ -1955,6 +1961,9 @@ body.dark-mode .modal-close {
 }
 .mobile-nav-item .icon {
     font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .mobile-nav-item:active {
     background: #f3f4f6;
