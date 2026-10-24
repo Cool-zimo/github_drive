@@ -70,9 +70,16 @@ class UI {
     /**
      * GitHub 登录（OAuth Device Flow）
      *
-     * 只有「代理地址 + client_id 都配了」且「代理真的连得上」才显示按钮。
-     * 任何一环不满足就维持隐藏 —— 一个点下去必然失败的按钮，
-     * 比没有这个按钮更糟，用户直接用上面的 PAT 输入框就好。
+     * 显示条件只有一条：代理地址 + client_id 都配了。
+     *
+     * 曾经多加了一条「代理探测通过才显示」，结果踩了两个坑：
+     *   1. 探测是异步的，失败时静默隐藏 —— 排障时看不到任何线索，
+     *      只能靠猜（这次就是这么卡住的）。
+     *   2. 探测成功 ≠ 真实请求成功。预检通了不代表 POST 通。
+     *
+     * 所以改成：配了就显示，真连不上时点一下会 toast 报错，
+     * 错误信息明确，比一个永远不出现的按钮好排查得多。
+     * 探测仍然在后台跑，但只用于控制台诊断，不再决定按钮生死。
      */
     initOAuth() {
         // 类还没定义 = oauth.min.js 还没执行到（脚本顺序问题）。
@@ -88,40 +95,53 @@ class UI {
         }
         const flow = new GitHubDeviceFlow();
         this.oauthFlow = flow;
-        if (!flow.configured) return;
 
-        // 不 await：探测是网络请求，不能拖住 PAT 输入框的可用性
+        // 诊断：把配置来源打出来，排障时一眼能看出哪一步没配上
+        console.log('[OAuth] proxy =', JSON.stringify(flow.proxy),
+            '| clientId =', flow.clientId ? flow.clientId.slice(0, 6) + '…' : '(空)',
+            '| configured =', flow.configured);
+
+        if (!flow.configured) {
+            console.warn('[OAuth] 未配置，按钮保持隐藏。可用 localStorage 的 gd_oauth_proxy / gd_oauth_client_id 覆盖。');
+            return;
+        }
+
+        // 后台探测，只写日志。失败不隐藏按钮 —— 否则又是一次静默失败。
         flow.available().then((ok) => {
-            if (!ok) return;
-            if (this._oauthBound) return; // 重试可能跑多次，重复绑监听会点一次弹两次
-            const btn = document.getElementById('oauth-login-btn');
-            if (!btn) return;
-            this._oauthBound = true;
-            btn.style.display = '';
-            btn.addEventListener('click', () => this.startOAuth());
+            console.log('[OAuth] 代理探测:', ok ? '通过' : '未通过（点按钮时仍会再试，失败会提示）');
+        }).catch((e) => console.warn('[OAuth] 探测异常:', e && e.message));
 
-            const cancel = document.getElementById('oauth-cancel-btn');
-            const openBtn = document.getElementById('oauth-open-btn');
-            const codeEl = document.getElementById('oauth-code');
+        if (this._oauthBound) return; // 重试可能跑多次，重复绑监听会点一次弹两次
+        const btn = document.getElementById('oauth-login-btn');
+        if (!btn) {
+            console.warn('[OAuth] 找不到 #oauth-login-btn，按钮无法挂载');
+            return;
+        }
+        this._oauthBound = true;
+        btn.style.display = '';
+        btn.addEventListener('click', () => this.startOAuth());
 
-            if (cancel) cancel.addEventListener('click', () => this.cancelOAuth());
-            if (openBtn) {
-                openBtn.addEventListener('click', () => {
-                    this._copyText(codeEl ? codeEl.textContent.trim() : '');
-                    window.open('https://github.com/login/device', '_blank');
-                });
-            }
-            if (codeEl) {
-                const doCopy = () => {
-                    const ok = this._copyText(codeEl.textContent.trim());
-                    this.showToast(ok ? '已复制' : '复制失败，请手动选中', ok ? 'success' : 'error');
-                };
-                codeEl.addEventListener('click', doCopy);
-                codeEl.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doCopy(); }
-                });
-            }
-        }).catch(() => { /* 探测失败 = 不显示按钮，静默 */ });
+        const cancel = document.getElementById('oauth-cancel-btn');
+        const openBtn = document.getElementById('oauth-open-btn');
+        const codeEl = document.getElementById('oauth-code');
+
+        if (cancel) cancel.addEventListener('click', () => this.cancelOAuth());
+        if (openBtn) {
+            openBtn.addEventListener('click', () => {
+                this._copyText(codeEl ? codeEl.textContent.trim() : '');
+                window.open('https://github.com/login/device', '_blank');
+            });
+        }
+        if (codeEl) {
+            const doCopy = () => {
+                const ok = this._copyText(codeEl.textContent.trim());
+                this.showToast(ok ? '已复制' : '复制失败，请手动选中', ok ? 'success' : 'error');
+            };
+            codeEl.addEventListener('click', doCopy);
+            codeEl.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doCopy(); }
+            });
+        }
     }
 
     async startOAuth() {
