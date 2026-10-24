@@ -1804,9 +1804,14 @@ class App {
         try {
             const res = await this.fileManager.compactRepos(plan, (stage, done, total, msg) => {
                 if (taskId && TaskDock.setPercent) {
-                    const pct = total ? Math.round(done / total * 100) : 0;
+                    // ★ 动了就不是 0：分片一多，头几十步四舍五入全是 0%，
+                    //   进度条纹丝不动，看着像"卡在 0% 一万年"。
+                    //   给个 1% 下限，让"已经开始"这件事本身可见。
+                    const raw = total ? Math.round(done / total * 100) : 0;
+                    const pct = Math.min(100, done > 0 ? Math.max(1, raw) : 0);
                     TaskDock.setPercent(taskId, pct);
-                    TaskDock.setNote?.(taskId, `${msg}（${done}/${total}）`);
+                    // msg 里已经带了 x/y 计数，这里再拼一遍会变成「读取分片 3/40（3/40）」
+                    TaskDock.setNote?.(taskId, msg || '');
                 }
             }, doDelete);
 
