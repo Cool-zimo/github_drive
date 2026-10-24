@@ -347,6 +347,14 @@
 'i18n.fromPlugin': '插件',
 'i18n.needDownload': '需下载',
 'i18n.pluginLangAdded': '插件注册了新语言',
+    'trash.itemCount': '回收站共 {count} 项',
+    'trash.restoreAll': '恢复全部',
+    'trash.emptyTrash': '清空回收站',
+    'trash.confirmRestoreAll': '确定恢复回收站里的 {count} 个项目吗？',
+    'trash.confirmEmpty': '确定永久删除回收站里的 {count} 个项目吗？此操作不可撤销，文件将从 GitHub 仓库彻底删除。',
+    'toast.trashEmpty': '回收站是空的',
+    'toast.restoredAll': '已恢复 {ok} 项，失败 {fail} 项',
+    'toast.emptiedTrash': '已清空 {ok} 项，失败 {fail} 项',
 };
     root.GdLangMeta = root.GdLangMeta || {};
     root.GdLangMeta['zh-CN'] = {name: '简体中文', own: '中文', flag: '\u{1F1E8}\u{1F1F3}', rtl: false};
