@@ -625,6 +625,18 @@ const TaskDock = (() => {
         return pwRoot;
     }
 
+    /**
+     * 图标字段专用转义
+     * 默认图标现在是内联 SVG（<svg ...>），直接 pwEsc 会把标签整体
+     * 转义成可见文本 —— 页面上会出现一行 "<svg ...>" 源码。
+     * 所以：已经是 SVG 就原样输出（内容是自己生成的常量，不含用户输入）；
+     * 否则按普通文本转义。
+     */
+    function pwIcon(v) {
+        var s = String(v == null ? '' : v);
+        return /<\s*svg/i.test(s) ? s : pwEsc(s);
+    }
+
     function pwEsc(v) {
         return String(v == null ? '' : v)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -645,7 +657,7 @@ const TaskDock = (() => {
         const w = {
             id,
             title: o.title || L('插件', 'Plugin'),
-            icon: o.icon || '🔌',
+            icon: o.icon || iconSvg('plug', 16),
             mount: o.mount || null,
             onClose: o.onClose || null,
             view: 'expanded',                 // expanded | mini
@@ -860,11 +872,11 @@ const TaskDock = (() => {
     /** 后台进程里的插件预览区 HTML（没插件时返回空串） */
     function pluginStagesHTML() {
         if (!pwins.size) return '';
-        let h = '<div class="tp-stage-sec"><div class="tp-stage-title">🧩 '
+        let h = '<div class="tp-stage-sec"><div class="tp-stage-title">' + iconSvg('puzzle', 14)
               + L('运行中的插件', 'Running plugins') + `（${pwins.size}）</div>`;
         for (const w of pwins.values()) {
             h += `<div class="tp-stage-card" data-pid="${pwEsc(w.id)}">`
-               + `<div class="tp-stage-head"><span>${pwEsc(w.icon)}</span>`
+               + ` <div class="tp-stage-head"><span>${pwIcon(w.icon)}</span>`
                + `<span class="tp-stage-name">${pwEsc(w.title)}</span></div>`
                + `<div class="tp-stage" data-pid="${pwEsc(w.id)}"></div>`
                + `<div class="tp-stage-tip">${L('点击预览，全屏打开', 'Tap the preview to open fullscreen')}</div>`
@@ -964,7 +976,7 @@ const TaskDock = (() => {
         if (!m) {
             m = document.createElement('div');
             m.className = 'tp-merged';
-            m.innerHTML = `<div class="tp-merged-ico">🧩</div>
+            m.innerHTML = `<div class="tp-merged-ico">${iconSvg('puzzle', 18)}</div>
                            <div class="tp-merged-main"><div class="tp-merged-title"></div></div>`;
             m.addEventListener('click', () => pwOpenList());
             root.appendChild(m);
@@ -978,10 +990,10 @@ const TaskDock = (() => {
             p = document.createElement('div');
             p.className = 'tp-list';
             p.innerHTML = `<div class="tp-head">
-                    <span class="tp-ico">🧩</span>
+                    <span class="tp-ico">${iconSvg('puzzle', 16)}</span>
                     <span class="tp-title tp-list-title"></span>
                     <span class="tp-spacer"></span>
-                    <button class="tp-btn" data-act="close">✕</button>
+                    <button class="tp-btn" data-act="close">${iconSvg('x', 12) || '✕'}</button>
                 </div>
                 <div class="tp-list-body"></div>`;
             p.querySelector('.tp-btn').addEventListener('click', e => { e.stopPropagation(); pwCloseList(); });
