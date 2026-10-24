@@ -924,7 +924,7 @@ class UI {
             const type = file.isFolder ? 'dir' : 'file';
             const icon = FileManager.getFileIcon(file.name, type);
             const size = file.isFolder ? '' : FileManager.formatSize(file.size);
-            const chunkInfo = file.chunks && file.chunks.length > 1 ? `<span class="file-repo-tag" title="已拆分存储">📦${file.chunks.length}片</span>` : '';
+            const chunkInfo = file.chunks && file.chunks.length > 1 ? `<span class="file-repo-tag" title="已拆分存储"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><polyline points="12 22 12 12"/></svg>${file.chunks.length}片</span>` : '';
 
             return `
                 <div class="file-item" data-index="${index}" data-path="${file.path}"
