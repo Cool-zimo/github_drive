@@ -14,13 +14,13 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.5"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.6"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=092">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.9.5"></script>
+    <script src="js/branch-guard.min.js?v=0.9.6"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -33,27 +33,25 @@
     <script defer src="js/storage.min.js?h=915f127e93" data-gd-core="storage"></script>
     <script defer src="js/file-manager.min.js?h=0790099620" data-gd-core="file-manager"></script>
     <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
-    <script defer src="js/task-dock.min.js?h=f46795d108" data-gd-core="task-dock"></script>
-    <script defer src="js/ui.min.js?h=8d9d813dca" data-gd-core="ui"></script>
+    <script defer src="js/task-dock.min.js?h=0004283198" data-gd-core="task-dock"></script>
+    <!-- oauth 必须在 ui 之前：ui 构造时会读 GitHubDeviceFlow，晚了类还没定义。
+         ★ 下面这一组（ui → app）只出现一次 —— 早先为了让 oauth 排在 ui 前，
+           在 oauth 后又整组复制了一遍，结果同一 URL 被执行两次：
+           const/class 顶层声明重复 → "Identifier 'UI' has already been declared"
+           → 第二份整体 SyntaxError。现在把第一份 ui 删掉（oauth 已在其前），
+           一份就够，顺序也仍然正确。 -->
+    <script defer src="js/oauth.min.js?h=0482c94889" data-gd-core="oauth"></script>
+    <script defer src="js/ui.min.js?h=979283f06c" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=0e53f69e73" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=0abcaa66fc" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=b732e17642" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=b49d35fe68" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=385acf8972" data-gd-core="i18n-scan"></script>
-    <script defer src="js/app.min.js?h=9dbc7f9fd6" data-gd-core="app"></script>
-    <!-- oauth 必须在 ui 之前：ui 构造时会读 GitHubDeviceFlow，晚了类还没定义 -->
-    <script defer src="js/oauth.min.js?h=d561066e51" data-gd-core="oauth"></script>
-    <script defer src="js/ui.min.js?h=7ee0feac5f" data-gd-core="ui"></script>
-    <script defer src="js/i18n.min.js?h=6edf71e4f5" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=3002dca680" data-gd-core="version"></script>
-    <script defer src="js/anim.min.js?h=d1cb097c67" data-gd-core="anim"></script>
-    <script defer src="js/gesture.min.js?h=59907b7121" data-gd-core="gesture"></script>
-    <script defer src="js/custom.min.js?h=69b53375f9" data-gd-core="custom"></script>
-    <script defer src="js/theme.min.js?h=e4926074c5" data-gd-core="theme"></script>
-    <script defer src="js/i18n-scan.min.js?h=f30221e941" data-gd-core="i18n-scan"></script>
-    <script defer src="js/app.min.js?h=3f8cd8eea3" data-gd-core="app"></script>
+    <script defer src="js/app.min.js?h=7173a14d82" data-gd-core="app">
+    </script>
+    <script src="js/app-hub.min.js?h=24affdfc52"></script>
 
     <script>
     // 分支切换：检测自定义分支，动态加载资源（使用 jsdelivr CDN 加速）
@@ -367,6 +365,56 @@
                     })();
                     </script>
                     <script>
+                    /* ★ 用本地已存账号进入：github_drive/?user=Cool-zimo
+                       账号的 token 本来就存在本机 localStorage 里，链接里不带任何
+                       凭据 —— 只是指定"用哪个已登录过的号"，比 with_token 安全得多。
+                       匹配 login（大小写不敏感）或 id，命中后切成当前账号再重载一次，
+                       让 app 用新 token 正常初始化。同样支持 #user=xxx。 */
+                    (function () {
+                        var p = new URLSearchParams(location.search);
+                        var u = p.get('user') ||
+                                (location.hash.match(/[?&]user=([^&]+)/) || [])[1] || '';
+                        u = (u || '').trim();
+                        if (!u) return;
+                        try { u = decodeURIComponent(u); } catch (e) {}
+
+                        var flag = 'gd_url_user_used_' + u.toLowerCase();
+                        if (sessionStorage.getItem(flag)) return;
+                        sessionStorage.setItem(flag, '1');
+
+                        // ★ Storage 类在 js/storage.js 里，defer 脚本要等文档解析完
+                        //   才执行。这段内联脚本跑得比它早，直接 new 会 ReferenceError，
+                        //   所以轮询等它出现（最多 5 秒）。
+                        var n = 0;
+                        var timer = setInterval(function () {
+                            n++;
+                            if (typeof Storage === 'undefined' && n < 50) return;
+                            clearInterval(timer);
+                            if (typeof Storage === 'undefined') return;
+                            var hit;
+                            try {
+                                var st = new Storage();
+                                var want = u.toLowerCase();
+                                hit = (st.getAccounts() || []).find(function (a) {
+                                    var login = ((a.user && (a.user.login || a.user.name)) || '').toLowerCase();
+                                    return login === want || String(a.id).toLowerCase() === want;
+                                });
+                                if (hit) st.setCurrentAccount(hit.id);
+                            } catch (e) { return; }
+
+                            if (!hit) {
+                                alert('本机没有保存 ' + u + ' 这个账号，请先登录一次再用这个链接。');
+                                return;
+                            }
+                            // 重载一次让 app 用新 token 初始化；参数已消费，去掉避免再次触发
+                            var q = location.search.replace(/[?&]user=[^&]*/g, '')
+                                        .replace(/^&/, '?');
+                            location.replace(location.pathname +
+                                (q && q !== '?' ? q : '') + location.hash);
+                        }, 100);
+                    })();
+                    </script>
+                    <script>
                     /* ★ 相对路径在无尾斜杠的 URL 下会解析到根域：
                          /github_drive  + "thousand-preview/" → /thousand-preview/（404）
                        你的地址栏正是 /github_drive（无尾斜杠），所以点千览等于跳到
@@ -398,6 +446,10 @@
                         <span data-i18n="nav.plugins">插件广场</span>
                     </a>
                 </div>
+
+                <!-- 我的应用：由 js/app-hub.js 按开关动态渲染。
+                     默认 display:none，一个都没开时不会占位置。 -->
+                <div class="nav-section" id="gd-apphub-nav" style="display:none;"></div>
             </nav>
             <div class="sidebar-footer">
                 <div class="app-switch-slot" id="app-switch-slot"></div>
@@ -513,8 +565,9 @@
         // ★ 由 build.py 生成：每个文件的内容 hash。
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
+            'app-hub': '24affdfc52',
             'anim': '8db9aa997e',
-            'app': '9dbc7f9fd6',
+            'app': '7173a14d82',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
@@ -532,10 +585,10 @@
             'plugin-api': 'c3c2940bd5',
             'share': 'cc060bd75a',
             'storage': '915f127e93',
-            'task-dock': 'f46795d108',
+            'task-dock': '0004283198',
             'theme': 'b0ec742409',
-            'ui': '8d9d813dca',
-            'version': '0abcaa66fc'
+            'ui': '979283f06c',
+            'version': 'b732e17642'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
