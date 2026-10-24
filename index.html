@@ -14,13 +14,13 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.1"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.2"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png">
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=092">
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.9.1"></script>
+    <script src="js/branch-guard.min.js?v=0.9.2"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -31,14 +31,14 @@
     <script defer src="js/icons.min.js?h=bde278015a" data-gd-core="icons"></script>
     <script defer src="js/github-api.min.js?h=389e7c20c9" data-gd-core="github-api"></script>
     <script defer src="js/storage.min.js?h=b806d51c08" data-gd-core="storage"></script>
-    <script defer src="js/file-manager.min.js?h=68fb389efb" data-gd-core="file-manager"></script>
+    <script defer src="js/file-manager.min.js?h=fea1f71b9c" data-gd-core="file-manager"></script>
     <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
     <script defer src="js/task-dock.min.js?h=022294f637" data-gd-core="task-dock"></script>
     <!-- oauth 必须在 ui 之前：ui 构造时会读 GitHubDeviceFlow，晚了类还没定义 -->
     <script defer src="js/oauth.min.js?h=70f11699c3" data-gd-core="oauth"></script>
-    <script defer src="js/ui.min.js?h=8ef77fa861" data-gd-core="ui"></script>
-    <script defer src="js/i18n.min.js?h=9d7edf6ad9" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=ac8508f684" data-gd-core="version"></script>
+    <script defer src="js/ui.min.js?h=efbe565c42" data-gd-core="ui"></script>
+    <script defer src="js/i18n.min.js?h=383370fd89" data-gd-core="i18n"></script>
+    <script defer src="js/version.min.js?h=db2ef2fd15" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
@@ -78,7 +78,7 @@
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
-            <div class="login-logo"><img src="assets/icon-drive-192.png" alt="GitHub Drive" width="72" height="72"></div>
+            <div class="login-logo"><img src="assets/icon-drive-192.png?v=092" alt="GitHub Drive" width="72" height="72"></div>
             <h1>GitHub Drive</h1>
             <p class="login-subtitle"><span data-i18n="login.subtitle">Turn your GitHub repo into a private cloud drive</span></p>
 
@@ -236,7 +236,7 @@
         <!-- 侧边栏 -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <span class="sidebar-logo"><img src="assets/icon-drive-192.png" alt="" width="24" height="24"></span>
+                <span class="sidebar-logo"><img src="assets/icon-drive-192.png?v=092" alt="" width="24" height="24"></span>
                 <span class="sidebar-title">GitHub Drive</span>
             </div>
             <nav class="sidebar-nav">
@@ -420,21 +420,21 @@
             'config-sync': 'd3c84a594e',
             'custom': '908e5708ce',
             'extension': 'ac2832ce10',
-            'file-manager': '68fb389efb',
+            'file-manager': 'fea1f71b9c',
             'gesture': '4896dd831d',
             'github-api': '389e7c20c9',
-            'i18n': '9d7edf6ad9',
+            'i18n': '383370fd89',
             'i18n-scan': '18e4c90f2f',
             'icons': 'bde278015a',
             'maintain': 'b10def0baf',
             'oauth': '70f11699c3',
             'plugin-api': 'c3c2940bd5',
-            'share': '27afaa1375',
+            'share': '5b55d64fc9',
             'storage': 'b806d51c08',
             'task-dock': '022294f637',
             'theme': 'b0ec742409',
-            'ui': '8ef77fa861',
-            'version': 'ac3ca09bec'
+            'ui': 'efbe565c42',
+            'version': 'db2ef2fd15'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
