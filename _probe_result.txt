@@ -1,4 +1,0 @@
-GET=405
-OPTIONS_OK=204
-OPTIONS_EVIL=403
-BODY={"device_code":"96591f189dea14879c259535dcc940523691d468","user_code":"7788-4369","verification_uri":"https://github.com/login/device","expires_in":899,"interval":5}
