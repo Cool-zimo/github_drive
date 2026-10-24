@@ -520,6 +520,60 @@ class App {
         } catch (e) { this.ui.showToast('恢复失败: ' + e.message, 'error'); }
     }
 
+    /** 回收站里所有条目（与 showTrashFiles 同源，避免两处口径不一致） */
+    _listTrash() {
+        try { return this.storage.listDirectory('/drive_home/.trash') || []; }
+        catch (e) { return []; }
+    }
+
+    /**
+     * 一键恢复全部：逐条 moveItem 回 /drive_home/
+     * ★ 全部走完再一次性刷新 —— 每条都 loadFiles 会打 N 次仓库请求，
+     *   而且在 VFS 上边迭代边删除会让后续条目的路径失效。
+     */
+    async restoreAllFromTrash() {
+        const files = this._listTrash();
+        if (!files.length) { this.ui.showToast(I18n.t('toast.trashEmpty'), 'info'); return; }
+        if (!confirm(I18n.t('trash.confirmRestoreAll').replace('{count}', files.length))) return;
+        let ok = 0, fail = 0;
+        for (const f of files) {
+            try {
+                const trashName = f.path.split('/').pop();
+                const originalName = trashName.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_/, '');
+                this.storage.moveItem(f.path, '/drive_home/' + originalName);
+                ok++;
+            } catch (e) { fail++; }
+        }
+        this.ui.showToast(
+            I18n.t('toast.restoredAll').replace('{ok}', ok).replace('{fail}', fail),
+            fail ? 'warning' : 'success');
+        await this.loadFiles();
+        if (this._currentView === 'trash') await this.showTrashFiles();
+    }
+
+    /**
+     * 一键清空回收站：真删 GitHub 分片，不可撤销
+     * ★ 串行执行：并发删同一仓库的分片会打同一个 tree，容易互相覆盖。
+     */
+    async emptyTrash() {
+        const files = this._listTrash();
+        if (!files.length) { this.ui.showToast(I18n.t('toast.trashEmpty'), 'info'); return; }
+        if (!confirm(I18n.t('trash.confirmEmpty').replace('{count}', files.length))) return;
+        let ok = 0, fail = 0;
+        for (const f of files) {
+            try {
+                if (f.isFolder) await this.fileManager.deleteFolder(f.path);
+                else await this.fileManager.deleteFile(f.path);
+                ok++;
+            } catch (e) { fail++; }
+        }
+        this.ui.showToast(
+            I18n.t('toast.emptiedTrash').replace('{ok}', ok).replace('{fail}', fail),
+            fail ? 'warning' : 'success');
+        await this.loadFiles();
+        if (this._currentView === 'trash') await this.showTrashFiles();
+    }
+
     async deleteFiles(files, permanent = false) {
         if (!files || files.length === 0) return;
         if (files.length === 1) { this.deleteFile(files[0], permanent); return; }
@@ -1297,12 +1351,40 @@ class App {
     async showTrashFiles() {
         try {
             const trashPath = '/drive_home/.trash';
-            const files = this.storage.listDirectory(trashPath);
+            const files = this.storage.listDirectory(trashPath) || [];
             // 回收站视图：显示恢复和永久删除按钮
             this.ui.renderFileList(files, { isTrash: true });
+            // 批量工具条：单独渲染，不塞进 renderFileList
+            //（那个函数目前只吃第一个参数，硬塞进去会被静默忽略）
+            this._renderTrashToolbar(files.length);
         } catch (e) {
             this.ui.showToast('加载回收站失败: ' + e.message, 'error');
         }
+    }
+
+    /** 回收站顶部的「恢复全部 / 清空」工具条（有内容才出现） */
+    _renderTrashToolbar(count) {
+        let bar = document.getElementById('trash-toolbar');
+        if (!count) { if (bar) bar.remove(); return; }
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'trash-toolbar';
+            bar.className = 'trash-toolbar';
+            const list = document.getElementById('file-list');
+            if (list && list.parentNode) list.parentNode.insertBefore(bar, list);
+            else return;
+        }
+        bar.innerHTML = `
+            <span class="trash-toolbar-count">${I18n.t('trash.itemCount').replace('{count}', count)}</span>
+            <span class="trash-toolbar-spacer"></span>
+            <button class="btn-secondary btn-sm" onclick="app.restoreAllFromTrash()">
+                ${(typeof Icons !== 'undefined' && Icons.get) ? Icons.get('recycle', { size: 14 }) : ''}
+                <span>${I18n.t('trash.restoreAll')}</span>
+            </button>
+            <button class="btn-secondary btn-sm trash-danger" onclick="app.emptyTrash()">
+                ${(typeof Icons !== 'undefined' && Icons.get) ? Icons.get('trash', { size: 14 }) : ''}
+                <span>${I18n.t('trash.emptyTrash')}</span>
+            </button>`;
     }
     
     async showRecentFiles() {
