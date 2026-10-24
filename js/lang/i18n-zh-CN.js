@@ -12,6 +12,7 @@
 'nav.starred': '收藏',
 'nav.shared': '我的分享',
 'nav.explore': '发现分享',
+'nav.thousand': '千览',
 'nav.plugins': '插件广场',
 'nav.backend': '后端服务',
 'nav.docs': '使用文档',
