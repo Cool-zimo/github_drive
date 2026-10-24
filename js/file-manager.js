@@ -1401,9 +1401,19 @@ class FileManager {
      *   Icons.forFile() 已经有完整的映射（且和设置页、分享页同一套画风），
      *   这里再写一份就是第三份重复的真相源，改一处漏两处。
      */
+    /**
+     * 文件图标
+     *
+     * ★ 尺寸用 em 而不是写死像素。
+     *   写死 width="16" 的话，SVG 永远按 16px 画 —— CSS 里那份
+     *   font-size（网格 72 / 列表 40）是给文字用的，对带 width 属性的
+     *   SVG 完全不起作用，于是无论怎么调 CSS，图标都还是 16px 那一小点。
+     *   换成 1em 后，图标跟着 .file-icon 的 font-size 走，
+     *   网格和列表才能各自要不同大小。
+     */
     static getFileIcon(name, type) {
         if (typeof Icons === 'undefined') return '';
-        if (type === 'dir') return Icons.get('folder', { size: 16 });
-        return Icons.forFile(name, { size: 16 });
+        if (type === 'dir') return Icons.get('folder', { size: '1em' });
+        return Icons.forFile(name, { size: '1em' });
     }
 }
