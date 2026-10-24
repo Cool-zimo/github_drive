@@ -212,7 +212,20 @@
             // 必须复制一份：PDF.js 会在内部 transfer 这个 ArrayBuffer，
             // 之后原 buffer 变成 detached（byteLength=0）。如果外面还要
             // 拿同一个 buffer 做别的事，就会拿到空的。
-            return blob.arrayBuffer().then(ab => pdfjs.getDocument({ data: ab.slice(0) }).promise);
+            //
+            // ★ 关于"一次性全加载"
+            //   数据源是 GitHub 的 git/blobs，不支持 HTTP Range，
+            //   所以文件本身只能整份下载 —— 做不到边看边下。
+            //   真正的懒加载在页面这一层：一次只渲染当前页，
+            //   只预取前后各一页，缓存上限 12 页（见 drawPage/cachePut）。
+            //   大文件把等待感摊开：先给一句实在的体积提示，别让用户干等。
+            return blob.arrayBuffer().then(ab => {
+                const mb = ab.byteLength / 1048576;
+                if (mb > 12 && opts && opts.onBigFile) {
+                    opts.onBigFile(mb);
+                }
+                return pdfjs.getDocument({ data: ab.slice(0) }).promise;
+            });
         }).then(pdf => {
             container.innerHTML = '';
 
@@ -243,6 +256,30 @@
             let rendering = false;
             let pending = null;
 
+            /**
+             * 已渲染页的缓存：页号 → canvas。
+             *
+             * ★ 为什么必须缓存
+             *   原来每次翻页都重新 getPage + render，往回翻一页要再解析一遍
+             *   同样的内容。PDF 解析是重活（文字定位、字体、矢量图），
+             *   几百页的文档来回翻会明显卡顿。
+             *
+             * ★ 为什么要有上限（LRU）
+             *   一页 canvas 在 2x 屏上轻易几 MB（宽 × 高 × 4 × dpr²）。
+             *   无上限缓存一本 500 页的 PDF 会直接把标签页拖垮。
+             *   12 页足够覆盖"前后翻几页"的真实行为，再多就是浪费。
+             */
+            const CACHE_MAX = 12;
+            const cache = new Map();
+
+            function cachePut(p, cv) {
+                cache.set(p, cv);
+                // Map 的迭代顺序就是插入顺序，删最老的即可
+                while (cache.size > CACHE_MAX) {
+                    cache.delete(cache.keys().next().value);
+                }
+            }
+
             function updateLabel() {
                 label.textContent = '/ ' + pdf.numPages;
                 jump.value = page;
@@ -250,20 +287,7 @@
                 next.disabled = page >= pdf.numPages;
             }
 
-            /**
-             * 渲染某一页。
-             *
-             * ★ rendering 锁是必须的：快速连点翻页会并发起多个 render()，
-             *   PDF.js 对同一个 canvas 并发渲染会抛错，且页面顺序可能错乱。
-             *   有锁时记录 pending（最后一次请求），渲染完立刻补上，
-             *   既不会并发，也不会丢掉用户的最后一次操作。
-             */
-            function show(p) {
-                p = Math.min(Math.max(1, p), pdf.numPages);
-                if (rendering) { pending = p; return; }
-                rendering = true;
-                page = p;
-                updateLabel();
+            function drawPage(p) {
                 return pdf.getPage(p).then(pg => {
                     const wrapW = stage.clientWidth || 800;
                     const base = pg.getViewport({ scale: 1 });
@@ -282,15 +306,74 @@
                     canvas.style.height = vp.height + 'px';
                     ctx.scale(dpr, dpr);
 
-                    return pg.render({ canvasContext: ctx, viewport: vp }).promise.then(() => {
-                        stage.innerHTML = '';
-                        stage.appendChild(canvas);
-                        rendering = false;
-                        if (pending != null) {
-                            const q = pending; pending = null;
-                            if (q !== page) return show(q);
-                        }
+                    return pg.render({ canvasContext: ctx, viewport: vp })
+                        .promise.then(() => pg.cleanup ? (pg.cleanup(), canvas) : canvas);
+                });
+            }
+
+            /** 把某一页显示到舞台（从缓存取，或直接放上去） */
+            function paint(cv) {
+                stage.innerHTML = '';
+                stage.appendChild(cv);
+            }
+
+            /**
+             * 预取相邻页。
+             *
+             * ★ 独立的 pfBusy，不占用 rendering 锁：
+             *   预取是"顺便做的"，绝不能挡住用户翻页。两者画的是不同的
+             *   canvas，PDF.js 允许并发渲染不同目标，不会冲突。
+             *   延迟 150ms 是为了连续翻页时不浪费算力在中间页上。
+             */
+            const prefetching = new Set();
+            let pfTimer = null;
+
+            function schedulePrefetch(cur) {
+                clearTimeout(pfTimer);
+                pfTimer = setTimeout(() => {
+                    [cur + 1, cur - 1].forEach(q => {
+                        if (q < 1 || q > pdf.numPages) return;
+                        if (cache.has(q) || prefetching.has(q)) return;
+                        prefetching.add(q);
+                        drawPage(q).then(cv => {
+                            prefetching.delete(q);
+                            cachePut(q, cv);
+                        }).catch(() => prefetching.delete(q));
                     });
+                }, 150);
+            }
+
+            /**
+             * 渲染某一页。
+             *
+             * ★ rendering 锁是必须的：快速连点翻页会并发起多个 render()，
+             *   PDF.js 对同一个 canvas 并发渲染会抛错，且页面顺序可能错乱。
+             *   有锁时记录 pending（最后一次请求），渲染完立刻补上，
+             *   既不会并发，也不会丢掉用户的最后一次操作。
+             */
+            function show(p) {
+                p = Math.min(Math.max(1, p), pdf.numPages);
+                if (rendering) { pending = p; return; }
+                page = p;
+                updateLabel();
+
+                const hit = cache.get(p);
+                if (hit) {
+                    paint(hit);
+                    schedulePrefetch(p);
+                    return Promise.resolve();
+                }
+
+                rendering = true;
+                return drawPage(p).then(cv => {
+                    cachePut(p, cv);
+                    paint(cv);
+                    rendering = false;
+                    schedulePrefetch(p);
+                    if (pending != null) {
+                        const q = pending; pending = null;
+                        if (q !== page) return show(q);
+                    }
                 }).catch(() => { rendering = false; });
             }
 
@@ -315,6 +398,15 @@
                 restorePosition: (pos) => { if (pos && pos.page) show(pos.page); },
                 destroy: () => {
                     document.removeEventListener('keydown', onKey);
+                    clearTimeout(pfTimer);
+                    // ★ 缓存里的 canvas 不释放会一直占着显存/内存。
+                    //   切走一个 200 页的 PDF 后它们没有任何用处，
+                    //   但浏览器不会替你回收（canvas 元素仍被 Map 引用）。
+                    cache.forEach(cv => {
+                        cv.width = cv.height = 0;
+                    });
+                    cache.clear();
+                    prefetching.clear();
                     pdf.destroy && pdf.destroy();
                 },
             }));
