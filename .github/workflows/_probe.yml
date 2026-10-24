@@ -3,11 +3,23 @@ on: workflow_dispatch
 jobs:
   p:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: probe
         run: |
-          set -x
-          curl -s -m 20 -o /dev/null -w "GET=%{http_code}\n" https://gd-oauth.feng-to-zhang.workers.dev/
-          curl -s -m 20 -o /dev/null -w "OPTIONS_OK=%{http_code}\n" -X OPTIONS -H "Origin: https://cool-zimo.github.io" -H "Access-Control-Request-Method: POST" https://gd-oauth.feng-to-zhang.workers.dev/device/code
-          curl -s -m 20 -o /dev/null -w "OPTIONS_EVIL=%{http_code}\n" -X OPTIONS -H "Origin: https://evil.com" https://gd-oauth.feng-to-zhang.workers.dev/device/code
-          curl -s -m 20 -X POST -H "Content-Type: application/json" -H "Origin: https://cool-zimo.github.io" -d '{"client_id":"Ov23liuMyWPhGbmCEqDS"}' https://gd-oauth.feng-to-zhang.workers.dev/device/code
+          set +e
+          U=https://gd-oauth.feng-to-zhang.workers.dev
+          G=$(curl -s -m 25 -o /dev/null -w "%{http_code}" $U/)
+          O=$(curl -s -m 25 -o /dev/null -w "%{http_code}" -X OPTIONS -H "Origin: https://cool-zimo.github.io" -H "Access-Control-Request-Method: POST" $U/device/code)
+          E=$(curl -s -m 25 -o /dev/null -w "%{http_code}" -X OPTIONS -H "Origin: https://evil.com" $U/device/code)
+          B=$(curl -s -m 25 -X POST -H "Content-Type: application/json" -H "Origin: https://cool-zimo.github.io" -d '{"client_id":"Ov23liuMyWPhGbmCEqDS"}' $U/device/code)
+          printf "GET=%s\nOPTIONS_OK=%s\nOPTIONS_EVIL=%s\nBODY=%s\n" "$G" "$O" "$E" "$B" > /tmp/r.txt
+          B64=$(base64 -w0 /tmp/r.txt)
+          API="https://api.github.com/repos/Cool-zimo/github_drive/contents/_probe_result.txt"
+          SHA=$(curl -s -H "Authorization: Bearer $TOK" "$API" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('sha',''))" 2>/dev/null)
+          if [ -n "$SHA" ]; then EX=",\"sha\":\"$SHA\""; else EX=""; fi
+          curl -s -X PUT -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+            -d "{\"message\":\"probe result\",\"content\":\"$B64\",\"branch\":\"main\"$EX}" "$API" > /dev/null
+        env:
+          TOK: ${{ secrets.GITHUB_TOKEN }}
