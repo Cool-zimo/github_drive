@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>千览 · GitHub Drive 阅读器</title>
+<meta name="description" content="预览 GitHub Drive 里的文件，支持 PDF / Word / 表格 / 文本，自动记住阅读位置。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230969da' stroke-width='2'%3E%3Cpath d='M2 4h7l2 2h11v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+<!--
+  ★ 三个脚本用 defer 且顺序固定：store → render → app。
+    app 在 boot 里直接用 TPStore / TPRender 这两个全局符号，
+    顺序反了会 undefined。defer 保证按书写顺序执行。
+-->
+<script defer src="js/store.js"></script>
+<script defer src="js/render.js"></script>
+<script defer src="js/app.js"></script>
+</head>
+<body>
+
+<div class="tp-app">
+
+  <!-- 顶栏 -->
+  <header class="tp-top">
+    <div class="tp-brand">
+      <svg class="ico ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <path d="M8 13h8M8 17h5"/>
+      </svg>
+      <span>千览</span>
+    </div>
+
+    <label class="tp-search">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/>
+      </svg>
+      <input id="tp-search" type="search" placeholder="搜索文件名…" autocomplete="off">
+    </label>
+
+    <button class="tp-iconbtn" id="tp-set-toggle" title="阅读设置">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+
+    <button class="tp-iconbtn" id="tp-user">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round">
+        <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- 账号切换菜单 -->
+  <div class="tp-menu" id="tp-acct-menu"></div>
+
+  <div class="tp-main">
+
+    <!-- 左：文件列表 -->
+    <aside class="tp-side">
+      <nav class="tp-crumb" id="tp-crumb"></nav>
+      <div class="tp-list" id="tp-list"></div>
+      <div class="tp-continue" id="tp-continue"></div>
+    </aside>
+
+    <!-- 右：阅读区 -->
+    <main class="tp-reader" id="tp-view">
+      <div class="tp-reader-bar">
+        <button class="tp-iconbtn" id="tp-close" title="返回列表（Esc）">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 6l-6 6 6 6"/>
+          </svg>
+        </button>
+        <div class="tp-reader-title" id="tp-view-title"></div>
+        <div class="tp-reader-meta" id="tp-view-meta"></div>
+        <button class="tp-iconbtn" id="tp-download" title="下载原文件">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12M7 11l5 5 5-5"/><path d="M4 20h16"/>
+          </svg>
+        </button>
+      </div>
+      <div class="tp-body" id="tp-body">
+        <div class="tp-welcome">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 4h7l2 2h11v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/>
+          </svg>
+          <div>从左边挑一个文件开始读</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ 登录 ============ -->
+<div class="tp-overlay" id="tp-login">
+  <div class="tp-card-panel">
+    <h2>需要先登录</h2>
+    <p>
+      千览在你自己的浏览器里读取 GitHub Drive 的文件，token 只存在本地，
+      不会上传到任何服务器。
+    </p>
+    <p>
+      如果你已经在 GitHub Drive 登录过，这里通常会自动取用；
+      看不到文件就填一个 token（需要 <code>repo</code> 权限）。
+    </p>
+    <input id="tp-login-token" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    <div class="tp-msg" id="tp-login-msg"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <a class="tp-btn" href="https://github.com/settings/tokens/new?scopes=repo&description=%E5%8D%83%E8%A7%88"
+         target="_blank" rel="noopener">去创建 token</a>
+      <button class="tp-btn tp-btn-primary" id="tp-login-go">登录</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 设置 ============ -->
+<div class="tp-overlay" id="tp-settings">
+  <div class="tp-card-panel">
+    <h2>阅读设置</h2>
+
+    <div class="tp-set-row">
+      <label for="tp-theme">主题</label>
+      <select id="tp-theme">
+        <option value="auto">跟随系统</option>
+        <option value="light">浅色</option>
+        <option value="dark">深色</option>
+      </select>
+    </div>
+
+    <div class="tp-set-row">
+      <label for="tp-fs">字号</label>
+      <input id="tp-fs" type="range" min="13" max="24" step="1">
+    </div>
+
+    <div class="tp-set-row">
+      <label for="tp-lh">行距</label>
+      <input id="tp-lh" type="range" min="1.3" max="2.4" step="0.1">
+    </div>
+
+    <div class="tp-set-row">
+      <label for="tp-mw">页面宽度</label>
+      <input id="tp-mw" type="range" min="560" max="1200" step="20">
+    </div>
+
+    <div class="tp-set-row">
+      <label for="tp-remember">记住阅读位置</label>
+      <input id="tp-remember" type="checkbox">
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:6px">
+      <button class="tp-btn" id="tp-clear-hist">清空阅读记录</button>
+      <button class="tp-btn tp-btn-primary" id="tp-set-close">完成</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 设置面板关闭：点完成、点遮罩空白处都关
+(function () {
+    var ov = document.getElementById('tp-settings');
+    document.getElementById('tp-set-close').addEventListener('click', function () {
+        ov.classList.remove('show');
+    });
+    ov.addEventListener('click', function (e) {
+        if (e.target === ov) ov.classList.remove('show');
+    });
+})();
+</script>
+</body>
+</html>
