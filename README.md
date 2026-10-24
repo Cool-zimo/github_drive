@@ -31,9 +31,23 @@
 
 ### 3. 登录
 
-在登录页面输入你的 GitHub Token，点击"进入 Drive"。
+两种方式，任选其一：
 
-> Token 仅存储在浏览器的 localStorage 中，不会上传到任何服务器。
+**A. 粘贴 Token**（默认，零配置）
+
+在登录页面输入你的 GitHub Personal Access Token，点击"进入 Drive"。
+
+**B. 用 GitHub 账号登录**（需先部署一个转发服务）
+
+点一下按钮，输入页面上显示的 8 位码即可，不用复制长串 token。
+
+这需要两样东西：一个 OAuth App 的 Client ID，和一个无状态转发服务
+（因为 GitHub 的 OAuth 端点不返回 CORS 头，浏览器发不出跨域 POST）。
+转发服务不存任何数据，只做转发。详见 [`worker/README.md`](worker/README.md)。
+
+> 未配置时这个按钮不会出现，功能完全回退到 A，不影响任何现有用法。
+
+> Token 仅存储在浏览器中，不会上传到任何服务器。
 
 ## 📖 使用指南
 
