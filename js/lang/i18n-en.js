@@ -412,6 +412,14 @@
 's.recent': "Recent",
 's.bg': "Background",
 's.move': "Move",
+    'trash.itemCount': '{count} items in trash',
+    'trash.restoreAll': 'Restore all',
+    'trash.emptyTrash': 'Empty trash',
+    'trash.confirmRestoreAll': 'Restore {count} item(s) from trash?',
+    'trash.confirmEmpty': 'Permanently delete {count} item(s) in trash? This cannot be undone.',
+    'toast.trashEmpty': 'Trash is empty',
+    'toast.restoredAll': 'Restored {ok}, failed {fail}',
+    'toast.emptiedTrash': 'Deleted {ok}, failed {fail}',
 };
 root.GdLangMeta = root.GdLangMeta || {};
     root.GdLangMeta['en'] = {name: 'English',  own: 'English',  flag: '🇬🇧', rtl: false};
