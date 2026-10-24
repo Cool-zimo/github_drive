@@ -244,6 +244,12 @@ class App {
         this.configSync = new ConfigSync(this.api, this.storage);
         this.storage.onConfigChange = () => this.configSync.scheduleSync();
 
+        // ★ 首次使用确认，必须排在 ConfigSync.init() 之前。
+        //   init() 一跑就会在账号里建 github-drive-config，之后再问
+        //   「要不要用」已经晚了 —— 仓库已经躺在人家账号里了。
+        //   返回 false 表示用户选择退出，此时一个仓库都还没创建。
+        if (!(await this.gateFirstRun())) return;
+
         try { await this.configSync.init(); } catch (e) { console.warn('配置同步初始化失败:', e.message); }
 
         this.showApp();
@@ -323,6 +329,137 @@ class App {
             await this.loadFiles();
         }
         this.fileManager.syncAllRepoUsage().then(() => this.ui.renderRepoList()).catch(() => {});
+    }
+
+    // ================= 首次使用确认 =================
+
+    /**
+     * 判断这个账号是不是第一次用 Drive。
+     *
+     * 判据不是 localStorage（换浏览器就空了），而是账号里有没有 Drive 留下的
+     * 痕迹：配置仓库 github-drive-config，或任何一个 drive-storage-* 存储仓。
+     * 查不到痕迹就弹窗问一句，别默默在人家账号里建一堆仓库 ——
+     * 对有整理癖的人来说，莫名多出几个仓库比丢文件还难受。
+     */
+    async gateFirstRun() {
+        const ACK_KEY = 'gd_firstrun_ack_v1';
+        try {
+            let user = this.storage.getUser();
+            if (!user || !user.login) { try { user = await this.api.getMe(); } catch (e) { /* 下面统一兜底 */ } }
+            const login = user && user.login;
+            if (!login) return true;               // 拿不到身份就别拦，别把人挡在门外
+
+            let ack = {};
+            try { ack = JSON.parse(localStorage.getItem(ACK_KEY) || '{}'); } catch (e) { ack = {}; }
+            if (ack[login]) return true;
+
+            let known = false;
+            // 1) 配置仓库是最可靠的痕迹：建过就一定还在
+            try {
+                await this.api.getRepository(login, 'github-drive-config');
+                known = true;
+            } catch (e) { /* 404 = 没建过，继续看存储仓 */ }
+
+            // 2) 兜底：有人关过配置同步，只有存储仓
+            if (!known) {
+                try {
+                    const repos = await this.api.listRepositories(100, 1);
+                    known = (repos || []).some(r => r.name && r.name.indexOf('drive-storage-') === 0);
+                } catch (e) { /* 查不动就当老用户，别拦 */ known = true; }
+            }
+
+            if (known) {
+                ack[login] = 1;
+                try { localStorage.setItem(ACK_KEY, JSON.stringify(ack)); } catch (e) {}
+                return true;
+            }
+
+            const ok = await this.showFirstRunDialog(login);
+            if (ok) {
+                ack[login] = 1;
+                try { localStorage.setItem(ACK_KEY, JSON.stringify(ack)); } catch (e) {}
+            }
+            return ok;
+        } catch (e) {
+            console.warn('[App] 首次使用检查失败，放行:', e.message);
+            return true;                           // 任何异常都放行，绝不能因为检查而登不进去
+        }
+    }
+
+    /**
+     * 首次使用确认弹窗。
+     * 返回 Promise<boolean>：true = 继续，false = 退出登录。
+     */
+    showFirstRunDialog(login) {
+        const t = (k, v) => {
+            let s = (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(k) : k;
+            if (v) s = s.replace('{user}', v);
+            return s;
+        };
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const user = esc(login);
+
+        // 图标一律内联 SVG：走 Icons 扫描替换会在 80ms 防抖窗口里先露出 emoji，
+        // 首屏弹窗正是最容易被看见的地方。
+        const icoFolder = '<svg class="fr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A2 2 0 0 1 5 5.5h3.6a2 2 0 0 1 1.6.8l1 1.4H19a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+        const icoWarn = '<svg class="fr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6 2.7 20.4h18.6z"/><path d="M12 10v4.2"/><path d="M12 17.4h.01"/></svg>';
+        const icoShield = '<svg class="fr-hero-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.9 7 9.5 4.1-1.6 7-5.3 7-9.5V6z"/><path d="m9.2 12.2 2 2 3.6-3.8"/></svg>';
+
+        const body = `
+            <div class="fr-dialog">
+                <div class="fr-hero">
+                    ${icoShield}
+                    <p class="fr-lead">${t('firstRun.lead', '<b>' + user + '</b>')}</p>
+                </div>
+                <p class="fr-what">${t('firstRun.whatTitle')}</p>
+                <div class="fr-list">
+                    <div class="fr-item">
+                        ${icoFolder}
+                        <div class="fr-txt">
+                            <div class="fr-item-t">${t('firstRun.cfgRepo')}</div>
+                            <div class="fr-item-d">${t('firstRun.cfgRepoDesc')}</div>
+                        </div>
+                    </div>
+                    <div class="fr-item">
+                        ${icoFolder}
+                        <div class="fr-txt">
+                            <div class="fr-item-t">${t('firstRun.storageRepo')}</div>
+                            <div class="fr-item-d">${t('firstRun.storageRepoDesc')}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="fr-warn">
+                    ${icoWarn}
+                    <div class="fr-txt">
+                        <div class="fr-warn-t">${t('firstRun.warnTitle')}</div>
+                        <div class="fr-warn-b">${t('firstRun.warnBody')}</div>
+                    </div>
+                </div>
+            </div>`;
+
+        const footer = `
+            <button class="btn-secondary" onclick="window.__gdFirstRunPick(false)">${t('firstRun.quit')}</button>
+            <button class="btn-primary" onclick="window.__gdFirstRunPick(true)">${t('firstRun.continue')}</button>`;
+
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = ok => {
+                if (settled) return;
+                settled = true;
+                if (this.ui) this.ui._modalDismissHook = null;
+                try { delete window.__gdFirstRunPick; } catch (e) { window.__gdFirstRunPick = undefined; }
+                if (!ok) {
+                    // 用户没点头：什么都不建，直接退回登录页
+                    this.ui?.showToast?.(t('firstRun.dismissed'), 'info');
+                    this.logout();
+                }
+                resolve(ok);
+            };
+            window.__gdFirstRunPick = ok => finish(ok);
+            // × / ESC / 点遮罩 = 没点头 → 不碰账号
+            if (this.ui) this.ui._modalDismissHook = () => finish(false);
+            this.ui?.showModal(t('firstRun.title'), body, footer, false);
+        });
     }
 
     logout() { this.storage.clearToken(); this.storage.setUser(null); location.reload(); }
