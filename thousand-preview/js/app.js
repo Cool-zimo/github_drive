@@ -173,9 +173,29 @@
             .replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
     }
 
+    /**
+     * 剥掉链接里的 Owner 前缀。
+     * 链接形态是 file=Cool-zimo/Drive+Home/a.py —— 第一段是 GitHub 用户名，
+     * 不是真实目录。VFS 里存的是 /drive_home/a.py，硬比必然落空。
+     * 只在首段确实是某个已存账号的 login 时才剥，否则可能是同名真目录。
+     */
+    function stripOwner(p) {
+        const s = String(p || '').replace(/^\/+/, '');
+        const slash = s.indexOf('/');
+        if (slash <= 0) return { owner: null, path: s };
+        const head = s.slice(0, slash);
+        const known = TPStore.listAccounts().map(
+            a => String((a.user && (a.user.login || a.user.name)) || '').toLowerCase()
+        ).filter(Boolean);
+        if (known.indexOf(head.toLowerCase()) === -1) return { owner: null, path: s };
+        return { owner: head, path: s.slice(slash + 1) };
+    }
+
     function findByPath(p) {
         if (!p) return null;
-        const want = normPath(p);
+        let want = normPath(p);
+        // 先剥 Owner，再走原来的三级宽容匹配
+        want = normPath(stripOwner(want).path);
         let hit = app.files.find(f => normPath(f.path) === want);
         if (hit) return hit;
         // 去掉首段目录再试一次（链接可能省略 /drive_home）

@@ -25,6 +25,8 @@ const VERSION = '0.1.0';
 const ALLOWED_HOSTS = [
     'cool-zimo.github.io',
     'fengzimo.eu.org',          // 免费域名，nic.eu.org 审核通过后启用
+    'fengzimo.is-a.dev',        // is-a.dev 子域，NS 委派到 Cloudflare
+    'fengzimo.is-a.bot',        // is-a.bot 子域（与主申请并行，哪个先批用哪个）
 ];
 
 function originAllowed(origin) {
@@ -39,6 +41,8 @@ function originAllowed(origin) {
     // fork 之后你自己的 xxx.github.io 也能用
     if (host.endsWith('.github.io')) return true;
     if (host.endsWith('.fengzimo.eu.org')) return true;
+    if (host.endsWith('.fengzimo.is-a.dev')) return true;
+    if (host.endsWith('.fengzimo.is-a.bot')) return true;
     if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return true;
     return false;
 }

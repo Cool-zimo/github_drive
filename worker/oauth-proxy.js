@@ -23,6 +23,13 @@ const ALLOWED_HOSTS = [
     'cool-zimo.github.io',
     // 自定义域（免费域名 fengzimo.eu.org，nic.eu.org 审核通过后启用）
     'fengzimo.eu.org',
+    // 自定义域（is-a.dev 子域，NS 委派到 Cloudflare，PR 审核通过后启用）
+    'fengzimo.is-a.dev',
+    'cool-zimo.is-a.dev',
+    // 自定义域（is-a.bot 子域，同一批维护者运营，与主申请并行提交）
+    // 两个项目同时申请，哪个先批就用哪个，所以白名单两个都留着
+    'fengzimo.is-a.bot',
+    'cool-zimo.is-a.bot',
 ];
 
 function originAllowed(origin) {
@@ -38,6 +45,10 @@ function originAllowed(origin) {
     if (host.endsWith('.github.io')) return true;
     // 自定义域的子域（gh.fengzimo.eu.org 之类）
     if (host.endsWith('.fengzimo.eu.org')) return true;
+    if (host.endsWith('.fengzimo.is-a.dev')) return true;
+    if (host.endsWith('.cool-zimo.is-a.dev')) return true;
+    if (host.endsWith('.fengzimo.is-a.bot')) return true;
+    if (host.endsWith('.cool-zimo.is-a.bot')) return true;
     // 本地开发
     if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return true;
     return false;
