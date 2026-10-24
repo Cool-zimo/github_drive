@@ -65,7 +65,9 @@ class App {
         }
         
         // 更严格的 Token 格式校验
-        if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+        // gho_ 是 OAuth Device Flow 换来的 token（本项目的 GitHub 登录）。
+        // 它和 PAT 能力一样，只是来源不同，不能按 PAT 的格式把它拒掉。
+        if (!token.startsWith('ghp_') && !token.startsWith('github_pat_') && !token.startsWith('gho_')) {
             this.ui?.showToast(I18n.t('login.tokenPrefix'), 'error');
             console.error('[App] Invalid token format provided.');
             return;
@@ -79,7 +81,7 @@ class App {
                 console.error('[App] github_pat_ token seems to be of invalid length.');
                 return;
             }
-        } else if (token.startsWith('ghp_')) {
+        } else if (token.startsWith('ghp_') || token.startsWith('gho_')) {
             // ghp_ 格式的 token 长度通常是 40 位
             if (token.length !== 40) {
                 this.ui?.showToast(I18n.t('login.tokenLength'), 'error');
@@ -88,7 +90,7 @@ class App {
             }
         }
         
-        console.log('[App] Attempting to login with token format: ', token.startsWith('ghp_') ? 'classic (ghp_)' : 'fine-grained (github_pat_)');
+        console.log('[App] Attempting to login with token format: ', token.startsWith('ghp_') ? 'classic (ghp_)' : (token.startsWith('gho_') ? 'oauth (gho_)' : 'fine-grained (github_pat_)'));
         try {
             this.ui?.showToast(I18n.t('login.validating'), 'info');
             this.api = new GitHubAPI(token);
