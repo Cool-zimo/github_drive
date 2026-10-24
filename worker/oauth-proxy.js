@@ -21,6 +21,8 @@
 // 否则任何人都能拿你的 client_id 发起授权（App 名是你的，用户会被骗）。
 const ALLOWED_HOSTS = [
     'cool-zimo.github.io',
+    // 自定义域（免费域名 fengzimo.eu.org，nic.eu.org 审核通过后启用）
+    'fengzimo.eu.org',
 ];
 
 function originAllowed(origin) {
@@ -34,6 +36,8 @@ function originAllowed(origin) {
     if (ALLOWED_HOSTS.includes(host)) return true;
     // 所有 GitHub Pages 子域放行：fork 之后你自己的 xxx.github.io 也能用
     if (host.endsWith('.github.io')) return true;
+    // 自定义域的子域（gh.fengzimo.eu.org 之类）
+    if (host.endsWith('.fengzimo.eu.org')) return true;
     // 本地开发
     if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return true;
     return false;
