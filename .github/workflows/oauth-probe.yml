@@ -1,0 +1,24 @@
+name: oauth-probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: |
+          echo "=== 1. DIRECT github.com device/code ==="
+          curl -s -w "\nHTTP:%{http_code}\n" -X POST https://github.com/login/device/code \
+            -H "Accept: application/json" \
+            -d "client_id=Ov23liuMyWPhGbmCEqDS&scope=repo" | head -c 600
+          echo ""
+          echo "=== 2. WORKER proxy, Origin=cool-zimo.github.io ==="
+          curl -s -w "\nHTTP:%{http_code}\n" -X POST https://gd-oauth2.feng-to-zhang.workers.dev/device/code \
+            -H "Content-Type: application/json" \
+            -H "Origin: https://cool-zimo.github.io" \
+            -d '{"client_id":"Ov23liuMyWPhGbmCEqDS","scope":"repo"}' | head -c 600
+          echo ""
+          echo "=== 3. WORKER with foreign origin (expect 403) ==="
+          curl -s -o /dev/null -w "HTTP:%{http_code}\n" -X POST https://gd-oauth2.feng-to-zhang.workers.dev/device/code \
+            -H "Content-Type: application/json" -H "Origin: https://evil.example.com" \
+            -d '{"client_id":"x","scope":"repo"}'
