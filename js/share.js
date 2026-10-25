@@ -2,7 +2,37 @@
  * 分享模块
  * 创建公开仓库 + GitHub Pages 下载页面，实现文件分享
  */
+/**
+ * 分享页图标路径表（24x24 视口，stroke 线条风）
+ *
+ * ★ 只在这一处定义，生成期（写在分享页 HTML 里）和运行期（访客浏览器的
+ *   内联脚本）共用同一份 —— 模板里用 JSON.stringify 注入，
+ *   内联脚本的 P 表就是这里序列化出来的。
+ *   之前两处各写一份，改了这边忘那边，图标就对不上。
+ */
+const SHARE_ICON_PATHS = {
+    file: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>',
+    fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    fileCode: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="10 12 8 14 10 16"/><polyline points="14 12 16 14 14 16"/>',
+    fileImage: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="12" cy="14" r="2.5"/><path d="M8.5 19l3-3.5 2 2 2.5-3 3 4.5"/>',
+    fileAudio: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M11 12.5v5"/><path d="M9.5 13.5v3"/><path d="M12.5 13.5v3"/><path d="M14 14v2"/>',
+    fileVideo: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polygon points="10 12 15 14.5 10 17"/>',
+    fileArchive: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9.5 13.5 12 11 14.5 13.5"/>',
+    package: '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    archive: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+    zoomIn: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    cloud: '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+    zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    chevronLeft: '<polyline points="15 18 9 12 15 6"/>',
+    chevronRight: '<polyline points="9 18 15 12 9 6"/>'
+};
+
 class ShareManager {
+    static get ICON_PATHS() { return SHARE_ICON_PATHS; }
     constructor(api, storage) {
         this.api = api;
         this.storage = storage;
@@ -573,9 +603,9 @@ class ShareManager {
          */
         const isImg = /\.(jpe?g|png|gif|webp|bmp|avif|ico|svg|jfif)$/i.test(name);
         const thumb = isImg
-            ? `<img class="file-thumb" src="${url}" loading="lazy" alt="">`
+            ? `<div class="thumb-wrap"><img class="file-thumb" src="${url}" loading="lazy" alt=""><span class="thumb-zoom">${this._zoomSvg()}</span></div>`
             : `<span class="file-icon">${this.getFileIcon(name)}</span>`;
-        return `<li class="file-item" onclick="window.open('${url}', '_blank')">
+        return `<li class="file-item${isImg ? ' is-img' : ''}" onclick="window.open('${url}', '_blank')">
                             ${thumb}
                             <div class="file-info">
                                 <div class="file-name">${this.escapeHtml(name)}</div>
@@ -585,21 +615,61 @@ class ShareManager {
                         </li>`;
     }
 
-    /** 本页用的图标（与内联脚本里的 getFileIcon 视觉保持一致） */
+    /**
+     * 生成期把一个图标渲染成内联 SVG。
+     *
+     * ★ 静态 HTML 里必须直接写死 SVG，不能留 data-icon 空占位让 JS 去填：
+     *   静态列表的存在意义就是「脚本挂掉时仍能下载」，
+     *   那时图标也一起变空，页面看着像坏了。
+     */
+    _iconSvg(name, size, sw) {
+        const P = ShareManager.ICON_PATHS;
+        return '<svg width="' + (size || 20) + '" height="' + (size || 20) +
+            '" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+            ' stroke-width="' + (sw || 1.9) + '" stroke-linecap="round"' +
+            ' stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+            (P[name] || P.file) + '</svg>';
+    }
+
+    /** 缩略图右下角的放大镜（静态渲染也要有，否则跟 JS 渲染出来长得不一样） */
+    _zoomSvg() {
+        return '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+               'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+               '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
+               '<line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>';
+    }
+
+    /**
+     * 本页用的文件图标（与分享页内联脚本里的 getFileIcon 视觉保持一致）
+     *
+     * ★ 0.9.9：兜底不再是 emoji。分享页是独立页面，emoji 不跟随主题、
+     *   各系统字形也不一致，暗色下尤其突兀，所以兜底也必须是内联 SVG。
+     * ★ size 用 1em：图标跟着 CSS 的 font-size 走。
+     *   写死 16 的话，CSS 里放大图标只对部分元素生效，视觉会参差不齐。
+     */
     getFileIcon(name) {
-        // ★ 0.9.2：改用 Icons.forFile()，与文件列表/设置页同一套黑白线性画风。
-        //   注意下面那份内联表（会被写进生成的分享页 HTML）不能改，原因见那里。
-        if (typeof Icons !== 'undefined') return Icons.forFile(name, { size: 16 });
-        const ext = String(name).split('.').pop().toLowerCase();
-        const icons = {
-            jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️',
-            mp4: '🎬', avi: '🎬', mov: '🎬', mkv: '🎬', webm: '🎬',
-            mp3: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', ogg: '🎵',
-            pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
-            txt: '📄', md: '📝', zip: '📦', rar: '📦', '7z': '📦',
-            js: '📜', py: '🐍', html: '🌐', css: '🎨', json: '📋'
+        if (typeof Icons !== 'undefined') return Icons.forFile(name, { size: '1em' });
+        const P = ShareManager.ICON_PATHS;
+        const MAP = {
+            md: 'fileText', txt: 'fileText', log: 'fileText', pdf: 'fileText',
+            doc: 'fileText', docx: 'fileText', xls: 'fileText', xlsx: 'fileText',
+            csv: 'fileText', ppt: 'fileText', pptx: 'fileText',
+            js: 'fileCode', ts: 'fileCode', json: 'fileCode', html: 'fileCode',
+            css: 'fileCode', py: 'fileCode', xml: 'fileCode', yml: 'fileCode',
+            png: 'fileImage', jpg: 'fileImage', jpeg: 'fileImage', gif: 'fileImage',
+            svg: 'fileImage', webp: 'fileImage', bmp: 'fileImage', ico: 'fileImage',
+            mp3: 'fileAudio', wav: 'fileAudio', flac: 'fileAudio', ogg: 'fileAudio',
+            mp4: 'fileVideo', avi: 'fileVideo', mov: 'fileVideo', mkv: 'fileVideo',
+            webm: 'fileVideo', flv: 'fileVideo',
+            zip: 'fileArchive', rar: 'fileArchive', '7z': 'fileArchive', gz: 'fileArchive',
+            exe: 'package', dmg: 'package', apk: 'package'
         };
-        return icons[ext] || '📄';
+        const n = String(name || '').toLowerCase();
+        const ext = n.indexOf('.') > -1 ? n.split('.').pop() : '';
+        const key = MAP[ext] || 'file';
+        return '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+               'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+               P[key] + '</svg>';
     }
 
     /** 生成期用的体积格式化 */
@@ -631,192 +701,238 @@ class ShareManager {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>${this.escapeHtml(description || I18n.t('share.pageTitle'))} - GitHub Drive</title>
     <style>
+        /* ★ 设计语言对齐 GitHub Drive / Primer：
+           浅灰蓝底 + 白卡片 + 1px 描边 + 蓝色强调，图标全部内联 SVG。
+           旧版是紫色渐变 + emoji，跟主应用完全不像，看着像另一个产品。 */
+        :root {
+            --bg: #f6f8fa;
+            --card: #ffffff;
+            --border: #d0d7de;
+            --border-light: #eaeef2;
+            --text: #1f2328;
+            --text2: #656d76;
+            --text3: #8c959f;
+            --accent: #0969da;
+            --btn-fg: #ffffff;
+            --accent-soft: #ddf4ff;
+            --hover: #f3f4f6;
+            --thumb-bg: #f6f8fa;
+            --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0d1117;
+                --card: #161b22;
+                --border: #30363d;
+                --border-light: #21262d;
+                --text: #c9d1d9;
+                --text2: #8b949e;
+                --text3: #6e7681;
+                --accent: #58a6ff;
+                --btn-fg: #0d1117;
+                --accent-soft: #0c2d6b;
+                --hover: #1c2128;
+                --thumb-bg: #21262d;
+                --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.25);
+            }
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+                         "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            padding: 20px;
+            padding: 24px 16px 40px;
+            -webkit-font-smoothing: antialiased;
         }
         .container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
             width: 100%;
-            max-width: 600px;
+            max-width: 640px;
             overflow: hidden;
         }
+
+        /* ── 头部 ── */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 32px;
-            text-align: center;
+            padding: 22px 24px;
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
             position: relative;
         }
-        .header-icon { font-size: 48px; margin-bottom: 12px; }
-        .header h1 { font-size: 24px; margin-bottom: 8px; }
-        .header p { opacity: 0.9; font-size: 14px; }
-        .lang-switch { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 12px; backdrop-filter: blur(10px); }
-        .lang-switch:hover { background: rgba(255,255,255,0.3); }
-        .content { padding: 24px; }
+        .brand {
+            width: 44px; height: 44px; flex-shrink: 0;
+            border-radius: 10px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .brand svg { width: 24px; height: 24px; }
+        .head-main { flex: 1; min-width: 0; }
+        .head-main h1 {
+            font-size: 18px; font-weight: 600; line-height: 1.35;
+            color: var(--text);
+            overflow-wrap: anywhere;
+        }
+        .head-sub {
+            margin-top: 4px; font-size: 13px; color: var(--text2);
+            display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        }
+        .dot-sep { color: var(--text3); }
+        .lang-switch {
+            flex-shrink: 0; align-self: flex-start;
+            margin-top: 2px;
+            background: var(--card); color: var(--text2);
+            border: 1px solid var(--border);
+            padding: 5px 10px; border-radius: 6px;
+            cursor: pointer; font-size: 12px; font-weight: 500;
+            display: flex; align-items: center; gap: 5px;
+            transition: background .15s, border-color .15s;
+        }
+        .lang-switch:hover { background: var(--hover); border-color: var(--text3); }
+        .lang-switch svg { width: 14px; height: 14px; }
+
+        .content { padding: 18px 24px 22px; }
         .file-list { list-style: none; }
         .file-item {
-            display: flex;
-            align-items: center;
-            padding: 14px 16px;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            transition: all 0.2s;
+            display: flex; align-items: center;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: border-color .15s, background .15s;
             cursor: pointer;
+            background: var(--card);
         }
-        .file-item:hover {
-            border-color: #667eea;
-            background: #f8f7ff;
-            transform: translateY(-1px);
+        .file-item:hover { border-color: var(--accent); background: var(--hover); }
+        .file-icon {
+            width: 38px; height: 38px; flex-shrink: 0; margin-right: 12px;
+            border-radius: 8px;
+            background: var(--thumb-bg);
+            border: 1px solid var(--border-light);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text2);
         }
-        .file-icon { font-size: 28px; margin-right: 14px; }
+        .file-icon svg { width: 20px; height: 20px; }
         .file-info { flex: 1; min-width: 0; }
         .file-name {
-            font-weight: 600;
-            font-size: 14px;
-            color: #1f2937;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-weight: 500; font-size: 14px; color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .file-size { font-size: 12px; color: #6b7280; margin-top: 2px; }
+        .file-size { font-size: 12px; color: var(--text2); margin-top: 2px; }
         .download-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            flex-shrink: 0;
+            background: var(--accent); color: var(--btn-fg);
+            border: 1px solid transparent;
+            padding: 6px 12px; border-radius: 6px;
+            font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: opacity .15s;
+            flex-shrink: 0; font-family: inherit;
         }
-        .download-btn:hover { background: #5a67d8; }
-        .download-all {
-            width: 100%;
-            margin-top: 16px;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
+        .download-btn:hover { opacity: .85; }
+
+        .btn-row { margin-top: 14px; }
+        .secondary-btn {
+            width: 100%; padding: 10px;
+            background: var(--card); color: var(--accent);
+            border: 1px solid var(--border); border-radius: 8px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            font-family: inherit;
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+            transition: background .15s, border-color .15s;
         }
-        .download-all:hover { transform: translateY(-1px); }
+        .secondary-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+        .secondary-btn svg { width: 16px; height: 16px; }
+        .primary-btn {
+            width: 100%; padding: 12px; margin-top: 10px;
+            background: var(--accent); color: var(--btn-fg);
+            border: 1px solid transparent; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            font-family: inherit;
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+            transition: opacity .15s;
+        }
+        .primary-btn:hover { opacity: .88; }
+        .primary-btn:disabled { opacity: .55; cursor: default; }
+        .primary-btn svg { width: 16px; height: 16px; }
+
+        .img-count {
+            font-size: 12px; color: var(--text2);
+            text-align: center; margin-top: 8px;
+        }
+        .dl-progress { margin-top: 10px; display: none; }
+        .dl-bar-wrap {
+            height: 6px; background: var(--border-light);
+            border-radius: 3px; overflow: hidden;
+        }
+        .dl-bar {
+            height: 100%; width: 0%;
+            background: var(--accent);
+            transition: width .2s;
+        }
+        .dl-text { font-size: 12px; color: var(--text2); margin-top: 6px; }
+
+        /* ── 推广卡 ── */
         .promo-card {
-            margin-top: 20px;
-            padding: 20px;
-            background: linear-gradient(135deg, #f8f7ff 0%, #eef2ff 100%);
-            border: 1px solid #e0e7ff;
-            border-radius: 12px;
-            text-align: center;
+            margin-top: 20px; padding: 18px;
+            background: var(--accent-soft);
+            border: 1px solid var(--border-light);
+            border-radius: 10px; text-align: center;
         }
-        .promo-icon { font-size: 32px; margin-bottom: 8px; }
-        .promo-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: #4338ca;
-            margin-bottom: 6px;
-        }
-        .promo-desc {
-            font-size: 13px;
-            color: #6366f1;
-            margin-bottom: 14px;
-            line-height: 1.5;
-        }
+        .promo-icon { color: var(--accent); margin-bottom: 8px; }
+        .promo-icon svg { width: 30px; height: 30px; }
+        .promo-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+        .promo-desc { font-size: 13px; color: var(--text2); margin-bottom: 14px; line-height: 1.6; }
         .promo-btn {
-            display: inline-block;
-            padding: 10px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 18px;
+            background: var(--accent); color: var(--btn-fg);
+            text-decoration: none; border-radius: 6px;
+            font-size: 13px; font-weight: 600;
+            transition: opacity .15s;
         }
-        .promo-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
-        }
+        .promo-btn:hover { opacity: .88; }
+        .promo-btn svg { width: 14px; height: 14px; }
+
         .footer {
-            padding: 16px 24px;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            font-size: 12px;
-            color: #9ca3af;
+            padding: 14px 24px; border-top: 1px solid var(--border-light);
+            text-align: center; font-size: 12px; color: var(--text3);
         }
-        .footer a { color: #667eea; text-decoration: none; }
-        .empty { text-align: center; padding: 40px; color: #9ca3af; }
-        .loading-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
-            gap: 12px;
-            color: #9ca3af;
-            font-size: 14px;
-        }
-        .spinner {
-            width: 28px;
-            height: 28px;
-            border: 3px solid #e5e7eb;
-            border-top-color: #667eea;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .empty { text-align: center; padding: 40px; color: var(--text3); }
 
         /* ── 图片缩略图 ──
            ★ 分享页没有后端，做不出真正的缩略图，只能用原图 + object-fit 裁。
              所以必须 loading="lazy" + 进视口才加载：98 张图一次性全请求会把浏览器拖死。 */
         .file-thumb {
-            width: 44px; height: 44px; margin-right: 14px; flex-shrink: 0;
+            width: 38px; height: 38px; margin-right: 12px; flex-shrink: 0;
             border-radius: 8px; object-fit: cover;
-            background: #f3f4f6; border: 1px solid #e5e7eb; display: block;
+            background: var(--thumb-bg); border: 1px solid var(--border-light);
+            display: block;
         }
         .file-item.is-img { cursor: zoom-in; }
-        .file-item.is-img:hover { border-color: #667eea; background: #f8f7ff; }
-        .thumb-wrap { position: relative; flex-shrink: 0; margin-right: 14px; }
+        .thumb-wrap { position: relative; flex-shrink: 0; margin-right: 12px; }
         .thumb-zoom {
-            position: absolute; right: -3px; bottom: -3px;
+            position: absolute; right: -4px; bottom: -4px;
             width: 18px; height: 18px; border-radius: 50%;
-            background: #667eea; color: #fff; font-size: 10px;
+            background: var(--accent); color: var(--btn-fg);
             display: flex; align-items: center; justify-content: center;
-            border: 2px solid #fff; pointer-events: none;
+            border: 2px solid var(--card); pointer-events: none;
         }
-        .img-count {
-            font-size: 12px; color: #6b7280; text-align: center;
-            margin-bottom: 10px;
-        }
+        .thumb-zoom svg { width: 10px; height: 10px; }
 
         /* ── 一键预览：全屏看图 ── */
-        .preview-all {
-            width: 100%; margin-bottom: 10px; padding: 12px;
-            background: #fff; color: #4338ca;
-            border: 1px solid #c7d2fe; border-radius: 10px;
-            font-size: 14px; font-weight: 600; cursor: pointer;
-            transition: background .2s;
-        }
-        .preview-all:hover { background: #eef2ff; }
-
         .lightbox {
             position: fixed; inset: 0; z-index: 9999; display: none;
             flex-direction: column; align-items: center; justify-content: center;
@@ -826,7 +942,7 @@ class ShareManager {
         .lightbox.show { display: flex; }
         .lb-top {
             position: absolute; top: 0; left: 0; right: 0; z-index: 2;
-            padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; display: flex; align-items: center; gap: 10px;
             color: #fff; background: linear-gradient(rgba(0,0,0,.5), transparent);
         }
         .lb-name {
@@ -835,11 +951,14 @@ class ShareManager {
         }
         .lb-count { font-size: 12px; opacity: .75; flex-shrink: 0; }
         .lb-btn {
-            background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.2);
-            padding: 7px 13px; border-radius: 8px; font-size: 13px; cursor: pointer;
-            flex-shrink: 0;
+            background: rgba(255,255,255,.14); color: #fff;
+            border: 1px solid rgba(255,255,255,.2);
+            padding: 7px 11px; border-radius: 8px; font-size: 13px;
+            cursor: pointer; flex-shrink: 0;
+            display: flex; align-items: center; gap: 6px;
         }
         .lb-btn:hover { background: rgba(255,255,255,.26); }
+        .lb-btn svg { width: 14px; height: 14px; }
         .lb-stage {
             flex: 1; width: 100%; display: flex; align-items: center; justify-content: center;
             padding: 56px 12px 12px; overflow: hidden;
@@ -851,11 +970,13 @@ class ShareManager {
         .lb-nav {
             position: absolute; top: 50%; transform: translateY(-50%);
             width: 42px; height: 42px; border-radius: 50%;
-            background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.2);
-            font-size: 20px; cursor: pointer; display: flex;
+            background: rgba(255,255,255,.14); color: #fff;
+            border: 1px solid rgba(255,255,255,.2);
+            cursor: pointer; display: flex;
             align-items: center; justify-content: center; z-index: 2;
         }
         .lb-nav:hover { background: rgba(255,255,255,.28); }
+        .lb-nav svg { width: 20px; height: 20px; }
         .lb-prev { left: 10px; }
         .lb-next { right: 10px; }
         .lb-hint {
@@ -864,8 +985,10 @@ class ShareManager {
         }
         .lb-loading { color: rgba(255,255,255,.6); font-size: 13px; }
 
-        /* 手机：箭头挪到底部，避免挡住图 */
         @media (max-width: 480px) {
+            body { padding: 12px 10px 32px; }
+            .header { padding: 18px 16px; }
+            .content { padding: 14px 16px 18px; }
             .lb-nav { top: auto; bottom: 44px; transform: none; width: 48px; height: 48px; }
             .lb-prev { left: 18px; }
             .lb-next { right: 18px; }
@@ -877,29 +1000,44 @@ class ShareManager {
 <body>
     <div class="container">
         <div class="header">
-            <div class="header-icon">📦</div>
-            <h1>${description ? this.escapeHtml(description) : '<span data-i18n="page.title">File Share</span>'}</h1>
-            <p>${fileList.length} files · Shared via GitHub Drive</p>
-            <button class="lang-switch" onclick="toggleLang()" title="切换语言">🌐 EN / 中</button>
+            <div class="brand">${this._iconSvg('package', 24)}</div>
+            <div class="head-main">
+                <h1>${description ? this.escapeHtml(description) : '<span data-i18n="page.title">File Share</span>'}</h1>
+                <p class="head-sub">
+                    <span>${fileList.length} <span data-i18n="unit.files">files</span></span>
+                    <span class="dot-sep">·</span>
+                    <span data-i18n="head.stored">Stored on GitHub</span>
+                </p>
+            </div>
+            <button class="lang-switch" onclick="toggleLang()" title="切换语言">
+                <span>${this._iconSvg('globe', 14)}</span><span>EN / 中</span>
+            </button>
         </div>
         <div class="content">
             <ul class="file-list" id="fileList">
                 ${fileList.map(f => this._staticFileItem(f, dp)).join('')}
             </ul>
-            <button class="preview-all" id="previewAllBtn" style="display:none" onclick="openLightbox(0)"></button>
-            <button class="download-all" id="dlAllBtn" onclick="downloadAll()"><span data-i18n="downloadAll">⬇️ 打包下载全部 (ZIP)</span></button>
-            <div id="dlProgress" style="display:none;margin-top:10px;">
-                <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
-                    <div id="dlBar" style="height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);transition:width .2s;"></div>
-                </div>
-                <div class="dl-text" style="font-size:12px;color:#6b7280;margin-top:6px;">准备中…</div>
+            <div class="btn-row">
+                <button class="secondary-btn" id="previewAllBtn" style="display:none" onclick="openLightbox(0)">
+                    <span>${this._iconSvg('image', 16)}</span><span class="lbl"></span>
+                </button>
+                <div class="img-count" id="imgCountTip" style="display:none"></div>
             </div>
-            
+            <button class="primary-btn" id="dlAllBtn" onclick="downloadAll()">
+                <span>${this._iconSvg('archive', 16)}</span><span data-i18n="downloadAll">Download All as ZIP</span>
+            </button>
+            <div class="dl-progress" id="dlProgress">
+                <div class="dl-bar-wrap"><div class="dl-bar" id="dlBar"></div></div>
+                <div class="dl-text" id="dlText"></div>
+            </div>
+
             <div class="promo-card">
-                <div class="promo-icon">📁✨</div>
+                <div class="promo-icon">${this._iconSvg('cloud', 30)}</div>
                 <div class="promo-title"><span data-i18n="promo.title">Want unlimited cloud storage with GitHub?</span></div>
                 <div class="promo-desc" data-i18n="promo.desc">Turn your GitHub repos into a private cloud drive<br>Multi-repo management, smart storage allocation, one-click sharing</div>
-                <a href="https://${this.escapeHtml(username)}.github.io/github_drive" target="_blank" class="promo-btn"><span data-i18n="promo.btn">🚀 Use GitHub Drive Now</span></a>
+                <a href="https://${this.escapeHtml(username)}.github.io/github_drive" target="_blank" class="promo-btn">
+                    <span>${this._iconSvg('zap', 14)}</span><span data-i18n="promo.btn">Use GitHub Drive Now</span>
+                </a>
             </div>
         </div>
         <div class="footer">
@@ -911,16 +1049,16 @@ class ShareManager {
         <div class="lb-top">
             <div class="lb-name" id="lbName"></div>
             <div class="lb-count" id="lbCount"></div>
-            <button class="lb-btn" id="lbDl">⬇️ <span data-i18n="download">Download</span></button>
-            <button class="lb-btn" onclick="closeLightbox()">✕</button>
+            <button class="lb-btn" id="lbDl"><span>${this._iconSvg('download', 14)}</span><span data-i18n="download">Download</span></button>
+            <button class="lb-btn" onclick="closeLightbox()" aria-label="Close"><span>${this._iconSvg('x', 14)}</span></button>
         </div>
         <div class="lb-stage" id="lbStage">
             <div class="lb-loading" id="lbLoading">…</div>
             <img class="lb-img" id="lbImg" style="display:none" alt="">
         </div>
-        <button class="lb-nav lb-prev" id="lbPrev" onclick="lbNav(-1)">‹</button>
-        <button class="lb-nav lb-next" id="lbNext" onclick="lbNav(1)">›</button>
-        <div class="lb-hint" data-i18n="lb.hint">← → 切换 · Esc 关闭</div>
+        <button class="lb-nav lb-prev" id="lbPrev" onclick="lbNav(-1)" aria-label="Prev"><span>${this._iconSvg('chevronLeft', 20)}</span></button>
+        <button class="lb-nav lb-next" id="lbNext" onclick="lbNav(1)" aria-label="Next"><span>${this._iconSvg('chevronRight', 20)}</span></button>
+        <div class="lb-hint" data-i18n="lb.hint">← → switch · Esc close</div>
     </div>
     <script>
         const files = ${filesJson};
@@ -928,45 +1066,81 @@ class ShareManager {
         const zipMeta = ${JSON.stringify({ name: (repoName || 'share').replace(/[\\/:*?"<>|]/g, '_') }).replace(/<\/script/gi, '<\\/script')};
         const fileList = document.getElementById('fileList');
 
+        /* ── 图标：内联 SVG，与 GitHub Drive 同一套线条画风 ──
+           ★ 分享页是独立仓库，拿不到主应用的 icons.js，必须自带一份。
+           ★ 不用 emoji：各系统字形/颜色不一致，且不跟随主题（暗色下会突兀）。 */
+        var P = ${JSON.stringify(ShareManager.ICON_PATHS)};
+        function iconSvg(name, size, sw) {
+            return '<svg width="' + (size || 20) + '" height="' + (size || 20) +
+                '" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+                ' stroke-width="' + (sw || 2) + '" stroke-linecap="round"' +
+                ' stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+                (P[name] || P.file) + '<\/svg>';
+        }
+        /* 页面里所有 data-icon="xxx" 的占位统一渲染成 SVG。
+           静态 HTML 里写占位而不是直接写死 SVG，是为了让同一段标记
+           在生成期和脚本里都能用，避免两处图标不一致。 */
+        (function paintIcons() {
+            var nodes = document.querySelectorAll('[data-icon]');
+            for (var i = 0; i < nodes.length; i++) {
+                var el = nodes[i];
+                if (el.getAttribute('data-painted')) continue;
+                el.setAttribute('data-painted', '1');
+                el.innerHTML = iconSvg(el.getAttribute('data-icon'), 20, 1.9);
+            }
+        })();
+
+        var TYPE_MAP = {
+            md:'fileText', txt:'fileText', log:'fileText', pdf:'fileText',
+            doc:'fileText', docx:'fileText', xls:'fileText', xlsx:'fileText',
+            csv:'fileText', ppt:'fileText', pptx:'fileText',
+            js:'fileCode', ts:'fileCode', jsx:'fileCode', tsx:'fileCode',
+            html:'fileCode', css:'fileCode', scss:'fileCode', json:'fileCode',
+            xml:'fileCode', yml:'fileCode', yaml:'fileCode', py:'fileCode',
+            go:'fileCode', rs:'fileCode', java:'fileCode', c:'fileCode',
+            cpp:'fileCode', h:'fileCode', sh:'fileCode', php:'fileCode',
+            rb:'fileCode', vue:'fileCode',
+            png:'fileImage', jpg:'fileImage', jpeg:'fileImage', gif:'fileImage',
+            svg:'fileImage', webp:'fileImage', bmp:'fileImage', ico:'fileImage',
+            mp3:'fileAudio', wav:'fileAudio', flac:'fileAudio', aac:'fileAudio',
+            ogg:'fileAudio', m4a:'fileAudio',
+            mp4:'fileVideo', avi:'fileVideo', mov:'fileVideo', mkv:'fileVideo',
+            webm:'fileVideo', flv:'fileVideo',
+            zip:'fileArchive', rar:'fileArchive', '7z':'fileArchive',
+            tar:'fileArchive', gz:'fileArchive',
+            exe:'package', dmg:'package', apk:'package', deb:'package'
+        };
         function getFileIcon(name) {
-            const ext = name.split('.').pop().toLowerCase();
-            const icons = {
-                jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',svg:'🖼️',webp:'🖼️',
-                mp4:'🎬',avi:'🎬',mov:'🎬',mkv:'🎬',webm:'🎬',
-                mp3:'🎵',wav:'🎵',flac:'🎵',aac:'🎵',ogg:'🎵',
-                pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',pptx:'📙',
-                txt:'📄',md:'📝',zip:'📦',rar:'📦','7z':'📦',
-                js:'📜',py:'🐍',html:'🌐',css:'🎨',json:'📋',
-                exe:'⚙️',dmg:'💿',apk:'📱'
-            };
-            return icons[ext] || '📄';
+            var n = String(name || '').toLowerCase();
+            var ext = n.indexOf('.') > -1 ? n.split('.').pop() : '';
+            return iconSvg(TYPE_MAP[ext] || 'file', 20, 1.9);
         }
 
         function formatSize(bytes) {
             if (!bytes) return '';
-            const k = 1024;
-            const sizes = ['B','KB','MB','GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            var k = 1024;
+            var sizes = ['B','KB','MB','GB'];
+            var i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
         // 转义函数在页面内联定义：此处代码运行于访客浏览器，无法访问 ShareManager 实例
         function escapeHtml(value) {
-            return String(value ?? '').replace(/[&<>"']/g, function(c) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             });
         }
 
         /** 触发浏览器下载（不是打开预览）。 */
         function triggerDownload(blob, name) {
-            const a = document.createElement('a');
+            var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = name;
             a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
             a.remove();
-            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
         }
 
         /** 取回文件字节，必要时解压。 */
@@ -1022,8 +1196,6 @@ class ShareManager {
          *
          * ★ 压缩过的（packed:'gzip'）不能直接给 <img src> —— 仓库里存的是 .gz，
          *   浏览器认不出，只会显示一个裂图。必须先取回来解压再转 blob URL。
-         *   （实际分享里 jpg/png 通常不会被压缩，因为已压缩格式会自动跳过；
-         *    但老数据可能有，这里一律处理。）
          */
         const _imgCache = new Map();
         async function imgURL(file) {
@@ -1168,7 +1340,7 @@ class ShareManager {
                 cv.setUint16(6, 20, true);
                 cv.setUint16(8, 0x0800, true);
                 cv.setUint16(10, 0, true);
-                cv.setUint16(12, time, true);
+                cv.setUint16(12, 0, true);
                 cv.setUint16(14, date, true);
                 cv.setUint32(16, crc, true);
                 cv.setUint32(20, data.length, true);
@@ -1218,20 +1390,22 @@ class ShareManager {
             li.onclick = () => isImg ? openLightbox(imageFiles.indexOf(file)) : saveFile(file);
 
             const thumb = isImg
-                ? \`<div class="thumb-wrap">
-                       <img class="file-thumb" alt="" data-fi="\${idx}">
-                       <span class="thumb-zoom">🔍</span>
-                   </div>\`
-                : \`<span class="file-icon">\${getFileIcon(file.name)}</span>\`;
+                ? '<div class="thumb-wrap">' +
+                      '<img class="file-thumb" alt="" data-fi="' + idx + '">' +
+                      '<span class="thumb-zoom">' + iconSvg('zoomIn', 10, 2.6) + '<\/span>' +
+                  '<\/div>'
+                : '<span class="file-icon">' + getFileIcon(file.name) + '<\/span>';
 
-            li.innerHTML = \`
-                \${thumb}
-                <div class="file-info">
-                    <div class="file-name">\${escapeHtml(file.name)}</div>
-                    <div class="file-size">\${file.size ? formatSize(file.size) : '<span data-i18n="clickDownload">Click to download</span>'}</div>
-                </div>
-                <button class="download-btn" onclick="event.stopPropagation(); saveFile(files[\${idx}])"><span data-i18n="download">Download</span></button>
-            \`;
+            li.innerHTML =
+                thumb +
+                '<div class="file-info">' +
+                    '<div class="file-name">' + escapeHtml(file.name) + '<\/div>' +
+                    '<div class="file-size">' + (file.size ? formatSize(file.size)
+                        : '<span data-i18n="clickDownload">Click to download<\/span>') + '<\/div>' +
+                '<\/div>' +
+                '<button class="download-btn" onclick="event.stopPropagation(); saveFile(files[' + idx + '])">' +
+                    '<span data-i18n="download">Download<\/span>' +
+                '<\/button>';
             fileList.appendChild(li);
         });
 
@@ -1239,7 +1413,6 @@ class ShareManager {
          * 缩略图懒加载。
          * ★ 不能给每个 <img> 直接写 src —— 98 张原图一起请求，浏览器直接卡死。
          *   进视口（提前 250px）才真正加载。没有 IntersectionObserver 就退回全加载。
-         *   加载失败的（比如 svg 其实是 XML）隐藏缩略图，回退成 emoji 图标。
          */
         (function initThumbs() {
             const imgs = Array.prototype.slice.call(document.querySelectorAll('.file-thumb'));
@@ -1266,20 +1439,19 @@ class ShareManager {
          * ★ 这里不能读 translations —— 它定义在脚本靠后，
          *   而 const 有暂时性死区（TDZ），提前引用会直接抛 ReferenceError
          *   把整段脚本停摆（实测：按钮文案空、提示元素不见了）。
-         *   所以这段只负责"显示/隐藏 + 建元素"，文案交给末尾的 applyLang 填。
+         *   所以这段只负责"显示/隐藏"，文案交给末尾的 applyLang 填。
          */
         (function initPreviewBtn() {
             const btn = document.getElementById('previewAllBtn');
             if (!btn) return;
-            if (!imageFiles.length) { btn.style.display = 'none'; return; }
-            btn.style.display = '';
-            let tip = document.getElementById('imgCountTip');
-            if (!tip) {
-                tip = document.createElement('div');
-                tip.className = 'img-count';
-                tip.id = 'imgCountTip';
-                btn.parentNode.insertBefore(tip, btn.nextSibling);
+            const tip = document.getElementById('imgCountTip');
+            if (!imageFiles.length) {
+                btn.style.display = 'none';
+                if (tip) tip.style.display = 'none';
+                return;
             }
+            btn.style.display = '';
+            if (tip) tip.style.display = '';
         })();
 
         /**
@@ -1293,6 +1465,7 @@ class ShareManager {
             const btn = document.getElementById('dlAllBtn');
             const prog = document.getElementById('dlProgress');
             const bar = document.getElementById('dlBar');
+            const txt = document.getElementById('dlText');
             if (btn) btn.disabled = true;
             if (prog) prog.style.display = 'block';
 
@@ -1314,7 +1487,7 @@ class ShareManager {
                     }
                     done++;
                     if (bar) bar.style.width = Math.round(done / files.length * 100) + '%';
-                    if (prog) prog.querySelector('.dl-text').textContent =
+                    if (txt) txt.textContent =
                         '打包中 ' + done + '/' + files.length + '（' + formatSize(bytes) + '）';
                 }
             }
@@ -1322,17 +1495,17 @@ class ShareManager {
             await Promise.all([0, 1, 2, 3].map(worker));
 
             if (!entries.length) {
-                if (prog) prog.querySelector('.dl-text').textContent = '全部下载失败，请重试';
+                if (txt) txt.textContent = '全部下载失败，请重试';
                 if (btn) btn.disabled = false;
                 return;
             }
 
-            if (prog) prog.querySelector('.dl-text').textContent = '正在生成 ZIP…';
+            if (txt) txt.textContent = '正在生成 ZIP…';
             const zipName = (zipMeta.name || 'github-drive-share') + '.zip';
             triggerDownload(buildZip(entries), zipName);
 
-            if (prog) {
-                prog.querySelector('.dl-text').textContent =
+            if (txt) {
+                txt.textContent =
                     '已打包 ' + entries.length + ' 个文件（' + formatSize(bytes) + '）' +
                     (errors.length ? '，' + errors.length + ' 个失败' : '');
             }
@@ -1344,30 +1517,34 @@ class ShareManager {
         const translations = {
             en: {
                 'page.title': 'File Share',
+                'unit.files': 'files',
+                'head.stored': 'Stored on GitHub',
                 'promo.desc': 'Turn your GitHub repos into a private cloud drive<br>Multi-repo management, smart storage allocation, one-click sharing',
                 'footer.powered': 'Powered by',
                 'footer.stored': 'Stored on GitHub',
                 'loading': 'Loading files...',
-                'downloadAll': '⬇️ Download All as ZIP',
+                'downloadAll': 'Download All as ZIP',
                 'download': 'Download',
                 'clickDownload': 'Click to download',
                 'promo.title': 'Want unlimited cloud storage with GitHub?',
-                'promo.btn': '🚀 Use GitHub Drive Now',
+                'promo.btn': 'Use GitHub Drive Now',
                 'previewAll': 'Preview all images',
                 'imgCount': '{n} images can be previewed directly',
                 'lb.hint': '← → switch · Esc close'
             },
             zh: {
                 'page.title': '文件分享',
+                'unit.files': '个文件',
+                'head.stored': '存储于 GitHub',
                 'promo.desc': 'GitHub Drive 把你的 GitHub 仓库变成私人云盘<br>支持多仓库统一管理、智能容量分配、一键分享',
                 'footer.powered': '由',
                 'footer.stored': '存储于 GitHub',
                 'loading': '加载文件中...',
-                'downloadAll': '⬇️ 打包下载全部 (ZIP)',
+                'downloadAll': '打包下载全部 (ZIP)',
                 'download': '下载',
                 'clickDownload': '点击下载',
                 'promo.title': '也想用 GitHub 当无限云盘？',
-                'promo.btn': '🚀 立即使用 GitHub Drive',
+                'promo.btn': '立即使用 GitHub Drive',
                 'previewAll': '一键预览全部图片',
                 'imgCount': '共 {n} 张图片可直接预览',
                 'lb.hint': '← → 切换 · Esc 关闭'
@@ -1389,19 +1566,27 @@ class ShareManager {
             // 预览按钮文案带数量，是 JS 拼的，没有 data-i18n —— 得手动刷
             const pb = document.getElementById('previewAllBtn');
             if (pb && pb.style.display !== 'none') {
-                pb.textContent = '🖼️ ' + translations[lang].previewAll + ' (' + imageFiles.length + ')';
+                const lbl = pb.querySelector('.lbl');
+                if (lbl) lbl.textContent = translations[lang].previewAll + ' (' + imageFiles.length + ')';
             }
             const tip = document.getElementById('imgCountTip');
-            if (tip) tip.textContent = translations[lang].imgCount.replace('{n}', imageFiles.length);
+            if (tip) {
+                // 英文 1 image / 2 images；中文量词不区分，模板里已写死"张"
+                const n = imageFiles.length;
+                const t = translations[lang].imgCount;
+                tip.textContent = (lang === 'en' && n === 1)
+                    ? t.replace('{n} images', '1 image')
+                    : t.replace('{n}', n);
+            }
         }
         function toggleLang() {
             applyLang(currentLang === 'en' ? 'zh' : 'en');
         }
         // 初始化语言
         applyLang(currentLang);
-    </script>
-</body>
-</html>`;
+    <\/script>
+<\/body>
+<\/html>`;
     }
 
     /**
