@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>口算 · GitHub Drive</title>
+<meta name="description" content="口算练习：两位数乘一位数、两位数加两位数，50 题一组，自动判分、记录成绩、一键分享题目。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230969da' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 4h16M4 12h10M4 20h13'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== 登录门 ===== -->
+<section id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <div class="gate-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 5h16M4 12h11M4 19h14"/>
+      </svg>
+    </div>
+    <h1 class="gate-title">口算</h1>
+    <p class="gate-sub">登录后才会保存成绩记录</p>
+
+    <div id="gate-users" class="gate-users" hidden>
+      <div class="gate-label">检测到已登录的账号</div>
+      <div id="gate-users-list"></div>
+    </div>
+
+    <div class="gate-form">
+      <label class="gate-label" for="gate-token">GitHub Personal Access Token</label>
+      <div class="token-wrap">
+        <input type="password" id="gate-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+        <button type="button" id="gate-eye" class="token-eye" aria-label="显示/隐藏"></button>
+      </div>
+      <p class="gate-hint">只需要公开信息权限即可确认身份，令牌只存在你本机。</p>
+      <button type="button" id="gate-enter" class="btn btn-primary btn-block">登录并进入</button>
+      <p id="gate-err" class="gate-err" hidden></p>
+    </div>
+
+    <a class="gate-link" href="../">回到 GitHub Drive</a>
+  </div>
+</section>
+
+<!-- ===== 主应用 ===== -->
+<div id="app" class="app" hidden>
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 5h16M4 12h11M4 19h14"/>
+      </svg>
+      <span>口算</span>
+    </div>
+    <div class="top-right">
+      <button type="button" class="icon-btn" id="btn-records" title="成绩记录" aria-label="成绩记录"></button>
+      <div class="who">
+        <span id="who-name" class="who-name"></span>
+        <button type="button" class="icon-btn" id="btn-logout" title="退出" aria-label="退出"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ---- 首页 ---- -->
+    <section id="view-home" class="view">
+      <div class="card setup">
+        <h2 class="card-title">开始一组练习</h2>
+
+        <div class="field">
+          <span class="field-label">题型</span>
+          <div class="seg" id="seg-type" role="radiogroup">
+            <button type="button" class="seg-item is-on" data-type="mix" role="radio" aria-checked="true">混合</button>
+            <button type="button" class="seg-item" data-type="add" role="radio" aria-checked="false">两位数加两位数</button>
+            <button type="button" class="seg-item" data-type="mul" role="radio" aria-checked="false">两位数乘一位数</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">题数</span>
+          <div class="seg" id="seg-count" role="radiogroup">
+            <button type="button" class="seg-item" data-count="20" role="radio" aria-checked="false">20</button>
+            <button type="button" class="seg-item is-on" data-count="50" role="radio" aria-checked="true">50</button>
+            <button type="button" class="seg-item" data-count="100" role="radio" aria-checked="false">100</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-block btn-lg" id="btn-start">开始练习</button>
+
+        <div id="resume-box" class="resume" hidden>
+          <div class="resume-text">有一组未完成的练习</div>
+          <div class="resume-actions">
+            <button type="button" class="btn btn-sm btn-primary" id="btn-resume">继续</button>
+            <button type="button" class="btn btn-sm" id="btn-discard">放弃</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">最近成绩</h2>
+          <button type="button" class="btn btn-sm" id="btn-all-records">全部记录</button>
+        </div>
+        <div id="recent-list" class="rec-list"></div>
+      </div>
+    </section>
+
+    <!-- ---- 练习 ---- -->
+    <section id="view-run" class="view" hidden>
+      <div class="runbar">
+        <button type="button" class="icon-btn" id="btn-back" title="返回" aria-label="返回"></button>
+        <div class="runbar-mid">
+          <span class="pill" id="run-progress">0 / 50</span>
+          <span class="pill pill-time" id="run-time">00:00</span>
+        </div>
+        <div class="runbar-right">
+          <button type="button" class="btn btn-sm" id="btn-share">分享题目</button>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-submit">交卷</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheet"></div>
+
+      <div class="run-foot">
+        <button type="button" class="btn btn-primary btn-block btn-lg" id="btn-submit2">交卷</button>
+      </div>
+    </section>
+
+    <!-- ---- 结果 ---- -->
+    <section id="view-done" class="view" hidden>
+      <div class="card result">
+        <div class="score">
+          <svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="score-bg" cx="60" cy="60" r="52"/>
+            <circle class="score-fg" id="score-arc" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="score-num"><span id="score-val">0</span><i>/</i><span id="score-total">50</span></div>
+        </div>
+        <div class="result-meta">
+          <div class="meta-item"><span class="meta-k">用时</span><span class="meta-v" id="res-time">--</span></div>
+          <div class="meta-item"><span class="meta-k">正确率</span><span class="meta-v" id="res-rate">--</span></div>
+          <div class="meta-item"><span class="meta-k">题型</span><span class="meta-v" id="res-type">--</span></div>
+        </div>
+        <div class="result-actions">
+          <button type="button" class="btn btn-primary" id="btn-again">再来一组</button>
+          <button type="button" class="btn" id="btn-review">看错题</button>
+          <button type="button" class="btn" id="btn-share2">分享这组题</button>
+        </div>
+      </div>
+
+      <div class="card" id="wrong-card" hidden>
+        <h2 class="card-title">错题</h2>
+        <div id="wrong-list" class="wrong-list"></div>
+      </div>
+    </section>
+
+    <!-- ---- 记录 ---- -->
+    <section id="view-records" class="view" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">成绩记录</h2>
+          <button type="button" class="btn btn-sm btn-danger" id="btn-clear-records">清空</button>
+        </div>
+        <div id="all-list" class="rec-list"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- 分享弹窗 -->
+<div class="modal" id="share-modal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-label="分享口算题">
+    <div class="modal-head">
+      <h3>分享这组题</h3>
+      <button type="button" class="icon-btn" data-close aria-label="关闭"></button>
+    </div>
+    <p class="modal-tip">对方打开链接会得到<b>完全相同</b>的一组题。</p>
+    <div class="modal-row">
+      <input type="text" id="share-url" readonly>
+      <button type="button" class="btn btn-primary" id="btn-copy">复制</button>
+    </div>
+    <div id="share-note" class="modal-note" hidden></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
