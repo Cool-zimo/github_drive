@@ -1,0 +1,46 @@
+{
+  "versions": [
+    {
+      "version": "0.8.8",
+      "sha": "700bdd9ee462abc23e130bbd21c04bf63663890d",
+      "bytes": 1148248,
+      "files": 23
+    },
+    {
+      "version": "0.8.11",
+      "sha": "2ff72ddead669be0925d45202e22f956a4a8a1d0",
+      "bytes": 1162681,
+      "files": 23
+    },
+    {
+      "version": "0.9.0",
+      "sha": "26ade004f15b766191e6ef00ec0de87f68e43f81",
+      "bytes": 1169487,
+      "files": 23
+    },
+    {
+      "version": "0.9.3",
+      "sha": "2cedc42ae4b40922b36e1195ed59b948f3aedd3d",
+      "bytes": 1061376,
+      "files": 23
+    },
+    {
+      "version": "0.9.5",
+      "sha": "26549f64ecde1a45eb69ba690a690ed60ae69670",
+      "bytes": 1043756,
+      "files": 23
+    },
+    {
+      "version": "0.9.7",
+      "sha": "9e501eb392f4eb47e329a751219212192d744972",
+      "bytes": 1099132,
+      "files": 24
+    },
+    {
+      "version": "0.9.8",
+      "sha": "a74c6b6c424717f05f5cfc4faf4f82e0ea24baec",
+      "bytes": 1144571,
+      "files": 24
+    }
+  ]
+}
