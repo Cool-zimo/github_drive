@@ -30,6 +30,8 @@ const ALLOWED_HOSTS = [
     // 两个项目同时申请，哪个先批就用哪个，所以白名单两个都留着
     'fengzimo.is-a.bot',
     'cool-zimo.is-a.bot',
+    // eu.org 实际申请到的域名（2026-10-25 提交，请求号 20261025050357-arf-38412）
+    'cool-zimo.eu.org',
 ];
 
 function originAllowed(origin) {
@@ -49,6 +51,7 @@ function originAllowed(origin) {
     if (host.endsWith('.cool-zimo.is-a.dev')) return true;
     if (host.endsWith('.fengzimo.is-a.bot')) return true;
     if (host.endsWith('.cool-zimo.is-a.bot')) return true;
+    if (host.endsWith('.cool-zimo.eu.org')) return true;
     // 本地开发
     if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return true;
     return false;
