@@ -580,7 +580,35 @@ class UI {
 
     // ==================== 视图切换 ====================
 
+    /**
+     * ★ 封禁闸门：命中后无论切到哪个视图都只出封禁页。
+     *   不做这个的话，被封的人点侧边栏"全部文件"就能绕过去照常用。
+     */
+    async enforceBan() {
+        try {
+            if (!window.GdCommunity || !window.GdCommunity.Mod) return false;
+            var info = await window.GdCommunity.Mod.check();
+            this._banned = info || null;
+            if (info) {
+                var host = document.getElementById('file-list');
+                if (host) {
+                    var bc = document.getElementById('breadcrumb');
+                    if (bc) bc.style.display = 'none';
+                    window.GdCommunity.Mod.render(host, info);
+                }
+            }
+            return !!info;
+        } catch (e) { return false; }
+    }
+
     switchView(view) {
+        if (this._banned) {
+            /* 被封期间一律只渲染封禁页，任何视图切换都落回这里 */
+            var host0 = document.getElementById('file-list');
+            if (host0) window.GdCommunity.Mod.render(host0, this._banned);
+            this.app._currentView = 'banned';
+            return;
+        }
         // 离开后台进程视图时停掉刷新定时器（否则它每 700ms 空转一整天）
         if (this.app._currentView === 'tasks' && view !== 'tasks') this._stopTasksRefresh();
         /* ★ 离开聊天室必须停掉 12 秒轮询。
@@ -697,6 +725,9 @@ class UI {
      * 渲染用户信息
      */
     renderUserInfo(user) {
+        /* ★ 封禁检查挂在登录后：此时才拿得到 login，
+           而且只跑一次，不会每次刷新界面都去拉名单。 */
+        try { this.enforceBan(); } catch (e) {}
         const el = document.getElementById('user-info');
         el.innerHTML = `
             <img src="${user.avatar_url}" alt="${user.login}">
@@ -1721,11 +1752,11 @@ class UI {
                 items: [
                     {icon:S('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
                      title:'公共聊天室', desc:'和大家说话 · 侧边栏也有入口',
-                     action:'ui.closeModal();ui.switchView("chat");'},
+                     action:"ui.closeModal();ui.switchView('chat');"},
                     {icon:S('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
                      title:'意见反馈', desc:'提交问题或建议，作者可直接回复'
                         + '<span class="gd-fb-dot" id="gd-fb-badge" style="display:none;"></span>',
-                     action:'ui.closeModal();(window.GdCommunity?GdCommunity.Feedback.open():alert("社区模块尚未加载完成，请稍后再试"));'},
+                     action:"ui.closeModal();(window.GdCommunity?GdCommunity.Feedback.open():alert('社区模块尚未加载完成，请稍后再试'));"},
                 ]
             },
             (function () {
@@ -1785,7 +1816,12 @@ class UI {
                 const extraHtml = it.extra ? ' <span style="font-weight:400;font-size:13px;color:#6b7280;">' + it.extra + '</span>' : '';
                 const color = it.danger ? 'color:#dc2626;' : '';
                 const hoverBg = it.danger ? 'var(--danger-light, #fef2f2)' : 'var(--bg-hover, #f3f4f6)';
-                body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
+                /* ★ action 里若含双引号，必须转成 &quot; 再进属性：
+                   HTML 会先把它解回 "，JS 拿到的是完整语句；
+                   直接拼进去的话属性在第一个 " 处就闭合了，
+                   剩下半句变语法错误 —— 界面表现就是"点了没反应"。 */
+                var actEsc = String(it.action || '').replace(/"/g, '&quot;');
+                body += '<div onclick="' + actEsc + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
                 /* ★ 图标可能是 emoji 也可能是内联 SVG。SVG 不吃 font-size，
                    且默认 display:inline 会基线下沉一截，看起来比旁边的字矮。
                    flex + center 让两种图标在同一行里居中对齐。 */
