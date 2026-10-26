@@ -9,12 +9,12 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=0d60a5c9b1" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=287308cdc2" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.8"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.11"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
@@ -70,14 +70,17 @@
            → 第二份整体 SyntaxError。现在把第一份 ui 删掉（oauth 已在其前），
            一份就够，顺序也仍然正确。 -->
     <script defer src="js/oauth.min.js?h=0482c94889" data-gd-core="oauth"></script>
-    <script defer src="js/ui.min.js?h=903c8e4249" data-gd-core="ui"></script>
+    <script defer src="js/ui.min.js?h=4c2e8e9e6f" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=1dda39794a" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=8699b7c3f1" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=793ccc50f6" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=385acf8972" data-gd-core="i18n-scan"></script>
+    <!-- ★ community 不在这里：走 DEFER（登录后才需要），
+         且 build.py 的 _sync_core_tags 会按 CORE_FILES 整块重写上面这段，
+         混进来的标签会被静默删掉。 -->
     <script defer src="js/onboarding.min.js?h=5f440a0702" data-gd-core="onboarding"></script>
     <script defer src="js/app.min.js?h=efa021be65" data-gd-core="app">
     </script>
@@ -495,6 +498,15 @@
                     </a>
                 </div>
 
+                <!-- 社区：聊天室走侧边栏（高频入口，天天来） -->
+                <div class="nav-section">
+                    <div class="nav-section-title"><span>社区</span></div>
+                    <a href="#" class="nav-item" data-view="chat" id="chat-nav">
+                        <span class="nav-icon"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
+                        <span>公共聊天室</span>
+                    </a>
+                </div>
+
             </nav>
             <div class="sidebar-footer">
                 <div class="app-switch-slot" id="app-switch-slot"></div>
@@ -606,7 +618,7 @@
         window.GD_OAUTH_CLIENT_ID = 'Ov23liuMyWPhGbmCEqDS';
 
         var CORE = ['icons', 'github-api', 'storage', 'file-manager', 'config-sync', 'task-dock', 'ui', 'i18n', 'version', 'anim', 'gesture', 'custom', 'theme', 'i18n-scan', 'app'];
-        var DEFER = ['bridge', 'cangshu-link', 'maintain', 'share', 'plugin-api'];
+        var DEFER = ['bridge', 'cangshu-link', 'maintain', 'share', 'plugin-api', 'community'];
         // ★ 由 build.py 生成：每个文件的内容 hash。
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
@@ -615,6 +627,7 @@
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
+            'community': '39246dac5f',
             'config-sync': 'd3c84a594e',
             'custom': '908e5708ce',
             'extension': 'ac2832ce10',
@@ -632,8 +645,8 @@
             'storage': '915f127e93',
             'task-dock': '8872107af0',
             'theme': 'b0ec742409',
-            'ui': '903c8e4249',
-            'version': '8699b7c3f1'
+            'ui': '4c2e8e9e6f',
+            'version': '793ccc50f6'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
