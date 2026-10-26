@@ -2509,7 +2509,7 @@ class UI {
                 <div id="adv-count" class="adv-count"></div>
                 <div class="adv-actions">
                     <button class="btn-secondary" id="adv-cancel">取消</button>
-                    <button class="btn-primary" id="adv-apply">🔍 应用筛选</button>
+                    <button class="btn-primary" id="adv-apply"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> 应用筛选</button>
                 </div>
             </div>`;
 
@@ -2627,7 +2627,7 @@ class UI {
                 <div id="opt-result" style="display:none;margin-bottom:14px;"></div>
                 <button id="opt-scan-btn" class="btn-primary btn-sm"
                     onclick="ui.runStorageOptimize('scan')">
-                    🔍 先看看能释放多少
+                    <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> 先看看能释放多少
                 </button>
             </div>
         `;
@@ -2852,7 +2852,7 @@ class UI {
                 <div id="maintain-result" style="display:none;margin-bottom:14px;"></div>
                 <button id="maintain-scan-btn" class="btn-primary btn-sm"
                     onclick="ui.runMaintainScan()">
-                    🔍 开始扫描
+                    <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> 开始扫描
                 </button>
             </div>
         `;
@@ -3009,7 +3009,7 @@ class UI {
                 </div>
 
                 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-                    <input type="text" id="vs-search" placeholder="🔍 搜索版本 / 作者"
+                    <input type="text" id="vs-search" placeholder="搜索版本 / 作者"
                         oninput="ui._vsFilter=this.value;ui._renderVersionList();"
                         style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;">
                     <select id="vs-sort" onchange="ui._vsSort=this.value;ui._renderVersionList();"
