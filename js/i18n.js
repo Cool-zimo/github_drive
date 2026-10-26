@@ -57,7 +57,7 @@ const I18n = {
             'upload.noFiles': '还没有选择文件',
             'upload.start': '开始上传',
             // 设置
-            'settings.title': '⚙️ 设置',
+            'settings.title': '设置',
             'settings.language': '语言 / Language',
             'settings.languageDesc': '中文 · English · Español · Français · Русский · العربية',
             'settings.backend': '后端服务',
@@ -198,7 +198,7 @@ const I18n = {
             'share.pageTitle': '文件分享',
             'share.pageDesc': '通过 GitHub Drive 分享的文件',
             'share.promoText': '也想用 GitHub 当无限云盘？',
-            'share.promoBtn': '🚀 立即使用 GitHub Drive',
+            'share.promoBtn': '立即使用 GitHub Drive',
             // 文件预览
             'file.previewLoading': '正在加载预览...',
             'file.previewFailed': '预览失败',
@@ -209,9 +209,9 @@ const I18n = {
             // 后端错误
             'backend.stopFailed': '停止失败（可能是旧版后端不支持远程停止，请手动关闭进程）',
             'backend.logsFailed': '日志加载失败',
-            'backend.oldVersion': '⚠️ 旧版后端',
-            'backend.cannotConnect': '❌ 无法连接',
-            'backend.serviceError': '❌ 服务异常',
+            'backend.oldVersion': '旧版后端',
+            'backend.cannotConnect': '无法连接',
+            'backend.serviceError': '服务异常',
             'backend.testing': '测试中...',
             'backend.addrSaved': '后端地址已保存',
             'backend.checkingUpdate': '正在检查更新...',
@@ -224,7 +224,7 @@ const I18n = {
             // 通用
             'toast.deleted': '已删除',
             'toast.copied': '已复制到剪贴板',
-            'common.done': '✅ 完成',
+            'common.done': '完成',
             'confirm.deleteSelected': '确定删除选中的',
             // 仓库
             'repo.associate': '关联已有仓库',
@@ -294,21 +294,21 @@ const I18n = {
             'backend.version': '版本',
             'backend.port': '端口',
             'backend.uptime': '运行时长',
-            'backend.refresh': '🔄 刷新',
-            'backend.configAuth': '⚙️ 配置/授权',
-            'backend.checkUpdate': '⬆️ 检查更新',
-            'backend.shutdown': '⏹️ 停止服务',
-            'backend.downloadNew': '⬇️ 下载新版本',
-            'backend.logsTitle': '📋 请求日志（最近100条）',
+            'backend.refresh': '刷新',
+            'backend.configAuth': '配置/授权',
+            'backend.checkUpdate': '检查更新',
+            'backend.shutdown': '停止服务',
+            'backend.downloadNew': '下载新版本',
+            'backend.logsTitle': '请求日志（最近100条）',
             'backend.noLogs': '暂无日志',
             // 插件运行
-            'plugin.running': '🔌 插件运行中 · 通过 postMessage 与 GitHub Drive 交互',
+            'plugin.running': '插件运行中 · 通过 postMessage 与 GitHub Drive 交互',
             'plugin.searchingAll': '正在搜索全网插件...',
             'plugin.searchFailed': '搜索失败',
             'backend.officialSource': '官方源',
-            'backend.fastDownload': '⚡ 加速下载',
+            'backend.fastDownload': '加速下载',
             // API 限流
-            'api.rateLimit': '⚠️ API 即将限流！剩余 {remaining} 次，{time} 重置',
+            'api.rateLimit': 'API 即将限流！剩余 {remaining} 次，{time} 重置',
             // Toast
             'toast.recentCount': '最近使用（{count}个）',
             'trash.itemCount': '回收站共 {count} 项',
@@ -324,13 +324,13 @@ const I18n = {
             // 分享
             'share.unnamed': '未命名分享',
             'share.deleteConfirm': '确定删除分享"{name}"吗？\n这将删除整个分享仓库，无法恢复。',
-            'share.open': '🔗 打开分享',
-            'share.viewRepo': '📂 查看仓库',
+            'share.open': '打开分享',
+            'share.viewRepo': '查看仓库',
             'share.searching': '正在搜索公开分享...',
             // 应用
             'app.versionTitle': '当前版本：{version}\n最新版本请查看仓库 commit',
             'plugin.confirmTrust': '确认信任此作者并继续安装？',
-            'backend.settingsDesc': '💡 后端服务为插件提供网络请求、文件操作、命令执行等能力。',
+            'backend.settingsDesc': '后端服务为插件提供网络请求、文件操作、命令执行等能力。',
             // 视图标题
             'view.allFiles': '全部文件',
             'view.recent': '最近使用',
@@ -365,28 +365,28 @@ const I18n = {
             'plugin.official': '官方插件',
             'plugin.community': '发现插件',
             'plugin.all': '全部',
-            'plugin.tools': '🧰 工具',
-            'plugin.games': '🎮 游戏',
-            'plugin.game': '🎮 游戏',
-            'plugin.communityTag': '🌐 第三方',
+            'plugin.tools': '工具',
+            'plugin.games': '游戏',
+            'plugin.game': '游戏',
+            'plugin.communityTag': '第三方',
             'plugin.noPlugins': '暂无可用插件',
             'plugin.installing': '正在安装...',
             'plugin.installSuccess': '安装成功',
             'plugin.installFailed': '安装失败',
             'plugin.runFailed': '插件未安装',
-            'plugin.securityWarning': '⚠️ 第三方插件安全警告\n\n此插件来自第三方开发者，GitHub Drive 无法保证安全性。\n插件可能访问你的文件、Token 和个人信息。\n\n确认信任此作者并继续安装？',
+            'plugin.securityWarning': '第三方插件安全警告\n\n此插件来自第三方开发者，GitHub Drive 无法保证安全性。\n插件可能访问你的文件、Token 和个人信息。\n\n确认信任此作者并继续安装？',
             // 后端
             'backend.title': '后端服务管理',
-            'backend.running': '● 运行中',
-            'backend.notRunning': '● 未运行',
+            'backend.running': '运行中',
+            'backend.notRunning': '未运行',
             'backend.exePath': '可执行文件路径',
             'backend.logs': '请求日志',
-            'backend.config': '⚙️ 配置',
+            'backend.config': '配置',
             'backend.shutdownConfirm': '确定停止后端服务吗？停止后需要手动重新启动。',
             'backend.stopped': '后端服务已停止',
             'backend.settings': '后端服务设置',
             'backend.url': '后端地址',
-            'backend.connectFailed': '❌ 无法连接',
+            'backend.connectFailed': '无法连接',
             'backend.saved': '后端地址已保存',
             'backend.desc': '后端服务为插件提供网络请求、文件操作、命令执行等能力。',
             'backend.noAuthNeeded': '下载后双击运行即可，无需授权码。',
@@ -495,12 +495,12 @@ const I18n = {
      *      看着像布局坏了。
      */
     META: {
-        'zh-CN': { name: '简体中文', own: '中文', flag: '🇨🇳', rtl: false },
-        'en':    { name: 'English',  own: 'English',  flag: '🇬🇧', rtl: false },
-        'es':    { name: 'Español',  own: 'Español',  flag: '🇪🇸', rtl: false },
-        'fr':    { name: 'Français', own: 'Français', flag: '🇫🇷', rtl: false },
-        'ru':    { name: 'Русский',  own: 'Русский',  flag: '🇷🇺', rtl: false },
-        'ar':    { name: 'العربية',  own: 'العربية',  flag: '🇸🇦', rtl: true  }
+        'zh-CN': { name: '简体中文', own: '中文', flag: '', rtl: false },
+        'en':    { name: 'English',  own: 'English',  flag: '', rtl: false },
+        'es':    { name: 'Español',  own: 'Español',  flag: '', rtl: false },
+        'fr':    { name: 'Français', own: 'Français', flag: '', rtl: false },
+        'ru':    { name: 'Русский',  own: 'Русский',  flag: '', rtl: false },
+        'ar':    { name: 'العربية',  own: 'العربية',  flag: '', rtl: true  }
     },
 
     /** 语言代码列表（顺序即选择器里的显示顺序） */
@@ -608,7 +608,7 @@ const I18n = {
             ? Object.assign({}, prev, dict)
             : Object.assign({}, dict);
         const m = meta || this.META[code] ||
-                  { name: code, own: code, flag: '🌐', rtl: false };
+                  { name: code, own: code, flag: '', rtl: false };
         this._pluginPacks[code] = { meta: m, dict: merged };
         this.translations[code] = merged;
         this.META[code] = m;
@@ -816,7 +816,7 @@ const I18n = {
         const btn = document.getElementById('lang-btn');
         if (btn) {
             const meta = this.META[this.current];
-            btn.textContent = meta ? (meta.flag + ' ' + meta.own) : '🌐 ' + this.current;
+            btn.textContent = meta ? (meta.flag + ' ' + meta.own) : '' + this.current;
         }
         // ★ 设置页、文件列表这些是 innerHTML 动态生成的，不跟着 data-i18n 走。
         //   切语言时不重渲染，界面上就会留一大片旧语言 —— 这是「换英文后
