@@ -269,8 +269,12 @@
     ];
 
     var Feedback = {
+        /** 预填（申诉等场景）：{type, text} */
+        _prefill: null,
+
         /** 打开反馈面板（模态） */
-        async open() {
+        async open(pre) {
+            if (pre) this._prefill = pre;
             var self = this;
             var overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
@@ -353,7 +357,14 @@
                     b.classList.toggle('active', b.dataset.type === k);
                 });
             }
-            mark(picked);
+            /* ★ 预填要在 mark(picked) 之后再套用，否则会被 mark 的
+                   默认选中覆盖 —— 申诉会被归到"功能有问题"里。 */
+            if (self._prefill) {
+                if (self._prefill.type) mark(self._prefill.type);
+                var ta = pane.querySelector('#gd-fb-text');
+                if (ta && self._prefill.text) ta.value = self._prefill.text;
+                self._prefill = null;
+            }
             pane.querySelectorAll('.gd-fb-type').forEach(function (b) {
                 b.addEventListener('click', function () { mark(b.dataset.type); });
             });
@@ -474,12 +485,28 @@
                      +     '<input class="gd-fb-reply-input" placeholder="回复这位用户…">'
                      +     '<button class="gd-cm-btn sm" data-act="reply">' + ico(ICON.reply, 14) + '<span>回复</span></button>'
                      +     '<button class="gd-cm-btn sm ghost" data-act="close">' + ico(ICON.close, 14) + '<span>关闭</span></button>'
+                     +     '<button class="gd-cm-btn sm danger" data-act="ban" data-user="'
+                     +       esc(iss.user && iss.user.login || '') + '">' + ico(ICON.warn, 14) + '<span>封禁 3 天</span></button>'
                      +   '</div><div class="gd-fb-msg"></div>'
                      + '</div>';
             }).join('');
             pane.querySelectorAll('.gd-fb-card').forEach(function (card) {
                 var num = card.dataset.num;
                 var msg = card.querySelector('.gd-fb-msg');
+                card.querySelector('[data-act=ban]').addEventListener('click', function () {
+                    var who = this.getAttribute('data-user') || '';
+                    if (!who) { msg.textContent = '拿不到对方账号'; return; }
+                    if (!confirm('封禁 ' + who + ' 使用 GitHub Drive 3 天？\n\n'
+                               + '刑期从他第一次打开 Drive 看到封禁页起算。\n'
+                               + '他的文件不受影响，只是暂时用不了本应用。'))
+                        return;
+                    msg.textContent = '处理中…';
+                    Mod.ban(who, '违反社区规则').then(function () {
+                        msg.textContent = '已封禁，' + who + ' 下次打开时起算 3 天';
+                    }).catch(function (e2) {
+                        msg.textContent = '封禁失败：' + (e2.message || e2);
+                    });
+                });
                 card.querySelector('[data-act=reply]').addEventListener('click', function () {
                     var v = (card.querySelector('.gd-fb-reply-input').value || '').trim();
                     if (!v) return;
@@ -526,6 +553,177 @@
         toast: function (m, t) { try { window.ui && window.ui.showToast && window.ui.showToast(m, t || 'info'); } catch (e) {} }
     };
 
-    window.GdCommunity = { CFG: CFG, Chat: Chat, Feedback: Feedback, ICON: ICON, ico: ico,
+
+    /* ==================================================================
+       封禁（Moderation）
+       ------------------------------------------------------------------
+       匿名为什么还要能封人？——匿名是"单向玻璃"：
+         普通用户互相只看得见随机昵称，看不见彼此账号；
+         但 GitHub 的评论作者字段必然是真实 login，作者端拿得到。
+       所以骂街的人你随时能定位。这里的封禁就建立在这个前提上。
+
+       ★ 刑期"自他发现被封号起"：
+         计时起点不是你写进名单的那一刻，而是被封的人第一次打开 Drive
+         看到封禁页的那一刻（写进 localStorage）。
+         否则会出现"你封了三天，他一周没打开，一进门就刑满释放"，
+         或者更糟的"他根本没看到过封禁页，三天白白流走"。
+         清 localStorage 也绕不过：一清再打开就是新的发现时刻，重新计时。
+
+       ⚠️ 客户端封禁不是铁壁：改本地时间、本地跑一份源码都能绕。
+         这是纯前端的固有边界。目标是"让正常人止步"，不是防破解。
+         所以封禁页必须留申诉入口 —— 只封不给人说话的地方是灾难。
+       ================================================================== */
+    var Mod = {
+        FILE: 'bans.json',
+        KEY:  'gd_ban_start_',
+
+        /** 读取封禁名单（公开仓库，走 raw，不耗 API 额度） */
+        async list() {
+            try {
+                var url = 'https://raw.githubusercontent.com/' + CFG.chat.owner + '/'
+                        + CFG.chat.repo + '/main/' + this.FILE + '?t=' + Date.now();
+                var r = await fetch(url, { cache: 'no-store' });
+                if (!r.ok) return [];
+                var j = await r.json();
+                return Array.isArray(j && j.bans) ? j.bans : [];
+            } catch (e) { return []; }
+        },
+
+        /**
+         * 检查当前登录者是否被封。
+         * 返回 null = 正常；返回对象 = 应当展示封禁页。
+         */
+        async check() {
+            var u = me();
+            if (!u) return null;
+            if (isAuthor()) return null;              // 作者永不自封
+            var bans = await this.list();
+            var key = u.toLowerCase();
+            var hit = null;
+            for (var i = 0; i < bans.length; i++) {
+                if (String(bans[i].user || '').toLowerCase() === key) { hit = bans[i]; break; }
+            }
+            var k = this.KEY + key;
+            if (!hit) { try { localStorage.removeItem(k); } catch (e) {} return null; }
+
+            var st = null;
+            try { st = localStorage.getItem(k); } catch (e) {}
+            var now = Date.now();
+            if (!st) {                                 // ★ 第一次看到 = 发现时刻
+                st = String(now);
+                try { localStorage.setItem(k, st); } catch (e) {}
+            }
+            var days = Number(hit.days) || 3;
+            var end  = Number(st) + days * 86400000;
+            if (now >= end) {                          // 刑满，自动解除
+                try { localStorage.removeItem(k); } catch (e) {}
+                return null;
+            }
+            return { user: u, reason: hit.reason || '违反社区规则', by: hit.by || '作者',
+                     days: days, end: end, remain: end - now };
+        },
+
+        fmt: function (ms) {
+            var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+            if (h >= 24) return Math.floor(h / 24) + ' 天 ' + (h % 24) + ' 小时';
+            return h + ' 小时 ' + m + ' 分钟';
+        },
+
+        /** 渲染封禁页：盖住主窗口，其余功能不可用，但保留申诉 */
+        render: function (host, info) {
+            host.innerHTML =
+              '<div style="max-width:520px;margin:40px auto;padding:28px 26px;'
+            + 'border:1px solid #d0d7de;border-radius:14px;background:var(--bg-primary,#fff);'
+            + 'box-shadow:0 1px 3px rgba(0,0,0,.06);text-align:center;">'
+            +   '<div style="display:flex;justify-content:center;margin-bottom:14px;">'
+            +     ico(ICON.warn, 40) + '</div>'
+            +   '<div style="font-size:19px;font-weight:700;color:var(--text-primary);margin-bottom:10px;">'
+            +     '账号已被暂停使用</div>'
+            +   '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);text-align:left;'
+            +     'padding:14px 16px;border-radius:10px;background:var(--bg-secondary,#f6f8fa);margin-bottom:16px;">'
+            +     '<b>原因：</b>' + esc(info.reason) + '<br>'
+            +     '<b>处理人：</b>' + esc(info.by) + '<br>'
+            +     '<b>剩余时间：</b><span id="gd-ban-remain">' + this.fmt(info.remain) + '</span>'
+            +     '（共 ' + info.days + ' 天，自你看到本页起算）'
+            +   '</div>'
+            +   '<div style="font-size:12px;color:var(--text-tertiary);line-height:1.7;text-align:left;margin-bottom:16px;">'
+            +     '暂停期间 GitHub Drive 的功能不可用，你的文件仍安全保存在自己的仓库里，不受影响。<br>'
+            +     '如果认为处理有误，可以提交申诉，作者会看到。'
+            +   '</div>'
+            +   '<button onclick="window.GdCommunity.Mod.appeal()" style="padding:9px 18px;border-radius:8px;'
+            +     'border:1px solid #d0d7de;background:var(--bg-primary,#fff);color:var(--text-primary);'
+            +     'font-size:13px;font-weight:600;cursor:pointer;">提交申诉</button>'
+            + '</div>';
+            var self = this, el = host.querySelector('#gd-ban-remain');
+            if (el) {
+                clearInterval(this._t);
+                this._t = setInterval(function () {
+                    var left = info.end - Date.now();
+                    if (left <= 0) {
+                        clearInterval(self._t);
+                        try { localStorage.removeItem(self.KEY + info.user.toLowerCase()); } catch (e) {}
+                        location.reload();
+                        return;
+                    }
+                    el.textContent = self.fmt(left);
+                }, 30000);
+            }
+        },
+
+        /** 申诉：复用反馈通道，标题带标记，作者端一眼能认出 */
+        appeal: function () {
+            try {
+                Feedback.open({ type: 'complain',
+                    text: '【封禁申诉】' + me() + '\n\n我认为暂停处理有误，理由：\n' });
+            } catch (e) {
+                alert('申诉通道打开失败，请稍后再试');
+            }
+        },
+
+        /** 作者端：把某人加进名单，默认 3 天 */
+        async ban(user, reason, days) {
+            user = String(user || '').trim();
+            if (!user) throw new Error('缺少用户名');
+            if (user.toLowerCase() === CFG.author) throw new Error('不能封自己');
+            days = Number(days) || 3;
+            var p = '/repos/' + CFG.chat.owner + '/' + CFG.chat.repo + '/contents/' + this.FILE;
+            var sha = null, cur = { bans: [] };
+            try {
+                var got = await api().request(p);
+                sha = got.sha;
+                cur = JSON.parse(decodeURIComponent(escape(atob((got.content || '').replace(/\s/g, '')))));
+                if (!Array.isArray(cur.bans)) cur.bans = [];
+            } catch (e) { /* 文件还不存在，新建 */ }
+            cur.bans = cur.bans.filter(function (b) {
+                return String(b.user || '').toLowerCase() !== user.toLowerCase();
+            });
+            cur.bans.push({ user: user, reason: reason || '违反社区规则', days: days,
+                            by: CFG.author, at: new Date().toISOString().slice(0, 10) });
+            var body = { message: 'ban: ' + user + ' (' + days + 'd)',
+                         content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 2)))) };
+            if (sha) body.sha = sha;
+            await api().request(p, { method: 'PUT', body: JSON.stringify(body) });
+            return true;
+        },
+
+        async unban(user) {
+            var p = '/repos/' + CFG.chat.owner + '/' + CFG.chat.repo + '/contents/' + this.FILE;
+            try {
+                var got = await api().request(p);
+                var cur = JSON.parse(decodeURIComponent(escape(atob((got.content || '').replace(/\s/g, '')))));
+                cur.bans = (cur.bans || []).filter(function (b) {
+                    return String(b.user || '').toLowerCase() !== String(user).toLowerCase();
+                });
+                await api().request(p, { method: 'PUT', body: JSON.stringify({
+                    message: 'unban: ' + user,
+                    content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 2)))),
+                    sha: got.sha }) });
+            } catch (e) { throw e; }
+            return true;
+        }
+    };
+
+    window.GdCommunity = { CFG: CFG, Chat: Chat, Feedback: Feedback, Mod: Mod, ICON: ICON, ico: ico,
                            nick: nick, isAuthor: isAuthor };
+
 })();
