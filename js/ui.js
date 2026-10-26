@@ -583,6 +583,13 @@ class UI {
     switchView(view) {
         // 离开后台进程视图时停掉刷新定时器（否则它每 700ms 空转一整天）
         if (this.app._currentView === 'tasks' && view !== 'tasks') this._stopTasksRefresh();
+        /* ★ 离开聊天室必须停掉 12 秒轮询。
+           否则切到文件列表后它还一直在后台拉 API，不但白耗额度，
+           轮询回调里的 paint() 会因为 #gd-chat-list 已被替换而静默失败，
+           控制台刷一堆找不到元素的错误。 */
+        if (this.app._currentView === 'chat' && view !== 'chat') {
+            try { window.GdCommunity && window.GdCommunity.Chat.stop(); } catch (e) {}
+        }
         this.app._currentView = view;
         this.app.saveLastState?.();
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -666,6 +673,13 @@ class UI {
                 if (typeof TaskDock !== 'undefined' && TaskDock.flyToList) {
                     requestAnimationFrame(() => TaskDock.flyToList());
                 }
+            } else if (view === 'chat') {
+                // 公共聊天室：占主窗口，不弹窗
+                if (fileList) fileList.style.display = '';
+                if (breadcrumb) breadcrumb.style.display = 'none';
+                if (emptyState) emptyState.classList.add('hidden');
+                if (loadingState) loadingState.classList.add('hidden');
+                this._renderChatView();
             } else if (view === 'plugins') {
                 // ★ 移动端不加载插件：下载不了后端代码，点了只会白屏
                 if (this.isPluginsBlocked && this.isPluginsBlocked()) {
@@ -902,6 +916,11 @@ class UI {
         const container = document.getElementById('file-list');
         const emptyState = document.getElementById('empty-state');
         const loadingState = document.getElementById('loading-state');
+
+        /* ★ 每次渲染都按存储还原网格/列表，而不是只在启动时还原一次。
+           中间可能经过后台进程、聊天室、设置等视图，它们共用 #file-list，
+           谁顺手改了 class 都会带走布局。渲染方自己兜底最可靠。 */
+        this.applyViewPreference();
 
         // ★ 渲染前必须自己还原可见性。
         //   switchView 对"非文件视图"写过 container.style.display='none'
@@ -1413,11 +1432,15 @@ class UI {
 
     // 视图切换（网格/列表）
     toggleView() {
-        const list = document.getElementById('file-list');
-        const isList = list.classList.toggle('list-view');
-        const icon = document.getElementById('view-toggle-icon');
-        if (icon) icon.textContent = isList ? '▦' : '☰';
+        /* ★ 真值只认 localStorage，不用 classList.toggle()。
+           toggle 是从「当前 DOM 状态」翻转的：一旦某次渲染把 class 弄丢
+           （或某个视图偷偷加了又没摘），再点一次就会翻到相反的一边 ——
+           表现正是「去别的界面转一圈回来，布局就变了」。
+           这里改成读存储 → 取反 → 写回，DOM 只是结果的镜像。 */
+        const cur = localStorage.getItem('github_drive_view') || 'grid';
+        const isList = cur !== 'list';           // 取反
         localStorage.setItem('github_drive_view', isList ? 'list' : 'grid');
+        this.applyViewPreference();
         this.showToast(isList ? I18n.t('toast.listView') : I18n.t('toast.gridView'), 'info');
     }
 
@@ -1646,16 +1669,28 @@ class UI {
     _settingsGroups() {
         var versionEl = document.getElementById('app-version');
         var version = versionEl ? versionEl.textContent : 'v-';
+        /* ★ 设置项图标一律内联 SVG，不用 emoji。
+           emoji 在这里有两个毛病：不同系统的字体渲染差异大（同一行图标
+           高矮不一），且暗色下彩色 emoji 会和 --text-* 的灰阶文字打架。 */
+        var S = function (d) {
+            return '<svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" '
+                 + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+                 + 'stroke-linejoin="round" aria-hidden="true" focusable="false">' + d + '</svg>';
+        };
 
         const GROUPS = [
             {
                 title: '外观',
                 items: [
-                    {icon:'🌙', title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
-                    {icon:'🌐', title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
-                    {icon:'🎨', title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
+                    {icon:S('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'),
+                     title:I18n.t('settings.darkMode') || '暗色模式', desc:I18n.t('settings.darkModeDesc') || '切换深色/浅色主题', action:'ui.toggleDarkMode();'},
+                    {icon:S('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'),
+                     title:I18n.t('settings.language'), desc:I18n.t('settings.languageDesc'), action:'I18n.pick();'},
+                    {icon:S('<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>'),
+                     title:'界面自定义', desc:'侧边栏/顶栏右键可勾选显示项，这里调主题与字号',
                      action:'ui.closeModal();ui.showLookPanel();'},
-                    {icon:'🔗', title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
+                    {icon:S('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+                     title:'仓鼠联动', desc:'默认关闭 · 打开后登录页才会出现「沿用仓鼠账号」',
                      action:'ui.toggleBridge();',
                      extra:(localStorage.getItem('gd_bridge_enabled') === '1' ? '开' : '关')},
                 ]
@@ -1663,34 +1698,82 @@ class UI {
             {
                 title: '存储与仓库',
                 items: [
-                    {icon:'🗂️', title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
-                    {icon:'🤖', title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
+                    {icon:S('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="8" y1="13" x2="16" y2="13"/>'),
+                     title:'存储仓库管理', desc:'逐仓用量、新建仓库、校准容量登记、整理合并', action:'ui.closeModal();ui.showStorageManager();'},
+                    {icon:S('<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1"/><path d="M9 13h.01M15 13h.01"/>'),
+                     title:'自动整理设置', desc:'后台自动填满仓库、删除腾空的仓', action:'ui.closeModal();ui.showAutoCompactSettings();'},
                 ]
             },
             {
                 title: '功能',
                 items: [
-                    {icon:'🔍', title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
+                    {icon:S('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+                     title:I18n.t('settings.contentSearch') || '内容搜索', desc:I18n.t('settings.contentSearchDesc') || '搜索时同时匹配文件内容', action:'ui.toggleContentSearch();',
                      extra:(localStorage.getItem('gd_search_content') === '1' ? '开' : '关')},
-                    {icon:'🎯', title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
-                    {icon:'⚙️', title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
+                    {icon:S('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
+                     title:'智能分类', desc:'按文件类型自动整理到文件夹', action:'ui.closeModal();app.showCategoryStats();'},
+                    {icon:S('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+                     title:I18n.t('settings.backend'), desc:I18n.t('settings.backendDesc'), action:'ui.closeModal();ui.showBackendManager();'},
                 ]
             },
             {
+                title: '社区',
+                items: [
+                    {icon:S('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
+                     title:'公共聊天室', desc:'和大家说话 · 侧边栏也有入口',
+                     action:'ui.closeModal();ui.switchView("chat");'},
+                    {icon:S('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+                     title:'意见反馈', desc:'提交问题或建议，作者可直接回复'
+                        + '<span class="gd-fb-dot" id="gd-fb-badge" style="display:none;"></span>',
+                     action:'ui.closeModal();(window.GdCommunity?GdCommunity.Feedback.open():alert("社区模块尚未加载完成，请稍后再试"));'},
+                ]
+            },
+            (function () {
+                /* ★ 历史版本：versions/ 下是从仓库提交历史里抽出来的静态快照，
+                   同一源、不走 CDN。默认只读（外壳拦掉非 GET 的 GitHub 请求），
+                   因为旧版本不认识新版写进 config 的字段，写回去会丢数据。 */
+                var LIST = window.GD_HIST_VERSIONS || [];
+                if (!LIST.length) return null;
+                var root = location.pathname.replace(/\/index\.html?$/i, '').replace(/\/$/, '');
+                var rows = LIST.slice().reverse().map(function (v) {
+                    return '<a href="' + root + '/versions/' + v + '/index.html" '
+                         + 'style="display:inline-block;margin:0 6px 6px 0;padding:5px 11px;'
+                         + 'border-radius:8px;border:1px solid var(--border-color,#d0d7de);'
+                         + 'font-size:12px;color:var(--text-primary);text-decoration:none;">'
+                         + 'v' + v + '</a>';
+                }).join('');
+                return {
+                    title: '历史版本',
+                    html: '<div style="padding:12px 14px;border-radius:12px;'
+                        + 'border:1px solid var(--border-color,#d0d7de);background:var(--bg-secondary,#f6f8fa);">'
+                        + '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">'
+                        + '回到旧版本</div>'
+                        + '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:8px;">'
+                        + '每个版本都是从仓库历史里抽出的完整快照，打开即为只读 —— 旧版本不认识新版的配置字段，'
+                        + '写回去可能丢数据。也可直接用 <code style="font-size:11px;">?version=0.8.8</code> 进。</div>'
+                        + rows + '</div>'
+                };
+            })(),
+            {
                 title: '关于与账号',
                 items: [
-                    {icon:'❓', title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
-                    {icon:'🔀', title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
-                    {icon:'💾', title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
-                    {icon:'🏷️', title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
-                    {icon:'🚪', title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
+                    {icon:S('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+                     title:I18n.t('settings.help'), desc:I18n.t('settings.helpDesc'), action:'ui.closeModal();ui.showHelp();'},
+                    {icon:S('<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>'),
+                     title:I18n.t('settings.versionSwitch') || '版本切换', desc:I18n.t('settings.versionSwitchDesc') || '体验他人改进的版本', action:'ui.closeModal();ui.showVersionSwitcher();'},
+                    {icon:S('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+                     title:I18n.t('settings.export'), desc:I18n.t('settings.exportDesc'), action:'app.exportBackup();ui.closeModal();'},
+                    {icon:S('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'),
+                     title:I18n.t('settings.version'), desc:'GitHub Drive', extra:version},
+                    {icon:S('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'),
+                     title:I18n.t('settings.logout'), desc:I18n.t('settings.logoutDesc'), action:"if(confirm(I18n.t('settings.logoutConfirm'))){app.logout();ui.closeModal();}", danger:true}
                 ]
             }
         ];
 
 
         let body = '';
-        for (const g of GROUPS) {
+        for (const g of GROUPS.filter(Boolean)) {
             body += '<div style="margin-bottom:14px;">'
                   +   '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;'
                   +   'text-transform:uppercase;padding:0 4px 6px;">' + g.title + '</div>';
@@ -1703,7 +1786,11 @@ class UI {
                 const color = it.danger ? 'color:#dc2626;' : '';
                 const hoverBg = it.danger ? 'var(--danger-light, #fef2f2)' : 'var(--bg-hover, #f3f4f6)';
                 body += '<div onclick="' + (it.action || '') + '" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;margin-bottom:6px;' + color + '" onmouseover="this.style.background=\"' + hoverBg + '\"" onmouseout="this.style.background=\"transparent\"">';
-                body += '<span style="font-size:20px;">' + it.icon + '</span>';
+                /* ★ 图标可能是 emoji 也可能是内联 SVG。SVG 不吃 font-size，
+                   且默认 display:inline 会基线下沉一截，看起来比旁边的字矮。
+                   flex + center 让两种图标在同一行里居中对齐。 */
+                body += '<span style="font-size:20px;display:flex;align-items:center;'
+                      + 'flex:none;">' + it.icon + '</span>';
                 body += '<div><div style="font-weight:600;font-size:14px;color:var(--text-primary);">' + it.title + extraHtml + '</div><div style="font-size:12px;color:var(--text-secondary);">' + it.desc + '</div></div></div>';
             }
             body += '</div>';
@@ -1767,6 +1854,16 @@ class UI {
             }
         } catch (e) { /* 设置页不能因为外观控件挂掉 */ }
         this._renderForeignSection(fileList);
+        /* ★ 作者账号才查未回复数。GitHub 不会给仓库主发自己仓库 Issue 的
+           通知邮件，不主动数一遍，用户提了反馈永远没人知道。
+           查失败不影响设置页本身，所以整段吞掉异常。 */
+        try {
+            if (window.GdCommunity && window.GdCommunity.isAuthor()) {
+                window.GdCommunity.Feedback.unanswered().then(n => {
+                    this.setFeedbackBadge(n);
+                }).catch(() => {});
+            }
+        } catch (e) { /* 未登录或模块未加载 */ }
     }
 
     /**
@@ -2032,6 +2129,41 @@ class UI {
             el.disabled = false;
             el.classList.remove('gd-bar-off');
         });
+    }
+
+    /**
+     * 公共聊天室视图
+     *
+     * 模块走 DEFER 延迟加载，理论上点进来时已经在位；但用户可能在
+     * 页面刚加载完就点，所以这里等一下它出现，避免"点了空白"。
+     */
+    _renderChatView() {
+        const fileList = document.getElementById('file-list');
+        if (!fileList) return;
+        fileList.style.display = '';
+        fileList.className = '';
+        const start = () => {
+            if (!window.GdCommunity) {
+                fileList.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-tertiary);">社区模块加载中…</div>';
+                setTimeout(start, 200);
+                return;
+            }
+            try {
+                window.GdCommunity.Chat.mount(fileList);
+            } catch (e) {
+                fileList.innerHTML = '<div style="padding:40px;text-align:center;color:#cf222e;">'
+                    + '聊天室打开失败：' + (e.message || e) + '</div>';
+            }
+        };
+        start();
+    }
+
+    /** 设置页反馈项上的未回复红点（只有作者账号会有） */
+    setFeedbackBadge(n) {
+        const el = document.getElementById('gd-fb-badge');
+        if (!el) return;
+        if (n > 0) { el.textContent = n; el.style.display = ''; }
+        else { el.style.display = 'none'; }
     }
 
     _renderTasksView() {
