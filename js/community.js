@@ -109,6 +109,8 @@
         lastSent: 0,
         burst: 0,
         mutedUntil: 0,
+        /* 作者端才用：封禁名单缓存（小写账号 -> 条目），paint 时同步读 */
+        bans: {},
 
         /** 解析消息体：<!--gd:昵称|序号-->正文 */
         parse: function (body) {
@@ -135,7 +137,10 @@
                 var o = self.parse(c.body);
                 o.id = c.id;
                 o.at = c.created_at;
-                o.mine = (c.user && c.user.login) === me();
+                /* ★ 真实账号必须留住：昵称是给用户之间互相看不见用的，
+                   但 GitHub 评论的作者字段本来就是明文 login，作者端要拿它封人。 */
+                o.login = (c.user && c.user.login) || '';
+                o.mine = o.login === me();
                 return o;
             });
             if (incremental && this.lastSince) {
@@ -193,6 +198,12 @@
               +   '<div class="gd-cm-head">'
               +     '<div class="gd-cm-title">' + ico(ICON.chat, 18) + '<span>公共聊天室</span></div>'
               +     '<div class="gd-cm-sub">大家的留言公开可见 · 显示昵称，不显示账号</div>'
+              /* 昵称是随机生成后写进 localStorage 的，所以同一台设备一直不变。
+                 想换就在点一下"换一个"，旧消息里已发出的名字改不了（内容存在 GitHub 上）。 */
+              +     '<div class="gd-cm-me">' + ico(ICON.user, 13)
+              +       '<span>你是 <b>' + esc(nick()) + '</b></span>'
+              +       '<button id="gd-chat-renick" class="gd-cm-linkbtn">换一个</button>'
+              +     '</div>'
               +   '</div>'
               +   '<div class="gd-cm-warn">' + ico(ICON.warn, 14)
               +     '<span>仓库是公开的：通过 GitHub API 仍可查到每条消息对应的真实账号。'
@@ -219,6 +230,18 @@
             input.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); }
             });
+            var rn = document.getElementById('gd-chat-renick');
+            if (rn) rn.addEventListener('click', function () {
+                try {
+                    var n = ADJ[Math.floor(Math.random() * ADJ.length)]
+                          + ANI[Math.floor(Math.random() * ANI.length)];
+                    localStorage.setItem('gd_nickname', n);
+                    document.querySelector('#gd-chat-renick').previousElementSibling
+                        && (document.querySelector('.gd-cm-me b').textContent = n);
+                    self.toast('已换成 ' + n + '（之后发出的消息用新名字）', 'success');
+                } catch (e) { self.toast('换昵称失败', 'error'); }
+            });
+            if (isAuthor()) await this.loadBans();
             try { await this.load(false); this.paint(); } catch (e) {
                 document.getElementById('gd-chat-list').innerHTML =
                     '<div class="gd-cm-error">加载失败：' + esc(e.message || e) + '</div>';
@@ -237,13 +260,62 @@
                     + ico(ICON.chat, 28) + '<div>还没有人说话，来抢第一条</div></div>';
                 return;
             }
+            /* 作者端：每条消息下面挂一条管理条 —— 直接看到是谁、直接封。
+               骂街现场就能处理，不用跳去反馈页翻 Issue。 */
+            var admin = isAuthor();
+            var self2 = this;
             box.innerHTML = this.msgs.map(function (m) {
-                return '<div class="gd-msg' + (m.mine ? ' mine' : '') + '">'
+                var banned = admin && m.login && !!self2.bans[String(m.login).toLowerCase()];
+                var bar = '';
+                if (admin && m.login && !m.mine) {
+                    bar = '<div class="gd-msg-admin">'
+                        +   '<span class="gd-msg-login">' + ico(ICON.user, 11) + esc(m.login) + '</span>'
+                        +   (banned ? '<span class="gd-msg-banned">已封禁</span>' : '')
+                        +   '<button class="gd-msg-ban" data-user="' + esc(m.login) + '">'
+                        +     ico(ICON.warn, 11) + '<span>' + (banned ? '续封' : '封禁') + '</span></button>'
+                        + '</div>';
+                }
+                return '<div class="gd-msg' + (m.mine ? ' mine' : '') + (banned ? ' banned' : '') + '">'
                      +   '<div class="gd-msg-meta"><span class="gd-msg-nick">' + esc(m.nick) + '</span>'
                      +     '<span class="gd-msg-time">' + fmtTime(m.at) + '</span></div>'
                      +   '<div class="gd-msg-text">' + esc(m.text).replace(/\n/g, '<br>') + '</div>'
+                     +   bar
                      + '</div>';
             }).join('');
+            if (admin) {
+                box.querySelectorAll('.gd-msg-ban').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        var who = this.getAttribute('data-user') || '';
+                        if (!who) return;
+                        var input = prompt('封禁 ' + who + ' 多少天？（刑期从他打开 Drive 看到封禁页起算）', '3');
+                        if (input === null) return;
+                        var days = Number(input);
+                        if (!days || days <= 0) { self2.toast('天数无效', 'error'); return; }
+                        var btn = this;
+                        btn.disabled = true;
+                        Mod.ban(who, '聊天室违规', days).then(function () {
+                            self2.toast('已封禁 ' + who + ' ' + days + ' 天', 'success');
+                            return self2.loadBans();
+                        }).then(function () { self2.paint(); })
+                          .catch(function (e) {
+                              self2.toast('封禁失败：' + (e.message || e), 'error');
+                              btn.disabled = false;
+                          });
+                    });
+                });
+            }
+        },
+
+        /** 作者端：拉一次封禁名单，供 paint 标记"已封禁" */
+        async loadBans() {
+            try {
+                var arr = await Mod.list();
+                var map = {};
+                (arr || []).forEach(function (b) {
+                    if (b && b.user) map[String(b.user).toLowerCase()] = b;
+                });
+                this.bans = map;
+            } catch (e) { this.bans = {}; }
         },
 
         start: function () {
