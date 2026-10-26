@@ -14,7 +14,7 @@
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.11"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.12"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
@@ -70,9 +70,9 @@
            → 第二份整体 SyntaxError。现在把第一份 ui 删掉（oauth 已在其前），
            一份就够，顺序也仍然正确。 -->
     <script defer src="js/oauth.min.js?h=0482c94889" data-gd-core="oauth"></script>
-    <script defer src="js/ui.min.js?h=4c2e8e9e6f" data-gd-core="ui"></script>
-    <script defer src="js/i18n.min.js?h=1dda39794a" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=793ccc50f6" data-gd-core="version"></script>
+    <script defer src="js/ui.min.js?h=6adb820d0b" data-gd-core="ui"></script>
+    <script defer src="js/i18n.min.js?h=085553dff9" data-gd-core="i18n"></script>
+    <script defer src="js/version.min.js?h=7b625462e1" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
@@ -634,7 +634,7 @@
             'file-manager': '205dd21f3d',
             'gesture': '4896dd831d',
             'github-api': '389e7c20c9',
-            'i18n': '1dda39794a',
+            'i18n': '085553dff9',
             'i18n-scan': '385acf8972',
             'onboarding': '5f440a0702',
             'icons': 'bde278015a',
@@ -645,8 +645,8 @@
             'storage': '915f127e93',
             'task-dock': '8872107af0',
             'theme': 'b0ec742409',
-            'ui': '4c2e8e9e6f',
-            'version': '793ccc50f6'
+            'ui': '6adb820d0b',
+            'version': '7b625462e1'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
