@@ -9,7 +9,7 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=287308cdc2" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=0568b4a909" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
