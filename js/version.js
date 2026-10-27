@@ -20,7 +20,7 @@ const APP_VERSION = {
     scheme: 2,
     major: '0',
     api: '9',
-    patch: 4,
+    patch: 13,
     internalVersion: '0.9.13',
     formalVersion: '0.9.13',
     displayVersion: '0.9.13',
