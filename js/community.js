@@ -26,6 +26,7 @@
     var CFG = {
         chat:     { owner: 'Cool-zimo', repo: 'drive-chat',     issue: 1 },
         feedback: { owner: 'Cool-zimo', repo: 'drive-feedback'  },
+        bans:     { owner: 'Cool-zimo', repo: 'drive-bans'      },
         author:   'cool-zimo'
     };
 
@@ -652,8 +653,8 @@
         /** 读取封禁名单（公开仓库，走 raw，不耗 API 额度） */
         async list() {
             try {
-                var url = 'https://raw.githubusercontent.com/' + CFG.chat.owner + '/'
-                        + CFG.chat.repo + '/main/' + this.FILE + '?t=' + Date.now();
+                var url = 'https://raw.githubusercontent.com/' + CFG.bans.owner + '/'
+                        + CFG.bans.repo + '/main/' + this.FILE + '?t=' + Date.now();
                 var r = await fetch(url, { cache: 'no-store' });
                 if (!r.ok) return [];
                 var j = await r.json();
@@ -664,8 +665,18 @@
         /**
          * 检查当前登录者是否被封。
          * 返回 null = 正常；返回对象 = 应当展示封禁页。
+         *
+         * ★ 判定交给 GdBan（云端双锚点）：
+         *   云端 bans.json 为权威，用户自己存储仓库里的 .gd-ban.json 作冗余，
+         *   二者会自动互相补全；到期/解除时自动清除残留标记。全过程静默。
          */
         async check() {
+            if (window.GdBan) {
+                try {
+                    var r = await window.GdBan.resolve();
+                    return r;                          // null = 正常
+                } catch (e) { /* 云端不可用，退回本地判定 */ }
+            }
             var u = me();
             if (!u) return null;
             if (isAuthor()) return null;              // 作者永不自封
@@ -758,7 +769,7 @@
             if (!user) throw new Error('缺少用户名');
             if (user.toLowerCase() === CFG.author) throw new Error('不能封自己');
             days = Number(days) || 3;
-            var p = '/repos/' + CFG.chat.owner + '/' + CFG.chat.repo + '/contents/' + this.FILE;
+            var p = '/repos/' + CFG.bans.owner + '/' + CFG.bans.repo + '/contents/' + this.FILE;
             var sha = null, cur = { bans: [] };
             try {
                 var got = await api().request(p);
@@ -770,7 +781,8 @@
                 return String(b.user || '').toLowerCase() !== user.toLowerCase();
             });
             cur.bans.push({ user: user, reason: reason || '违反社区规则', days: days,
-                            by: CFG.author, at: new Date().toISOString().slice(0, 10) });
+                            by: CFG.author, at: new Date().toISOString().slice(0, 10),
+                            seenAt: 0, expireAt: 0, remaining: days * 86400000 });
             var body = { message: 'ban: ' + user + ' (' + days + 'd)',
                          content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 2)))) };
             if (sha) body.sha = sha;
@@ -779,7 +791,7 @@
         },
 
         async unban(user) {
-            var p = '/repos/' + CFG.chat.owner + '/' + CFG.chat.repo + '/contents/' + this.FILE;
+            var p = '/repos/' + CFG.bans.owner + '/' + CFG.bans.repo + '/contents/' + this.FILE;
             try {
                 var got = await api().request(p);
                 var cur = JSON.parse(decodeURIComponent(escape(atob((got.content || '').replace(/\s/g, '')))));
@@ -791,6 +803,31 @@
                     content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 2)))),
                     sha: got.sha }) });
             } catch (e) { throw e; }
+            /* ★ 解除后必须登记"待清理"：客户端启动时据此删掉自己仓库里的
+               封禁标记。不登记的话，那些文件会永久留在他仓库里。 */
+            await this.markCleanup(user);
+            return true;
+        },
+
+        /** 把某账号加进 cleanup.json 的待清理清单 */
+        async markCleanup(user) {
+            try {
+                var q = '/repos/' + CFG.bans.owner + '/' + CFG.bans.repo + '/contents/cleanup.json';
+                var got = null, cur = { pending: [] };
+                try {
+                    got = await api().request(q);
+                    cur = JSON.parse(decodeURIComponent(escape(atob((got.content || '').replace(/\s/g, '')))));
+                    if (!Array.isArray(cur.pending)) cur.pending = [];
+                } catch (e) {}
+                var k = String(user).toLowerCase();
+                if (!cur.pending.some(function (x) { return String(x).toLowerCase() === k; })) {
+                    cur.pending.push(user);
+                    var body = { message: 'cleanup: ' + user,
+                                 content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 2)))) };
+                    if (got) body.sha = got.sha;
+                    await api().request(q, { method: 'PUT', body: JSON.stringify(body) });
+                }
+            } catch (e) { /* 登记失败不影响主流程 */ }
             return true;
         }
     };
