@@ -68,16 +68,37 @@ def bump(v, level):
 
 
 def sync_version_fields(s, new_v):
-    """把 version.js / version.min.js 里所有版本字段同步为 new_v"""
+    """把 version.js / version.min.js 里所有版本字段同步为 new_v
+
+    ★ 事故：原来每条正则都要求 `^\s*字段名:`（行首 + 单引号）。
+      version.js 确实是这样，但 version.min.js 是真正压缩过的单行文件
+      （`version:"0.8.0"` —— 双引号、无空格、且不在行首）。
+      结果 min 一条都匹配不到，脚本却照样打印 ✓ —— 于是线上自检永远
+      读到旧版本号，而版本号恰恰是判断"要不要提示刷新"的依据。
+      现在统一放宽：不要求行首，单双引号都认。
+    """
     a, b, c = new_v.split('.')
-    s = re.sub(r"(^\s*version:\s*)'[0-9.]+'", r"\g<1>'%s'" % new_v, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*major:\s*)'[0-9]+'", r"\g<1>'%s'" % a, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*api:\s*)'[0-9]+'", r"\g<1>'%s'" % b, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*patch:\s*)'[0-9]+'", r"\g<1>'%s'" % c, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*internalVersion:\s*)'[0-9.]+'", r"\g<1>'%s'" % new_v, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*formalVersion:\s*)'[0-9.]+'", r"\g<1>'%s'" % new_v, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*displayVersion:\s*)'v?[0-9.]+'", r"\g<1>'v%s'" % new_v, s, count=1, flags=re.M)
-    s = re.sub(r"(^\s*apiVersion:\s*)'[0-9]+'", r"\g<1>'%s'" % b, s, count=1, flags=re.M)
+    # \2 反向引用保证替换后仍是原来的引号风格（min 用双引号，源码用单引号）
+    fields = [
+        ('version', new_v, r"[0-9.]+"),
+        ('major', a, r"[0-9]+"),
+        ('api', b, r"[0-9]+"),
+        ('patch', c, r"[0-9]+"),
+        ('internalVersion', new_v, r"[0-9.]+"),
+        ('formalVersion', new_v, r"[0-9.]+"),
+        ('displayVersion', new_v, r"[0-9.]+"),
+        ('apiVersion', b, r"[0-9]+"),
+    ]
+    # ★ 引号必须可选：patch 字段是裸数字（patch: 13），其余是带引号字符串。
+    #   原正则强制要求引号 → patch 永远匹配不到 → 每次 bump 都悄悄漏改它，
+    #   表现为 version 写着 0.9.13 而 patch 还停在上一轮的数字。
+    #   现在用可选引号分组，替换时还原原引号风格（无引号则保持无引号）。
+    for field, val, pat in fields:
+        PAT = r"(\b" + field + r":\s*)(?:(['\"])(?:v?" + pat + r")\2|(v?" + pat + r"))"
+        s = re.sub(PAT,
+                   lambda m: m.group(1) + (m.group(2) + val + m.group(2)
+                                           if m.group(2) is not None else val),
+                   s, count=1)
     return s
 
 
