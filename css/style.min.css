@@ -3009,7 +3009,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .file-item:nth-child(13) { --fi: 12; }
 .file-item:nth-child(14) { --fi: 13; }
 .file-item .file-icon {
-    transition: transform var(--dur-md) var(--var(--hm-dec));
+    transition: transform var(--dur-md) var(--hm-dec);
 }
 .file-item:hover {
     transform: translateY(-2px);
@@ -3031,7 +3031,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 }
 .ctx-menu {
     transform: scale(.93) translateY(-4px);
-    transition: opacity var(--t-2) var(--hm-dec), transform var(--t-3) var(--var(--hm-dec));
+    transition: opacity var(--t-2) var(--hm-dec), transform var(--t-3) var(--hm-dec);
 }
 .ctx-menu.on {
     transform: scale(1) translateY(0);
@@ -3042,7 +3042,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 .toast.is-out {
     opacity: 0;
     transform: translateX(110%) scale(.96);
-    transition: opacity var(--t-3) var(--var(--hm-acc)), transform var(--t-3) var(--var(--hm-acc));
+    transition: opacity var(--t-3) var(--hm-acc), transform var(--t-3) var(--hm-acc);
 }
 .sidebar-overlay {
     display: block;
@@ -3059,7 +3059,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
 }
 @media (max-width: 768px) {
     .sidebar {
-        transition: transform var(--t-4) var(--var(--hm-dec));
+        transition: transform var(--t-4) var(--hm-dec);
     }
 }
 .spinner {
@@ -3140,7 +3140,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     border-bottom-color: transparent;
 }
 .nav-item {
-    transition: background var(--t-2) var(--hm-std), color var(--t-2) var(--hm-std), transform var(--dur-xs) var(--var(--hm-dec));
+    transition: background var(--t-2) var(--hm-std), color var(--t-2) var(--hm-std), transform var(--dur-xs) var(--hm-dec);
 }
 .nav-item:active {
     transform: scale(.975);
@@ -3152,7 +3152,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     from { background: var(--bg-hover); transform: scale(.98); }
 }
 .toolbar .search-box input {
-    transition: width var(--t-4) var(--var(--hm-dec)), box-shadow var(--t-3) var(--hm-std), border-color var(--t-3) var(--hm-std);
+    transition: width var(--t-4) var(--hm-dec), box-shadow var(--t-3) var(--hm-std), border-color var(--t-3) var(--hm-std);
 }
 .toolbar .search-box input:focus {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, .16);
@@ -3181,7 +3181,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     box-shadow: 0 10px 24px rgba(31, 35, 40, .18);
 }
 .dash-card {
-    transition: transform var(--dur-md) var(--var(--hm-dec)), box-shadow var(--dur-md) var(--hm-std);
+    transition: transform var(--dur-md) var(--hm-dec), box-shadow var(--dur-md) var(--hm-std);
 }
 .dash-num {
     font-variant-numeric: tabular-nums;
