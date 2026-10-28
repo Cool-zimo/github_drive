@@ -665,3 +665,85 @@ audio.tp-media { max-width: 480px; }
     line-height: 1.35;
     margin: 1.6em 0 .6em;
 }
+
+/* ============ 侧边栏右键重命名 ============ */
+
+/*
+ * ★ 用 position:fixed 而不是 absolute：菜单要跟着鼠标落在视口里的位置，
+ *   absolute 会受 .tp-side 的 overflow 影响，滚动列表时位置会飘。
+ */
+.tp-ctx {
+    position: fixed;
+    z-index: 90;
+    background: var(--tp-bg);
+    border: 1px solid var(--tp-line);
+    border-radius: 10px;
+    box-shadow: var(--tp-shadow);
+    padding: 6px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 148px;
+}
+.tp-ctx.show { display: flex; }
+
+.tp-ctx button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: none;
+    padding: 8px 10px;
+    border-radius: 6px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--tp-fg);
+    font-family: inherit;
+    font-size: 13px;
+    /* 图标是内联 SVG，不给颜色会继承按钮文字色，深色下正好跟着变 */
+}
+.tp-ctx button:hover { background: var(--tp-bg-soft); }
+.tp-ctx .ico { width: 15px; height: 15px; flex: 0 0 15px; color: var(--tp-fg-dim); }
+
+/*
+ * 行内改名输入框：撑满 .tp-item-name 那一格，看起来像"原地编辑"
+ * 而不是弹了个框。min-width:0 是必须的 —— flex/grid 子项默认
+ * min-width:auto，长文件名会把输入框顶出容器。
+ */
+.tp-rename-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 13px;
+    color: var(--tp-fg);
+    background: var(--tp-bg);
+    border: 1px solid var(--tp-accent);
+    border-radius: 4px;
+    padding: 1px 4px;
+    outline: none;
+}
+.tp-item:has(.tp-rename-input) { background: var(--tp-bg-soft); }
+
+.tp-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(8px);
+    background: var(--tp-fg);
+    color: var(--tp-bg);
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    box-shadow: var(--tp-shadow);
+    z-index: 120;
+    opacity: 0;
+    pointer-events: none;
+    /* ★ 用 opacity + visibility 而不是 display：display 切不过渡，
+       提示会硬闪一下就没了，看不清写的什么 */
+    visibility: hidden;
+    transition: opacity .18s var(--tp-ease, ease), transform .18s var(--tp-ease, ease), visibility .18s;
+    max-width: 78vw;
+    text-align: center;
+}
+.tp-toast.show { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
