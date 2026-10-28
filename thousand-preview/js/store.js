@@ -129,6 +129,31 @@
         },
 
         /**
+         * 写回某个账号的 VFS 缓存
+         *
+         * ★ 重命名这类"改了云端 config.json"的操作必须同步写回这里。
+         *   千览的列表是从这份缓存渲染的（loadFiles 读 getVFS），
+         *   只改云端不改缓存，界面上会一直显示旧名字，直到 Drive 那边
+         *   重新推一次缓存——那可能是几天后。
+         *
+         * ★ 只写带账号前缀的那份 key，绝不回写不带前缀的旧 key：
+         *   那份是历史遗留，多账号场景下会被别的账号读到。
+         */
+        setVFS(accountId, vfs) {
+            if (!accountId || !vfs) return false;
+            try {
+                localStorage.setItem(
+                    PREFIX + 'account_' + accountId + '_vfs',
+                    JSON.stringify(vfs));
+                return true;
+            } catch (e) {
+                // localStorage 写满（配额 5MB）时静默失败，不打断重命名——
+                // 云端已经改成功了，缓存这次没跟上不是致命错误
+                return false;
+            }
+        },
+
+        /**
          * 扫出所有账号的 VFS —— 用于"这个账号没文件"时提示切换账号。
          * 不做切换猜测，只是让用户知道别的账号里有东西。
          */
