@@ -76,6 +76,81 @@
             }
             return new TextEncoder().encode(content);
         }
+
+        /**
+         * 通用写请求（PUT / POST / DELETE）
+         *
+         * ★ 单独写一份而不是复用 _get：_get 带 429/5xx 重试，而写操作
+         *   重试有副作用——第一次其实已经成功了只是响应丢了，再发一次
+         *   会变成重复提交。所以写请求只发一次，让调用方决定怎么办。
+         *
+         * ★ 409 要单独抛出来：config.json 是多人争抢的单文件，
+         *   sha 冲突意味着"我读完之后有人改过"，必须重读再改，
+         *   硬覆盖会把别人的改动吞掉。
+         */
+        async _send(method, path, body) {
+            const headers = {
+                'Authorization': 'token ' + this.token,
+                'Accept': 'application/vnd.github.v3+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'Content-Type': 'application/json',
+            };
+            const r = await fetch(GH + path, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : undefined,
+            });
+            const txt = await r.text().catch(() => '');
+            let data = null;
+            try { data = txt ? JSON.parse(txt) : null; } catch { data = null; }
+            if (!r.ok) {
+                const e = new Error('HTTP ' + r.status + ' ' + txt.slice(0, 160));
+                e.status = r.status;
+                throw e;
+            }
+            return data;
+        }
+
+        /** 读 Drive 的 config.json，连 sha 一起返回（写回要用） */
+        async getConfig() {
+            const owner = app.login;
+            if (!owner) throw new Error('还没拿到账号名，稍等一下再试');
+            const d = await this._send('GET',
+                `/repos/${owner}/github-drive-config/contents/config.json`);
+            return { sha: d.sha, cfg: JSON.parse(b64Decode(d.content)) };
+        }
+
+        /** 写回 config.json。sha 不对会被 GitHub 拒（409），由调用方重读重来 */
+        async putConfig(cfg, sha, msg) {
+            const owner = app.login;
+            return this._send('PUT',
+                `/repos/${owner}/github-drive-config/contents/config.json`,
+                { message: msg, content: b64Encode(JSON.stringify(cfg)), sha, branch: 'main' });
+        }
+    }
+
+    // ---------- base64（UTF-8 安全） ----------
+
+    /**
+     * ★ 不能直接 btoa(中文)：btoa 只吃 Latin-1，中文会抛异常。
+     *   也不能 unescape(encodeURIComponent()) 那套老写法——它已经被
+     *   标准废弃。走 TextEncoder + 分块 String.fromCharCode 最稳。
+     */
+    function b64Encode(str) {
+        const bytes = new TextEncoder().encode(str);
+        let bin = '';
+        const CH = 32768;   // 一次 apply 太多参数会爆栈，分片拼接
+        for (let i = 0; i < bytes.length; i += CH) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+        }
+        return btoa(bin);
+    }
+
+    function b64Decode(b64) {
+        const bin = atob(b64.replace(/\s/g, ''));
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
     }
 
     /**
@@ -134,6 +209,8 @@
         download: '<path d="M12 3v12M7 11l5 5 5-5"/><path d="M4 20h16"/>',
         home: '<path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
         user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>',
+        edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+        copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
     };
 
     function icon(name, cls) {
@@ -273,6 +350,7 @@
 
     function useAccount(acc) {
         app.accountId = acc.id;
+        app.login = (acc.user && (acc.user.login || acc.user.name)) || acc.id;
         app.api = new Api(acc.token);
         TPStore.setLastAccountId(acc.id);
         $('#tp-login').classList.remove('show');
@@ -368,6 +446,8 @@
         for (const it of items) {
             const row = document.createElement('button');
             row.className = 'tp-item' + (app.current && app.current.path === it.path ? ' active' : '');
+            row.dataset.path = it.path;   // 右键菜单要靠它找回是哪一行
+            row._it = it;                 // 文件夹条目不在 app.files 里，直接挂对象引用
             const ic = it.isDir ? 'folder' : (KIND_ICON[it.kind] || 'other');
             const meta = it.isDir ? '文件夹'
                 : TPRender.fmtSize(it.size) + (it.chunks.length > 1 ? ' · ' + it.chunks.length + ' 片' : '');
@@ -395,6 +475,236 @@
     }
 
     function enterDir(p) { app.dir = p; renderList(); }
+
+    // ---------- 重命名（侧边栏右键） ----------
+
+    /**
+     * 在虚拟文件系统里重命名，同时改云端 config.json 和本地缓存
+     *
+     * ★ 为什么两边都要改：
+     *   云端 config.json 是权威（Drive 也读它），本地 VFS 是千览渲染用的
+     *   缓存。只改云端 → 界面上还是旧名字；只改缓存 → 一刷新就打回原形。
+     *
+     * ★ 文件夹重命名不是改一个键就完事：/a/b 改成 /a/c 之后，
+     *   /a/b/xx.jpg、/a/b/sub/ 这些子项的路径键全都得跟着换前缀，
+     *   否则文件会"消失"——它们还挂在已经不存在的父目录下。
+     *
+     * ★ 写之前重新 GET 一次拿最新 sha：config.json 是单文件，
+     *   Drive 那边可能刚改过。拿旧 sha 去 PUT 会被 409 拒掉。
+     */
+    async function doRename(it, newName) {
+        const oldPath = it.path;
+        const isDir = !!it.isDir;
+
+        newName = String(newName || '').trim();
+        if (!newName) { toast('名字不能为空'); return false; }
+        if (newName.indexOf('/') !== -1) { toast('名字里不能有 /'); return false; }
+        if (newName === it.name) return false;
+
+        const cut = oldPath.lastIndexOf('/');
+        const parent = cut > 0 ? oldPath.slice(0, cut) : '';
+        const newPath = parent + '/' + newName;
+        const now = new Date().toISOString();
+
+        // 同级重名先在本地缓存里挡一道，省一次网络往返
+        const vfs = TPStore.getVFS(app.accountId);
+        const bucket = isDir ? vfs.folders : vfs.files;
+        if (bucket && bucket[newPath]) { toast('已经有同名' + (isDir ? '文件夹' : '文件') + '了'); return false; }
+
+        try {
+            const { sha, cfg } = await app.api.getConfig();
+            applyRename(cfg, oldPath, newPath, newName, isDir, now);
+            await app.api.putConfig(cfg, sha,
+                (isDir ? '重命名文件夹 ' : '重命名 ') + it.name + ' → ' + newName);
+        } catch (e) {
+            // 409：读完之后有人改过 config.json，重读一次再试，只重试一轮
+            if (e.status === 409) {
+                try {
+                    const again = await app.api.getConfig();
+                    applyRename(again.cfg, oldPath, newPath, newName, isDir, now);
+                    await app.api.putConfig(again.cfg, again.sha,
+                        (isDir ? '重命名文件夹 ' : '重命名 ') + it.name + ' → ' + newName);
+                } catch (e2) { toast('重命名失败：' + e2.message); return false; }
+            } else {
+                toast('重命名失败：' + (e.message || e));
+                return false;
+            }
+        }
+
+        // 云端改成功了，同步本地缓存
+        applyRename(vfs, oldPath, newPath, newName, isDir, now);
+        TPStore.setVFS(app.accountId, vfs);
+
+        // 继续阅读里存的名字也跟着换，否则卡片上还是旧名
+        // （fingerprint 只算 sha+size 不含名字，所以进度不会丢）
+        try {
+            const hist = TPStore.getHistory();
+            const hit = hist.find(h => h && h.name === it.name);
+            if (hit && TPStore.addHistory) {
+                TPStore.addHistory(Object.assign({}, hit, { name: newName }));
+            }
+        } catch { /* 历史改名失败不影响重命名本身 */ }
+
+        if (app.current && app.current.path === oldPath) {
+            app.current = Object.assign({}, app.current, { path: newPath, name: newName });
+            $('#tp-view-title').textContent = newName;
+            closeView();
+        }
+        loadFiles();
+        toast('已改名为 ' + newName);
+        return true;
+    }
+
+    /** 纯函数：把一次重命名应用到任意一份 {files, folders} 结构上 */
+    function applyRename(root, oldPath, newPath, newName, isDir, now) {
+        const fi = root.fileIndex || root;
+        if (!fi.files) fi.files = {};
+        if (!fi.folders) fi.folders = {};
+        const pref = oldPath + '/';
+        const np = newPath + '/';
+
+        if (isDir) {
+            if (fi.folders[newPath]) throw new Error('已存在同名文件夹');
+            const node = fi.folders[oldPath];
+            if (!node) throw new Error('找不到这个文件夹');
+            fi.folders[newPath] = Object.assign({}, node, { name: newName });
+            delete fi.folders[oldPath];
+        } else {
+            if (fi.files[newPath]) throw new Error('已存在同名文件');
+            const node = fi.files[oldPath];
+            if (!node) throw new Error('找不到这个文件');
+            fi.files[newPath] = Object.assign({}, node, { name: newName, updatedAt: now });
+            delete fi.files[oldPath];
+        }
+
+        // 子项前缀迁移（文件夹重命名时才会命中）
+        for (const k of Object.keys(fi.files)) {
+            if (k.indexOf(pref) === 0) {
+                const v = fi.files[k]; delete fi.files[k];
+                fi.files[np + k.slice(pref.length)] = v;
+            }
+        }
+        for (const k of Object.keys(fi.folders)) {
+            if (k.indexOf(pref) === 0) {
+                const v = fi.folders[k]; delete fi.folders[k];
+                fi.folders[np + k.slice(pref.length)] = v;
+            }
+        }
+
+        // 收藏 / 最近 里存的是路径字符串，改名后一并换掉，
+        // 否则点收藏会跳到一个已经不存在的路径
+        ['starred', 'recent'].forEach(key => {
+            if (!Array.isArray(root[key])) return;
+            root[key] = root[key].map(p => {
+                if (typeof p !== 'string') return p;
+                if (p === oldPath) return newPath;
+                if (p.indexOf(pref) === 0) return np + p.slice(pref.length);
+                return p;
+            });
+        });
+
+        if (root.fileIndex) root.updatedAt = now;
+    }
+
+    /** 把某一行变成输入框，回车提交 / Esc 取消 / 失焦提交 */
+    function startInlineRename(row, it) {
+        const nameEl = row.querySelector('.tp-item-name');
+        if (!nameEl || row.dataset.renaming === '1') return;
+        row.dataset.renaming = '1';
+
+        const old = it.name;
+        const input = document.createElement('input');
+        input.className = 'tp-rename-input';
+        input.value = old;
+        // 有后缀的文件只选中主文件名，符合常见系统的习惯
+        const dot = old.lastIndexOf('.');
+        nameEl.textContent = '';
+        nameEl.appendChild(input);
+        input.focus();
+        try { input.setSelectionRange(0, dot > 0 ? dot : old.length); } catch { input.select(); }
+
+        let done = false;
+        const finish = async (commit) => {
+            if (done) return;
+            done = true;
+            const val = commit ? input.value : null;
+            row.dataset.renaming = '0';
+            nameEl.textContent = old;          // 先还原，等云端结果再刷新
+            if (commit && val && val.trim() !== old) await doRename(it, val);
+            else loadFiles();
+        };
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+            e.stopPropagation();               // 别让 Esc 触发"关闭阅读区"
+        });
+        input.addEventListener('click', e => e.stopPropagation());
+        input.addEventListener('blur', () => finish(true));
+    }
+
+    // ---------- 右键菜单 ----------
+
+    function ctxMenu() {
+        let el = $('#tp-ctx');
+        if (el) return el;
+        el = document.createElement('div');
+        el.className = 'tp-ctx';
+        el.id = 'tp-ctx';
+        el.innerHTML =
+            '<button data-act="rename">' + icon('edit') + '<span>重命名</span></button>' +
+            '<button data-act="copy">' + icon('copy') + '<span>复制路径</span></button>';
+        document.body.appendChild(el);
+        el.addEventListener('click', (e) => {
+            const b = e.target.closest('button');
+            if (!b) return;
+            const it = el._item;
+            hideCtx();
+            if (!it) return;
+            if (b.dataset.act === 'rename') {
+                const row = $('#tp-list').querySelector('[data-path="' + cssEsc(it.path) + '"]');
+                if (row) startInlineRename(row, it);
+            } else if (b.dataset.act === 'copy') {
+                navigator.clipboard && navigator.clipboard.writeText(it.path)
+                    .then(() => toast('路径已复制'), () => toast('复制失败'));
+            }
+        });
+        return el;
+    }
+
+    function showCtx(x, y, it) {
+        const el = ctxMenu();
+        el._item = it;
+        el.classList.add('show');
+        // ★ 必须先 add('show') 再量尺寸 —— display:none 时 offsetWidth 是 0，
+        //   拿 0 去算边界会让菜单永远贴在左上角
+        const w = el.offsetWidth, h = el.offsetHeight;
+        el.style.left = Math.max(4, Math.min(x, window.innerWidth - w - 8)) + 'px';
+        el.style.top = Math.max(4, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    }
+
+    function hideCtx() {
+        const el = $('#tp-ctx');
+        if (el) el.classList.remove('show');
+    }
+
+    function cssEsc(s) {
+        return String(s).replace(/["\\]/g, '\\$&');
+    }
+
+    let toastTimer = null;
+    function toast(msg) {
+        let el = $('#tp-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'tp-toast';
+            el.id = 'tp-toast';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+    }
 
     // ---------- 继续阅读 ----------
 
@@ -645,6 +955,24 @@
             if (b) enterDir(b.dataset.d);
         });
         $('#tp-close').addEventListener('click', closeView);
+
+        // 侧边栏右键 → 重命名 / 复制路径
+        $('#tp-list').addEventListener('contextmenu', (e) => {
+            const row = e.target.closest('.tp-item');
+            if (!row || !row._it) return;
+            e.preventDefault();
+            showCtx(e.clientX, e.clientY, row._it);
+        });
+        // 点别处、滚动、Esc 都把菜单收起来，否则它会一直浮在屏幕上
+        document.addEventListener('click', hideCtx);
+        document.addEventListener('scroll', hideCtx, true);
+        window.addEventListener('resize', hideCtx);
+        // F2：给"当前打开的那个文件"改名，桌面端的通用习惯
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'F2' || !app.current) return;
+            const row = $('#tp-list').querySelector('[data-path="' + cssEsc(app.current.path) + '"]');
+            if (row) { e.preventDefault(); startInlineRename(row, row._it || app.current); }
+        });
         $('#tp-user').addEventListener('click', showAccountMenu);
 
         // 搜索框 Esc 清空，符合大多数阅读器的习惯
