@@ -24,6 +24,32 @@ function gdIco(name, size, extra) {
     });
 }
 
+/**
+ * ★ 给 onclick="f('${x}')" 这类内联 JS 字符串用的双层转义。
+ *
+ *   两层上下文叠加，只转一层必然漏：
+ *     1. JS 字符串字面量（单引号）
+ *     2. HTML 属性值（双引号包裹整个 onclick）
+ *   浏览器**先**做 HTML 解码，所以 &#39; 会被还原成裸单引号，
+ *   照样能闭合 JS 字符串 —— 必须先在 JS 层把 ' 变成 \'。
+ *
+ *   \ 必须先转义，否则后面插入的反斜杠会被二次转义。
+ *   U+2028/2029 在 JS 源码里是行终止符，不转会整段 onclick 语法错误。
+ */
+function gdEscJs(v) {
+    return String(v == null ? '' : v)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 class App {
     constructor() {
         this.api = null;
@@ -77,6 +103,24 @@ class App {
         const dateVersion = (typeof APP_VERSION !== 'undefined') ? APP_VERSION.internalVersion : 'unknown';
         versionEl.textContent = formalVersion;
         versionEl.title = I18n.t('app.versionTitle').replace('{version}', dateVersion);
+    }
+
+    /**
+     * ★ 用账号 id 登录，而不是把 token 拼进 onclick。
+     *
+     *   旧写法 <div onclick="app.login('${acc.token}')"> 让 token 出现在
+     *   真实 DOM 里 —— 任何能写 DOM 的东西（插件、第三方脚本）都能直接读到，
+     *   比文件路径那类注入的攻击面大得多。
+     *   改成只暴露 id，token 从内存里的账号表取。
+     */
+    async loginById(id) {
+        const list = (this.storage && this.storage.getAccounts && this.storage.getAccounts()) || [];
+        const acc = list.find(a => String(a.id) === String(id));
+        if (!acc || !acc.token) {
+            this.ui?.showToast(I18n.t('login.enterToken'), 'error');
+            return;
+        }
+        return await this.login(acc.token);
     }
 
     async login(token) {
@@ -2170,8 +2214,8 @@ class App {
                     <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};"></div>
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    ${r.isDefault ? '' : `<button class="btn-secondary btn-sm" onclick="app.setDefaultStorageRepo('${r.owner}','${r.repo}')">设为默认</button>`}
-                    <button class="btn-secondary btn-sm" onclick="app.openRepoOnGithub('${r.owner}','${r.repo}')">在 GitHub 打开</button>
+                    ${r.isDefault ? '' : `<button class="btn-secondary btn-sm" onclick="app.setDefaultStorageRepo('${gdEscJs(r.owner)}','${gdEscJs(r.repo)}')">设为默认</button>`}
+                    <button class="btn-secondary btn-sm" onclick="app.openRepoOnGithub('${gdEscJs(r.owner)}','${gdEscJs(r.repo)}')">在 GitHub 打开</button>
                 </div>
               </div>`;
         }
