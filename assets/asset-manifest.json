@@ -1,7 +1,7 @@
 {
   "hashes": {
     "anim": "8db9aa997e",
-    "app": "efa021be65",
+    "app": "56c2e7602b",
     "branch-guard": "2a17031683",
     "bridge": "5cd1cbc1ce",
     "cangshu-link": "d87df4f3cb",
@@ -17,13 +17,15 @@
     "maintain": "b10def0baf",
     "oauth": "0482c94889",
     "plugin-api": "c3c2940bd5",
-    "share": "cc060bd75a",
+    "share": "6be7074ef9",
     "storage": "915f127e93",
     "task-dock": "8872107af0",
     "theme": "b0ec742409",
-    "ui": "1fdc4c5ce1",
-    "version": "c3bc1469b7",
-    "style": "287308cdc2",
-    "onboarding": "5f440a0702"
+    "ui": "12fa35f804",
+    "version": "4078af4524",
+    "style": "351f1ad44f",
+    "onboarding": "5f440a0702",
+    "ban-sync": "fe474431a5",
+    "community": "e186919083"
   }
 }
