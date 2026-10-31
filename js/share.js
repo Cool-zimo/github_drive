@@ -585,6 +585,26 @@ class ShareManager {
     }
 
     /**
+     * ★ 给 onclick="f('${x}')" 用的双层转义（JS 字符串 + HTML 属性）。
+     *   escapeHtml 把 ' 转成 &#39; 在这里**不够**：浏览器先做 HTML 解码，
+     *   &#39; 还原成裸单引号，照样能闭合 JS 字符串。
+     *   \ 必须先转，U+2028/2029 是行终止符，不转会整段 onclick 语法错误。
+     */
+    escapeJs(value) {
+        return String(value ?? '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    /**
      * 生成期直接渲染出静态文件条目
      *
      * 之前列表完全靠内联 JS 渲染，一旦脚本有任何语法错误，
@@ -605,13 +625,13 @@ class ShareManager {
         const thumb = isImg
             ? `<div class="thumb-wrap"><img class="file-thumb" src="${url}" loading="lazy" alt=""><span class="thumb-zoom">${this._zoomSvg()}</span></div>`
             : `<span class="file-icon">${this.getFileIcon(name)}</span>`;
-        return `<li class="file-item${isImg ? ' is-img' : ''}" onclick="window.open('${url}', '_blank')">
+        return `<li class="file-item${isImg ? ' is-img' : ''}" onclick="window.open('${this.escapeJs(url)}', '_blank')">
                             ${thumb}
                             <div class="file-info">
                                 <div class="file-name">${this.escapeHtml(name)}</div>
                                 <div class="file-size">${f.size ? this.formatSize(f.size) : ''}</div>
                             </div>
-                            <button class="download-btn" onclick="event.stopPropagation(); window.open('${url}', '_blank')"><span data-i18n="download">Download</span></button>
+                            <button class="download-btn" onclick="event.stopPropagation(); window.open('${this.escapeJs(url)}', '_blank')"><span data-i18n="download">Download</span></button>
                         </li>`;
     }
 
