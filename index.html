@@ -9,16 +9,16 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=0568b4a909" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=351f1ad44f" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.9.13"}</style>
+    <style>#gd-css-stamp{--stamp:"0.9.14"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=092">
-    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=092">
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=092">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=0.9.14">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=0.9.14">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=0.9.14">
     <!-- ★ 历史版本入口：?version=0.8.8 / ?v= / ?virson=
          重定向到 versions/<v>/index.html。
          快照是从仓库历史里抄出来的静态文件，
@@ -49,7 +49,7 @@
     })();
     </script>
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.9.13"></script>
+    <script src="js/branch-guard.min.js?v=0.9.14"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -70,9 +70,9 @@
            → 第二份整体 SyntaxError。现在把第一份 ui 删掉（oauth 已在其前），
            一份就够，顺序也仍然正确。 -->
     <script defer src="js/oauth.min.js?h=0482c94889" data-gd-core="oauth"></script>
-    <script defer src="js/ui.min.js?h=1fdc4c5ce1" data-gd-core="ui"></script>
+    <script defer src="js/ui.min.js?h=12fa35f804" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=085553dff9" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=5a2ebe2581" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=4078af4524" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=908e5708ce" data-gd-core="custom"></script>
@@ -82,7 +82,7 @@
          且 build.py 的 _sync_core_tags 会按 CORE_FILES 整块重写上面这段，
          混进来的标签会被静默删掉。 -->
     <script defer src="js/onboarding.min.js?h=5f440a0702" data-gd-core="onboarding"></script>
-    <script defer src="js/app.min.js?h=efa021be65" data-gd-core="app">
+    <script defer src="js/app.min.js?h=56c2e7602b" data-gd-core="app">
     </script>
 
     <script>
@@ -113,11 +113,11 @@
     })();
     </script>
 </head>
-<body class="gd-logged-out" data-api-v="8">
+<body class="gd-logged-out" data-api-v="9">
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
-            <div class="login-logo"><img src="assets/icon-drive-192.png?v=092" alt="GitHub Drive" width="72" height="72"></div>
+            <div class="login-logo"><img src="assets/icon-drive-192.png?v=0.9.14" alt="GitHub Drive" width="72" height="72"></div>
             <h1>GitHub Drive</h1>
             <p class="login-subtitle"><span data-i18n="login.subtitle">Turn your GitHub repo into a private cloud drive</span></p>
 
@@ -310,7 +310,7 @@
         <!-- 侧边栏 -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <span class="sidebar-logo"><img src="assets/icon-drive-192.png?v=092" alt="" width="24" height="24"></span>
+                <span class="sidebar-logo"><img src="assets/icon-drive-192.png?v=0.9.14" alt="" width="24" height="24"></span>
                 <span class="sidebar-title">GitHub Drive</span>
             </div>
             <nav class="sidebar-nav">
@@ -623,12 +623,12 @@
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
             'anim': '8db9aa997e',
-            'ban-sync': '756d7b234c',
-            'app': 'efa021be65',
+            'app': '56c2e7602b',
+            'ban-sync': 'fe474431a5',
             'branch-guard': '2a17031683',
             'bridge': '5cd1cbc1ce',
             'cangshu-link': 'd87df4f3cb',
-            'community': 'd5d4d04d77',
+            'community': 'e186919083',
             'config-sync': 'd3c84a594e',
             'custom': '908e5708ce',
             'extension': 'ac2832ce10',
@@ -637,17 +637,19 @@
             'github-api': '389e7c20c9',
             'i18n': '085553dff9',
             'i18n-scan': '385acf8972',
-            'onboarding': '5f440a0702',
             'icons': 'bde278015a',
             'maintain': 'b10def0baf',
             'oauth': '0482c94889',
+            'onboarding': '5f440a0702',
             'plugin-api': 'c3c2940bd5',
-            'share': '357b89b7e8',
+            'share': '6be7074ef9',
             'storage': '915f127e93',
+            'style': '351f1ad44f',
             'task-dock': '8872107af0',
             'theme': 'b0ec742409',
-            'ui': '1fdc4c5ce1',
-            'version': 'c3bc1469b7'
+            'ui': '12fa35f804',
+            'version': '4078af4524'
+        
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
