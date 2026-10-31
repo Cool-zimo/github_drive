@@ -752,13 +752,13 @@ class UI {
         
         container.style.display = 'block';
         list.innerHTML = accounts.map(acc => `
-            <div class="account-item" onclick="app.login('${acc.token}')">
+            <div class="account-item" onclick="app.loginById('${this._escJs(acc.id)}')">
                 <img src="${acc.user?.avatar_url || ''}" alt="${acc.user?.login || ''}" class="account-avatar">
                 <div class="account-info">
                     <div class="account-name">${acc.user?.name || acc.user?.login || 'Unknown'}</div>
                     <div class="account-login">@${acc.user?.login || ''}</div>
                 </div>
-                <button class="account-remove" onclick="event.stopPropagation();ui.removeAccount('${acc.id}')" title="移除账号">×</button>
+                <button class="account-remove" onclick="event.stopPropagation();ui.removeAccount('${this._escJs(acc.id)}')" title="移除账号">×</button>
             </div>
         `).join('');
     }
@@ -780,13 +780,13 @@ class UI {
         accounts.forEach(acc => {
             const isCurrent = acc.id === currentId;
             body += `
-                <div class="account-item ${isCurrent ? 'account-current' : ''}" onclick="${isCurrent ? '' : `app.switchAccount('${acc.id}')`}" style="${isCurrent ? 'opacity:0.6;cursor:default;' : ''}">
+                <div class="account-item ${isCurrent ? 'account-current' : ''}" onclick="${isCurrent ? '' : `app.switchAccount('${this._escJs(acc.id)}')`}" style="${isCurrent ? 'opacity:0.6;cursor:default;' : ''}">
                     <img src="${acc.user?.avatar_url || ''}" alt="" class="account-avatar">
                     <div class="account-info">
                         <div class="account-name">${acc.user?.name || acc.user?.login || 'Unknown'} ${isCurrent ? '<span style="font-size:11px;color:#16a34a;">(当前)</span>' : ''}</div>
                         <div class="account-login">@${acc.user?.login || ''}</div>
                     </div>
-                    ${isCurrent ? '' : `<button class="account-remove" onclick="event.stopPropagation();ui.removeAccount('${acc.id}')" title="移除账号">×</button>`}
+                    ${isCurrent ? '' : `<button class="account-remove" onclick="event.stopPropagation();ui.removeAccount('${this._escJs(acc.id)}')" title="移除账号">×</button>`}
                 </div>
             `;
         });
@@ -2009,7 +2009,7 @@ class UI {
              </div>`;
 
         const toggle = (act, cur, onT, offT) =>
-            `<button onclick="ui.toggleAutoCompact('${act}')"
+            `<button onclick="ui.toggleAutoCompact('${this._escJs(act)}')"
                 style="min-width:64px;padding:6px 12px;border-radius:999px;border:1px solid #d1d5db;
                        background:${cur ? '#2563eb' : '#f3f4f6'};color:${cur ? '#fff' : '#6b7280'};
                        font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
@@ -2439,6 +2439,38 @@ class UI {
     /** 属性转义：比 _escHtml 多转义反引号和等号，防止拼进 data-* 后截断属性 */
     _escAttr(v) {
         return this._escHtml(v).replace(/`/g, '&#96;').replace(/=/g, '&#61;');
+    }
+
+    /**
+     * ★ 双层转义：把值安全地放进 onclick="f('${x}')" 这类**内联 JS 字符串**里。
+     *
+     *   这是两个上下文叠在一起，只转义一层必然漏：
+     *     1. JS 字符串字面量（单引号包裹）
+     *     2. HTML 属性值（双引号包裹整个 onclick）
+     *
+     *   ★ 为什么 _escAttr 不够：它把 ' 转成 &#39;，而浏览器**先**做 HTML 解码
+     *     —— &#39; 解码回 ' 之后，JS 层拿到的就是一个能闭合字符串的裸单引号，
+     *     等于没转义。必须先在 JS 层把 ' 变成 \'，解码回来是 \'，才是安全的。
+     *
+     *   ★ 顺序不能反：\ 必须先转，否则后面插入的 \ 会被二次转义。
+     *
+     *   ★ U+2028 / U+2029 在 JSON 里合法、在 JS 源码里是行终止符，
+     *     不转义会直接语法错误（整段 onclick 失效，页面无任何提示）。
+     */
+    _escJs(v) {
+        return String(v == null ? '' : v)
+            // 第一层：JS 字符串字面量
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029')
+            // 第二层：HTML 属性值
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     /**
@@ -3699,7 +3731,7 @@ class UI {
             ? '<p style="color:#9ca3af;text-align:center;padding:24px 0;">暂无子文件夹，选择根目录即可</p>'
             : folders.map(f => {
                 const indent = f.depth * 16;
-                return `<div class="folder-picker-item" style="padding-left:${12 + indent}px" onclick="ui.selectFolder('${action}','${f.relativePath}')">📁 ${f.name}</div>`;
+                return `<div class="folder-picker-item" style="padding-left:${12 + indent}px" onclick="ui.selectFolder('${this._escJs(action)}','${this._escJs(f.relativePath)}')">📁 ${f.name}</div>`;
             }).join('');
         this.showModal(
             title,
@@ -4015,7 +4047,7 @@ class UI {
                     </div>
                     <div class="share-link-box">
                         <input type="text" value="${result.shareUrl}" readonly id="share-url-input">
-                        <button class="btn-secondary" onclick="ui.copyToClipboard('${result.shareUrl}')"><span data-i18n='btn.copy'>Copy</span></button>
+                        <button class="btn-secondary" onclick="ui.copyToClipboard('${this._escJs(result.shareUrl)}')"><span data-i18n='btn.copy'>Copy</span></button>
                     </div>
                     <div style="margin-top:12px;">
                         <a href="${result.shareUrl}" target="_blank" class="btn-text" style="color:#0969da;">在新窗口打开 →</a>
@@ -4106,7 +4138,7 @@ class UI {
             const hasFiles = (share.files || []).length > 0;
             const filesHtml = hasFiles
                 ? (share.files || []).map(f => `<span class="share-file-tag">${f.name}</span>`).join('')
-                : `<button class="btn-text btn-sm" onclick="ui.loadShareFiles('${share.repoName}')">查看文件</button>`;
+                : `<button class="btn-text btn-sm" onclick="ui.loadShareFiles('${this._escJs(share.repoName)}')">查看文件</button>`;
             const safeUrl = (share.shareUrl || '').replace(/'/g, "\\'");
             const id = share.id || share.repoName;
             const badge = share.fromRemote
@@ -4128,12 +4160,12 @@ class UI {
                     </div>
                     <div class="share-card-link">
                         <input type="text" value="${share.shareUrl || ''}" readonly onclick="this.select()" title="点击选中">
-                        <button class="btn-secondary btn-sm" onclick="ui.copyToClipboard('${safeUrl}')"><span data-i18n='btn.copy'>Copy</span></button>
+                        <button class="btn-secondary btn-sm" onclick="ui.copyToClipboard('${this._escJs(safeUrl)}')"><span data-i18n='btn.copy'>Copy</span></button>
                     </div>
                     <div class="share-card-actions">
                         <a href="${share.shareUrl}" target="_blank" class="btn-text"><span data-i18n='share.open'>🔗 Open Share</span></a>
                         <a href="${share.repoUrl}" target="_blank" class="btn-text"><span data-i18n='share.viewRepo'>📂 View Repo</span></a>
-                        <button class="btn-text btn-danger" onclick="app.deleteShare('${id}')">🗑️ 删除</button>
+                        <button class="btn-text btn-danger" onclick="app.deleteShare('${this._escJs(id)}')">🗑️ 删除</button>
                     </div>
                 </div>
             `;
@@ -4243,6 +4275,24 @@ class UI {
         return this.escapeHtml(text == null ? '' : String(text))
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    /**
+     * 同 _escJs：给 onclick="f('${x}')" 这类内联 JS 字符串用的双层转义。
+     * 两个对象各有一份转义实现（历史原因），所以这里也补一份，行为完全一致。
+     */
+    escapeJs(text) {
+        return String(text == null ? '' : text)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     // ==================== 插件广场 ====================
@@ -4392,8 +4442,8 @@ class UI {
                 ? `onclick="ui.installCommunityPlugin(${JSON.stringify(p).replace(/"/g, '&quot;')})"`
                 : `onclick="app.installPlugin(${JSON.stringify(p).replace(/"/g, '&quot;')})"`;
             const actionBtn = isInstalled
-                ? `<button class="btn-primary btn-sm" onclick="app.runPlugin('${p.id}')">▶️ 运行</button>
-                   <button class="btn-secondary btn-sm" onclick="app.uninstallPlugin('${p.id}')">🗑️ 卸载</button>`
+                ? `<button class="btn-primary btn-sm" onclick="app.runPlugin('${this._escJs(p.id)}')">▶️ 运行</button>
+                   <button class="btn-secondary btn-sm" onclick="app.uninstallPlugin('${this._escJs(p.id)}')">🗑️ 卸载</button>`
                 : `<button class="btn-primary btn-sm" ${installAction}><span data-i18n='btn.install'>⬇️ Install</span></button>`;
             return `
                 <div class="plugin-card">
@@ -4543,7 +4593,7 @@ window.I18n = {
                     <span class="plugin-bar-ver">${this.escapeHtml(plugin.version || '')}</span>
                 </span>
                 <span class="plugin-bar-actions">
-                    <button class="plugin-btn" onclick="ui.closePluginRunner('${modalId}','${blobUrl || ''}')">✕ 关闭</button>
+                    <button class="plugin-btn" onclick="ui.closePluginRunner('${this._escJs(modalId)}','${this._escJs(blobUrl || '')}')">✕ 关闭</button>
                 </span>
             </div>
             <iframe class="plugin-frame" src="${src}" allow="clipboard-read; clipboard-write"></iframe>
