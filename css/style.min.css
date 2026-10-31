@@ -2958,7 +2958,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
     text-align: center; padding: 48px 16px; color: #9ca3af; font-size: 13px;
 }
 .tasks-view-empty .tv-ico { font-size: 34px; display: block; margin-bottom: 10px; }
-#gd-css-stamp { --api-stamp: "8"; }
+#gd-css-stamp { --api-stamp: "9"; }
 :root {
     --ease-out: cubic-bezier(.22, 1, .36, 1);
     --ease-in:  cubic-bezier(.4, 0, 1, 1);
