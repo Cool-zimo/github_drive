@@ -40,13 +40,19 @@ INDEX = os.path.join(ROOT, 'index.html')
 MANIFEST = os.path.join(ROOT, 'assets', 'asset-manifest.json')
 
 # 由 index.html 里的加载顺序决定，这里只用来生成 manifest 和做校验
+# ★ oauth 必须排在 ui 之前：ui.js 里构造 UI 时会读 GitHubDeviceFlow，
+#   晚了类还没定义。onboarding 依赖 app，放最后。
+# ★ 这两个既不在 CORE 也不在 DEFER 时，只能靠 head 里手写的静态标签加载；
+#   而那份手写标签曾被整组复制过一次（ui→app 全重复），第二份还是旧 hash，
+#   浏览器会下载两份、执行两份，顶层 const 重复声明直接 SyntaxError。
+#   把它们收进 CORE_FILES，_sync_core_tags 一次生成全部标签，杜绝手写第二组。
 CORE_FILES = [
     'icons', 'github-api', 'storage', 'file-manager', 'config-sync',
-    'task-dock', 'ui', 'i18n', 'version', 'anim', 'gesture', 'custom',
-    'theme', 'i18n-scan', 'app',
+    'task-dock', 'oauth', 'ui', 'i18n', 'version', 'anim', 'gesture',
+    'custom', 'theme', 'i18n-scan', 'onboarding', 'app',
 ]
 # 这些不阻塞首屏：登录成功后才加载
-DEFERRED_FILES = ['bridge', 'cangshu-link', 'maintain', 'share', 'plugin-api']
+DEFERRED_FILES = ['bridge', 'cangshu-link', 'maintain', 'share', 'plugin-api', 'community']
 
 
 

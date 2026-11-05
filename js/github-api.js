@@ -452,6 +452,56 @@ class GitHubAPI {
     }
 
     /**
+     * ★ 用已知的 blob sha 直接取内容字节（RAW 版本）。
+     *
+     *   同一个 blob，两种取法：
+     *     Accept: application/vnd.github+json → JSON 里包 base64，体积膨胀 33%
+     *     Accept: application/vnd.github.raw   → 直接返回原始字节
+     *
+     *   实测 11.9MB 分片：JSON 传输 16.4MB / 3.31s，RAW 传输 11.9MB / 2.51s。
+     *   浏览器端收益更大：省掉 atob 之后的逐字节 charCodeAt 循环
+     *   （12MB 那个循环是同步阻塞主线程的）。
+     *
+     *   ★ 为什么不复用 request()：它对非 JSON 响应走 response.text()，
+     *     会把二进制当成文本解码，字节直接损坏。所以这里单独 fetch。
+     *
+     * @returns {Promise<Uint8Array>} 失败会抛，由调用方回退到 base64 路径
+     */
+    async getBlobBytesRaw(owner, repo, sha) {
+        const url = `${this.baseUrl}/repos/${owner}/${repo}/git/blobs/${sha}`;
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `token ${this.token}`,
+                'Accept': 'application/vnd.github.raw',
+                'X-GitHub-Api-Version': '2022-11-28'
+            },
+            cache: 'no-store'
+        });
+
+        // 限流信息和 request() 保持同一套口径，否则界面上的剩余次数会停更
+        const remaining = response.headers.get('X-RateLimit-Remaining');
+        if (remaining !== null) {
+            this.rateLimit.remaining = parseInt(remaining);
+            const reset = response.headers.get('X-RateLimit-Reset');
+            if (reset) this.rateLimit.reset = parseInt(reset);
+        }
+
+        if (!response.ok) {
+            throw new Error(`blob RAW 请求失败: HTTP ${response.status}`);
+        }
+
+        // raw 有时不生效（老仓库 / 超大 blob），会退回 JSON —— 交给调用方走 base64
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            throw new Error('服务端返回 JSON，raw 未生效');
+        }
+
+        const buf = await response.arrayBuffer();
+        if (!buf.byteLength) throw new Error('blob RAW 内容为空: ' + sha);
+        return new Uint8Array(buf);
+    }
+
+    /**
      * ★ 用已知的 blob sha 直接取内容字节。
      *
      *   blob 是**内容寻址**的：同一个内容在任何仓库、任何路径下 sha 都一样，
@@ -470,6 +520,16 @@ class GitHubAPI {
      * @returns {Promise<Uint8Array>}
      */
     async getBlobBytes(owner, repo, sha) {
+        // ★ 优先走 RAW：省掉 base64 的 33% 膨胀，也省掉浏览器端的 atob + 逐字节循环。
+        //   同样一个 11.9MB 分片实测：JSON(base64) 传输 16.4MB / 3.31s，RAW 传输 11.9MB / 2.51s。
+        //   （浏览器端更明显：12MB 的 charCodeAt 逐字节循环是主线程同步阻塞。）
+        //   拿不到就回退到老路径，不改变任何调用方的行为。
+        try {
+            return await this.getBlobBytesRaw(owner, repo, sha);
+        } catch (e) {
+            console.warn('[GitHubAPI] blob RAW 读取失败，回退 base64:', e.message);
+        }
+
         const blob = await this.getBlob(owner, repo, sha);
         const content = blob && blob.content;
         if (!content) throw new Error('blob 内容为空: ' + sha);

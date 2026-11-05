@@ -1254,7 +1254,7 @@ class UI {
         var suffix = multi ? ` (${this.selectedFiles.length} 项)` : '';
         var act = function (a) { return function () { self.handleContextAction(a, file); }; };
 
-        return [
+        var items = [
             { icon: ico('folderOpen'), label: '打开', onClick: act('open'), shortcut: 'Enter' },
             { icon: ico('download'), label: '下载' + suffix, onClick: act('download') },
             { sep: true },
@@ -1278,6 +1278,11 @@ class UI {
             { sep: true },
             { icon: ico('trash'), label: '删除' + suffix, onClick: act('delete'), danger: true, shortcut: 'Del' }
         ];
+
+        // 扩展宿主 v2：扩展声明的右键菜单项追加到末尾
+        var extras = (window.ExtHost && ExtHost.menuItems) ? ExtHost.menuItems('file', file) : [];
+        if (extras.length) items.push({ sep: true }, ...extras);
+        return items;
     }
 
     /** 旧版静态菜单（Bridge 不可用时的降级路径） */
@@ -4358,6 +4363,24 @@ class UI {
         }
     }
 
+    /** 扩展能力标签：让 v2 扩展能做什么一眼可见 */
+    renderPluginCaps(p) {
+        if (!(p.api === 2 || p.contributes || p.permissions)) return '';
+        var views = (p.contributes && p.contributes.views) || {};
+        var perms = p.permissions || [];
+        var chips = [];
+        if (views.sidebar) chips.push('▤ 常驻侧边栏');
+        if (perms.indexOf('ui.window') >= 0) chips.push('▢ 多窗口');
+        if (perms.indexOf('net.fetch') >= 0) chips.push('🌐 网络请求');
+        if (perms.indexOf('net.github') >= 0) chips.push('🐙 GitHub API');
+        if ((p.contributes && p.contributes.commands) || perms.indexOf('ui.commandRegister') >= 0) chips.push('⌘ 命令');
+        if (perms.indexOf('files.write') >= 0) chips.push('✎ 写文件');
+        if (!chips.length) chips.push('🧩 v2 扩展');
+        return '<div class="plugin-cap-chips">' + chips.map(function (c) {
+            return '<span>' + c + '</span>';
+        }).join('') + '</div>';
+    }
+
     renderPluginIcon(icon) {
         if (!icon) return '🧩';
         // 图片URL或data URL用img标签
@@ -4456,14 +4479,25 @@ class UI {
                         ${isInstalled ? '<span class="plugin-badge">' + I18n.t('plugin.installed') + '</span>' : ''}
                         ${p.type === 'game' ? '<span class="plugin-badge" style="background:#f59e0b;">' + I18n.t('plugin.game') + '</span>' : ''}
                         ${p.community ? '<span class="plugin-badge" style="background:#8b5cf6;">' + I18n.t('plugin.communityTag') + '</span>' : ''}
+                        ${(p.api === 2 || p.contributes) ? '<span class="plugin-badge" style="background:#8250df;" title="支持常驻侧边栏 / 窗口 / 命令 / 网络">⚡ v2</span>' : ''}
                     </div>
                     <div class="plugin-card-desc">${this.escapeHtml(p.description || '')}</div>
+                    ${this.renderPluginCaps(p)}
                     <div class="plugin-card-actions">${actionBtn}</div>
                 </div>
             `;
         }).join('');
 
-        container.innerHTML = tabsHtml + filterTabs + `
+        const LEGACY_IDS = ['text-editor', 'image-viewer', 'music-player', 'code-editor',
+            'markdown-preview', 'json-formatter', 'repo-hash-monitor', 'snake', 'xiudao'];
+        const legacyCount = LEGACY_IDS.filter(function (id) { return installed && installed[id]; }).length;
+        const mergeHint = legacyCount ? `<div style="grid-column:1/-1;padding:10px 12px;margin-bottom:8px;
+            border:1px solid #8250df;border-radius:8px;background:rgba(130,80,223,.08);
+            color:var(--text-primary);font-size:12px;line-height:1.6;">
+            🧬 检测到 ${legacyCount} 个旧版插件。它们已合并进新扩展，点对应卡片的「安装」即可完成迁移。
+        </div>` : '';
+
+        container.innerHTML = tabsHtml + filterTabs + mergeHint + `
             <div style="grid-column:1/-1;padding:8px 4px;color:#6b7280;font-size:13px;">
                 🧩 <span data-i18n='plugin.market'>Plugin Market</span> · ${plugins.length} <span data-i18n='plugin.plugins'>plugins</span> · ${installedCount} <span data-i18n='plugin.installed'>installed</span>
             </div>

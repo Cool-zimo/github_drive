@@ -16,14 +16,14 @@
 // ==========================================================================
 const APP_VERSION = {
     // ★ 唯一真值来源；下面 major/api/patch 与兼容字段由 bump 脚本同步
-    version: '0.9.14',
+    version: '0.10.0',
     scheme: 2,
     major: '0',
-    api: '9',
-    patch: 14,
-    internalVersion: '0.9.14',
-    formalVersion: '0.9.14',
-    displayVersion: '0.9.14',
+    api: '10',
+    patch: 0,
+    internalVersion: '0.10.0',
+    formalVersion: '0.10.0',
+    displayVersion: '0.10.0',
     //   = 1：契约体系建立。移除侧边栏 nav-group 折叠结构。
     //   = 2：侧边栏图标从 emoji 换成 <img src="assets/icons/...">。
     //        HTML 结构变了（nav-icon 内新增 img 节点），CSS 也新增了
@@ -78,6 +78,11 @@ const APP_VERSION = {
     //        老 CSS 没有这两条，SVG 会按内联属性渲染但不受容器约束，
     //        在收起态 / 移动端会尺寸失控。
     //
+    //   = 10：扩展宿主 v2（js/ext-host.js + js/ext-sdk.js）。
+    //        index.html 新增活动栏 / 常驻侧边栏 / 状态栏 / 命令面板 / 授权框
+    //        五个容器，CSS 新增 .gd-ext-* 规则 —— 老 CSS 配新 HTML 会让
+    //        面板失去定位，飘在页面底部；老 HTML 配新 JS 则拿不到容器。
+    //
     // ★ 兼容第一代：等于上面的 api，由 version 中段派生
-    apiVersion: '9'
+    apiVersion: '10'
 };

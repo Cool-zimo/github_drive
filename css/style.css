@@ -3438,7 +3438,7 @@ body:has(#login-screen:not(.hidden)) .mobile-bottom-nav {
    GitHub Pages 的 CDN 会长时间缓存 css，以前版本号写死在 ?v=58 忘了改，
    结果连改 6 个版本用户看到的都是旧界面 —— 改了等于没改。
    现在 stamp 跟着 internalVersion 走，对不上就提示硬刷新。 */
-#gd-css-stamp { --api-stamp: "9"; }
+#gd-css-stamp { --api-stamp: "10"; }
 
 /* ==================================================================
    动画打磨
@@ -4891,4 +4891,155 @@ svg.gd-set-ico {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
     background: #cf222e; color: #fff; font-size: 11px; font-weight: 700; margin-left: 6px;
+}
+
+/* ==================================================================
+   扩展宿主 v2 —— 活动栏 / 常驻侧边栏 / 状态栏 / 命令面板 / 授权框
+   放在右侧：主侧边栏在左（文件导航），扩展视图在右，互不遮挡。
+   ================================================================== */
+.gd-ext-activity {
+    position: fixed; right: 0; top: 62px; z-index: 1900;
+    width: 44px; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; padding: 8px 0;
+    background: var(--bg-secondary); border-left: 1px solid var(--border-color);
+    box-shadow: -2px 0 8px rgba(0,0,0,.06);
+}
+.gd-ext-act-btn {
+    position: relative; width: 36px; height: 36px; border: 0; border-radius: 8px;
+    background: transparent; color: var(--text-secondary); cursor: pointer;
+    font-size: 18px; line-height: 1; display: flex; align-items: center;
+    justify-content: center; transition: background .15s, color .15s;
+}
+.gd-ext-act-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.gd-ext-act-btn.active { color: #0969da; background: var(--bg-active); }
+.gd-ext-act-btn.active::before {
+    content: ''; position: absolute; left: -5px; top: 7px; bottom: 7px;
+    width: 2px; border-radius: 2px; background: #0969da;
+}
+.gd-ext-act-btn.gd-ext-act-cmd { color: #8250df; font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.gd-ext-act-badge {
+    position: absolute; right: 1px; top: 0; min-width: 14px; height: 14px;
+    padding: 0 3px; border-radius: 7px; background: #cf222e; color: #fff;
+    font-size: 9px; line-height: 14px; font-weight: 700;
+}
+.gd-ext-act-badge:empty { display: none; }
+
+.gd-ext-panel {
+    position: fixed; right: 44px; top: 62px; bottom: 26px; z-index: 1899;
+    width: 340px; display: flex; flex-direction: column;
+    background: var(--bg-primary); border-left: 1px solid var(--border-color);
+    box-shadow: -6px 0 20px rgba(0,0,0,.12);
+}
+.gd-ext-panel[hidden], .gd-ext-palette[hidden], .gd-ext-grant-layer[hidden] { display: none !important; }
+.gd-ext-panel-head {
+    height: 38px; flex: 0 0 auto; display: flex; align-items: center;
+    padding: 0 10px; gap: 8px; border-bottom: 1px solid var(--border-light);
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    letter-spacing: .04em; text-transform: uppercase;
+}
+.gd-ext-panel-head span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gd-ext-panel-head button {
+    border: 0; background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px;
+}
+.gd-ext-panel-head button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.gd-ext-panel-body { flex: 1; position: relative; overflow: hidden; }
+.gd-ext-frame, .gd-ext-sidebar-frame {
+    width: 100%; height: 100%; border: 0; display: block; background: var(--bg-primary);
+}
+
+.gd-ext-statusbar {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 24px; z-index: 1898;
+    display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    background: var(--bg-tertiary); border-top: 1px solid var(--border-light);
+    color: var(--text-secondary); font-size: 11px; font-family: var(--font-mono, monospace);
+}
+.gd-ext-status-host { color: #8250df; font-weight: 700; }
+.gd-ext-status-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+
+.gd-ext-palette, .gd-ext-grant-layer {
+    position: fixed; inset: 0; z-index: 9600; background: rgba(0,0,0,.35);
+    display: flex; justify-content: center; align-items: flex-start;
+}
+.gd-ext-palette-box {
+    margin-top: 14vh; width: min(560px, 92vw); border-radius: 10px; overflow: hidden;
+    background: var(--bg-primary); border: 1px solid var(--border-color);
+    box-shadow: 0 18px 60px rgba(0,0,0,.35);
+}
+.gd-ext-palette-box input {
+    width: 100%; box-sizing: border-box; padding: 14px 16px; border: 0;
+    border-bottom: 1px solid var(--border-light); outline: none;
+    background: var(--bg-primary); color: var(--text-primary); font-size: 15px;
+}
+.gd-ext-palette-list { max-height: 320px; overflow: auto; }
+.gd-ext-pal-item {
+    padding: 9px 16px; cursor: pointer; display: flex; justify-content: space-between;
+    gap: 12px; align-items: center; border-bottom: 1px solid var(--border-light);
+}
+.gd-ext-pal-item:hover, .gd-ext-pal-item.first { background: var(--bg-hover); }
+.gd-ext-pal-item span { font-size: 13px; color: var(--text-primary); }
+.gd-ext-pal-item small { font-size: 11px; color: var(--text-tertiary); font-family: monospace; }
+.gd-ext-pal-empty { padding: 20px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+
+.gd-ext-grant-layer { align-items: center; }
+.gd-ext-grant-box {
+    width: min(440px, 92vw); padding: 20px; border-radius: 12px;
+    background: var(--bg-primary); border: 1px solid var(--border-color);
+    box-shadow: 0 18px 60px rgba(0,0,0,.35); color: var(--text-primary);
+}
+.gd-ext-grant-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+.gd-ext-grant-box p { font-size: 13px; margin: 8px 0; color: var(--text-secondary); }
+.gd-ext-grant-box code {
+    display: block; padding: 10px; border-radius: 8px; word-break: break-all;
+    background: var(--bg-tertiary); font-size: 12px; color: var(--text-primary);
+}
+.gd-ext-grant-note { font-size: 12px !important; line-height: 1.6; }
+.gd-ext-grant-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.gd-ext-grant-actions button {
+    flex: 1; min-width: 110px; padding: 9px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border-color); background: var(--bg-secondary);
+    color: var(--text-primary); font-size: 12px;
+}
+.gd-ext-grant-actions button[data-a="always"] { background: #0969da; border-color: #0969da; color: #fff; }
+.gd-ext-grant-actions button.danger { background: transparent; color: #cf222e; }
+
+.gd-ext-fallback {
+    position: fixed; right: 56px; bottom: 36px; width: 520px; height: 380px; z-index: 9500;
+    background: var(--bg-primary); border: 1px solid var(--border-color);
+    border-radius: 10px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.3);
+    display: flex; flex-direction: column;
+}
+.gd-ext-fallback-head {
+    height: 34px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px; background: var(--bg-tertiary); font-size: 12px;
+}
+.gd-ext-fallback-head button { border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); }
+.gd-ext-fallback .gd-ext-frame { flex: 1; }
+
+/* 登录页不显示任何扩展 UI */
+body.gd-logged-out .gd-ext-activity,
+body.gd-logged-out .gd-ext-panel,
+body.gd-logged-out .gd-ext-statusbar,
+body.gd-logged-out .gd-ext-palette,
+body.gd-logged-out .gd-ext-grant-layer { display: none !important; }
+
+@media (max-width: 768px) {
+    .gd-ext-activity {
+        top: auto; bottom: 0; left: 0; right: 0; width: auto; height: 46px;
+        flex-direction: row; justify-content: center; padding: 0 8px;
+        border-left: 0; border-top: 1px solid var(--border-color);
+    }
+    .gd-ext-act-btn.gd-ext-act-cmd { margin-bottom: 0; margin-right: 6px; }
+    .gd-ext-act-btn.active::before { left: 7px; right: 7px; top: auto; bottom: -4px; width: auto; height: 2px; }
+    .gd-ext-panel { left: 0; right: 0; top: 0; bottom: 46px; width: auto; border-left: 0; }
+    .gd-ext-statusbar { bottom: 46px; }
+    .gd-ext-fallback { left: 8px; right: 8px; bottom: 54px; width: auto; height: 60vh; }
+}
+
+/* 插件广场：v2 能力标签 */
+.plugin-cap-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 10px; }
+.plugin-cap-chips span {
+    padding: 2px 7px; border-radius: 10px; font-size: 11px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+    border: 1px solid var(--border-light);
 }

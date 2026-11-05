@@ -2617,6 +2617,7 @@ class App {
             this.saveInstalledPlugins(installed);
             this.ui.showToast(pluginInfo.name + ' 安装成功', 'success');
             this.showPluginMarket();
+            if (window.ExtHost) window.ExtHost.refresh();
         } catch (e) {
             this.ui.showToast('安装失败: ' + e.message, 'error');
         }
@@ -2669,6 +2670,7 @@ class App {
             this.saveInstalledPlugins(installed);
             this.ui.showToast(pluginInfo.name + ' 安装成功', 'success');
             this.showPluginMarket();
+            if (window.ExtHost) window.ExtHost.refresh();
         } catch (e) {
             this.ui.showToast('安装失败: ' + e.message, 'error');
         }
@@ -2683,12 +2685,20 @@ class App {
         this.saveInstalledPlugins(installed);
         this.ui.showToast('已卸载 ' + plugin.name, 'success');
         this.showPluginMarket();
+        if (window.ExtHost) window.ExtHost.refresh();
     }
 
     runPlugin(pluginId) {
         const installed = this.getInstalledPlugins();
         const plugin = installed[pluginId];
         if (!plugin) { this.ui.showToast(I18n.t('plugin.notInstalled'), 'error'); return; }
+        // v2 扩展交给扩展宿主：常驻侧边栏、多窗口、命令、网络都在那边。
+        // v1 插件保持原来的 showPluginRunner 路径，行为完全不变。
+        if (window.ExtHost && ExtHost.isV2(plugin)) {
+            ExtHost.open(plugin);
+            if (window.ExtHost.refresh) window.ExtHost.refresh();
+            return;
+        }
         this.ui.showPluginRunner?.(plugin);
     }
 
