@@ -90,54 +90,171 @@
         dom.paletteInput = q('gd-ext-palette-input');
         dom.paletteList = q('gd-ext-palette-list');
         dom.grantLayer = q('gd-ext-grant-layer');
+        dom.sidebar = document.querySelector('.sidebar');
+        dom.navManage = q('gd-ext-nav-manage');
+        dom.viewBack = q('gd-ext-view-back');
+        dom.viewWindow = q('gd-ext-view-window');
+        dom.viewClose = q('gd-ext-panel-close');
+        dom.searchBox = q('gd-search-box');
+        dom.searchInput = q('search-input');
+        dom.searchMode = q('gd-search-mode');
+        dom.searchOptions = q('gd-search-options');
+        dom.searchResults = q('gd-search-results');
 
-        if (dom.activity) return;   // index.html 已经给了容器
+        // 兜底：宿主没给容器时，列表与视图都归到主侧边栏里，不再往 body 上挂右侧浮层
+        if (!dom.activity) {
+            dom.activity = document.createElement('div');
+            dom.activity.id = 'gd-ext-activity';
+            dom.activity.className = 'gd-ext-activity gd-ext-nav-list';
+            var nav = document.querySelector('.sidebar-nav');
+            (nav || document.body).appendChild(dom.activity);
+        }
+        if (!dom.panel) {
+            dom.panel = document.createElement('div');
+            dom.panel.id = 'gd-ext-panel';
+            dom.panel.className = 'gd-ext-view';
+            dom.panel.hidden = true;
+            dom.panel.innerHTML =
+                '<div class="gd-ext-view-head">' +
+                '<button id="gd-ext-view-back" class="gd-ext-view-btn" title="返回文件导航">←</button>' +
+                '<span id="gd-ext-panel-title"></span>' +
+                '<button id="gd-ext-view-window" class="gd-ext-view-btn" title="在独立窗口打开">⧉</button>' +
+                '<button id="gd-ext-panel-close" class="gd-ext-view-btn" title="收起">✕</button></div>' +
+                '<div id="gd-ext-panel-body"></div>';
+            (dom.sidebar || document.body).appendChild(dom.panel);
+            dom.panelTitle = q('gd-ext-panel-title');
+            dom.panelBody = q('gd-ext-panel-body');
+            dom.viewBack = q('gd-ext-view-back');
+            dom.viewWindow = q('gd-ext-view-window');
+            dom.viewClose = q('gd-ext-panel-close');
+        }
+        if (!dom.statusbar) {
+            dom.statusbar = document.createElement('div');
+            dom.statusbar.id = 'gd-ext-statusbar';
+            dom.statusbar.className = 'gd-ext-statusbar';
+            dom.statusbar.hidden = true;
+            document.body.appendChild(dom.statusbar);
+        }
+        if (!dom.grantLayer) {
+            dom.grantLayer = document.createElement('div');
+            dom.grantLayer.id = 'gd-ext-grant-layer';
+            dom.grantLayer.className = 'gd-ext-grant-layer';
+            dom.grantLayer.hidden = true;
+            document.body.appendChild(dom.grantLayer);
+        }
+    }
 
-        var mk = function (tag, id, cls, html) {
-            var el = document.createElement(tag);
-            el.id = id; el.className = cls;
-            if (html != null) el.innerHTML = html;
-            document.body.appendChild(el);
-            return el;
-        };
-        dom.activity = mk('div', 'gd-ext-activity', 'gd-ext-activity', '');
-        dom.panel = mk('aside', 'gd-ext-panel', 'gd-ext-panel',
-            '<div class="gd-ext-panel-head"><span id="gd-ext-panel-title"></span>' +
-            '<button id="gd-ext-panel-close" title="收起">✕</button></div>' +
-            '<div id="gd-ext-panel-body"></div>');
-        dom.panel.hidden = true;
-        dom.panelTitle = q('gd-ext-panel-title');
-        dom.panelBody = q('gd-ext-panel-body');
-        dom.statusbar = mk('div', 'gd-ext-statusbar', 'gd-ext-statusbar', '');
-        dom.palette = mk('div', 'gd-ext-palette', 'gd-ext-palette',
-            '<div class="gd-ext-palette-box"><input id="gd-ext-palette-input" placeholder="输入命令…" autocomplete="off">' +
-            '<div id="gd-ext-palette-list"></div></div>');
-        dom.palette.hidden = true;
-        dom.paletteInput = q('gd-ext-palette-input');
-        dom.paletteList = q('gd-ext-palette-list');
-        dom.grantLayer = mk('div', 'gd-ext-grant-layer', 'gd-ext-grant-layer', '');
-        dom.grantLayer.hidden = true;
+    var searchMode = 'files';
+    var searchItems = [];
+    var searchIndex = 0;
+    var statusTimer = null;
+
+    function isCommandMode() { return searchMode === 'commands'; }
+
+    /** 顶部搜索框的两种模式：搜文件 / 搜命令。选项栏展开后切换。 */
+    function setSearchMode(mode, focus) {
+        searchMode = mode === 'commands' ? 'commands' : 'files';
+        if (dom.searchMode) {
+            dom.searchMode.textContent = isCommandMode() ? '命令 ⌄' : '文件 ⌄';
+            dom.searchMode.classList.toggle('on', isCommandMode());
+        }
+        if (dom.searchOptions) {
+            dom.searchOptions.querySelectorAll('[data-mode]').forEach(function (b) {
+                b.classList.toggle('active', b.dataset.mode === searchMode);
+            });
+            dom.searchOptions.hidden = true;
+        }
+        if (dom.searchInput) {
+            dom.searchInput.placeholder = isCommandMode() ? '输入命令…' : 'Search files...';
+            if (isCommandMode()) {
+                dom.searchInput.value = '';
+                renderSearchCommands();
+                if (focus) dom.searchInput.focus();
+            } else {
+                if (dom.searchResults) dom.searchResults.hidden = true;
+                if (dom.searchInput.value) {
+                    try { if (app() && app().searchFiles) app().searchFiles(dom.searchInput.value); } catch (err) {}
+                }
+            }
+        }
+        renderStatus();
+        return searchMode;
+    }
+
+    function renderSearchCommands() {
+        if (!dom.searchResults) return;
+        var q = ((dom.searchInput && dom.searchInput.value) || '').toLowerCase();
+        searchItems = commandList().filter(function (c) {
+            return !q || (c.title + c.id + c.source).toLowerCase().indexOf(q) >= 0;
+        });
+        searchIndex = 0;
+        dom.searchResults.innerHTML = searchItems.length ? searchItems.map(function (c, i) {
+            return '<div class="gd-search-cmd' + (i === 0 ? ' first' : '') + '" data-id="' + esc(c.id) + '">' +
+                '<span>' + esc(c.title) + '</span><small>' + esc(c.source) + ' · ' + esc(c.id) + '</small></div>';
+        }).join('') : '<div class="gd-search-empty">没有匹配的命令</div>';
+        dom.searchResults.hidden = false;
+        dom.searchResults.querySelectorAll('.gd-search-cmd').forEach(function (el) {
+            el.addEventListener('click', function () { runSearchCommand(el.dataset.id); });
+        });
+    }
+
+    function runSearchCommand(id) {
+        setSearchMode('files');
+        executeCommand(id, {}).catch(function (err) { toast(err.message, 'error'); });
     }
 
     function bindDOM() {
-        var closeBtn = document.getElementById('gd-ext-panel-close');
-        if (closeBtn) closeBtn.addEventListener('click', function () { hideSidebar(); });
-        if (dom.paletteInput) {
-            dom.paletteInput.addEventListener('input', renderPalette);
-            dom.paletteInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape') { togglePalette(false); return; }
-                if (e.key === 'Enter') {
-                    var first = dom.paletteList.querySelector('.gd-ext-pal-item');
-                    if (first) first.click();
+        if (dom.viewClose) dom.viewClose.addEventListener('click', function () { hideSidebar(); });
+        if (dom.viewBack) dom.viewBack.addEventListener('click', function () { hideSidebar(); });
+        if (dom.viewWindow) dom.viewWindow.addEventListener('click', function () {
+            var id = dom.viewWindow.dataset.ext || activeSidebar;
+            if (id) openWindow(id, {});
+        });
+        if (dom.navManage) dom.navManage.addEventListener('click', function () {
+            if (ui() && ui().switchView) ui().switchView('plugins');
+        });
+        if (dom.searchMode) dom.searchMode.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (dom.searchOptions) dom.searchOptions.hidden = !dom.searchOptions.hidden;
+        });
+        if (dom.searchOptions) dom.searchOptions.querySelectorAll('[data-mode]').forEach(function (b) {
+            b.addEventListener('click', function (e) {
+                e.stopPropagation();
+                setSearchMode(b.dataset.mode, b.dataset.mode === 'commands');
+            });
+        });
+        if (dom.searchInput) {
+            dom.searchInput.addEventListener('input', function () {
+                if (isCommandMode()) renderSearchCommands();
+            });
+            dom.searchInput.addEventListener('keydown', function (e) {
+                if (!isCommandMode()) return;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!searchItems.length) return;
+                    searchIndex = (searchIndex + (e.key === 'ArrowDown' ? 1 : searchItems.length - 1)) % searchItems.length;
+                    if (dom.searchResults) dom.searchResults.querySelectorAll('.gd-search-cmd').forEach(function (el, i) {
+                        el.classList.toggle('first', i === searchIndex);
+                    });
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (searchItems.length) runSearchCommand(searchItems[searchIndex].id);
+                } else if (e.key === 'Escape') {
+                    setSearchMode('files');
                 }
             });
         }
-        if (dom.palette) dom.palette.addEventListener('click', function (e) {
-            if (e.target === dom.palette) togglePalette(false);
+        document.addEventListener('click', function (e) {
+            if (dom.searchOptions && !dom.searchOptions.hidden &&
+                dom.searchBox && !dom.searchBox.contains(e.target)) dom.searchOptions.hidden = true;
+            if (dom.searchResults && !dom.searchResults.hidden && isCommandMode() &&
+                dom.searchBox && !dom.searchBox.contains(e.target)) dom.searchResults.hidden = true;
         });
+        // 旧命令面板 DOM（测试台仍可能带）留兼容，主站不再弹出独立面板
+        if (dom.paletteInput) dom.paletteInput.addEventListener('input', renderPalette);
         document.addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
-                e.preventDefault(); togglePalette(true);
+                e.preventDefault(); setSearchMode('commands', true);
             }
         });
     }
@@ -190,20 +307,34 @@
             return { id: id, p: installed()[id] };
         }).filter(function (x) { return isV2(x.p); });
 
-        var html = '<button class="gd-ext-act-btn gd-ext-act-cmd" title="命令面板 (Ctrl+Shift+P)">⌘</button>';
+        var html = '<div class="gd-ext-nav-item gd-ext-nav-cmd" data-cmd="1" role="button" tabindex="0" ' +
+            'title="命令搜索 (Ctrl+Shift+P)"><span class="gd-ext-nav-ico">⌘</span>' +
+            '<span class="gd-ext-nav-name">命令搜索</span></div>';
         html += list.map(function (x) {
-            var v = (x.p.contributes && x.p.contributes.views) || {};
             var icon = x.p.icon || '🧩';
-            return '<button class="gd-ext-act-btn" data-ext="' + esc(x.id) + '" title="' + esc(x.p.name || x.id) + '">' +
-                esc(icon) + '<span class="gd-ext-act-badge" data-badge="' + esc(x.id) + '"></span></button>';
+            return '<div class="gd-ext-nav-item" data-ext="' + esc(x.id) + '" role="button" tabindex="0" ' +
+                'title="' + esc(x.p.name || x.id) + ' · 点击在侧边栏打开">' +
+                '<span class="gd-ext-nav-ico">' + esc(icon) + '</span>' +
+                '<span class="gd-ext-nav-name">' + esc(x.p.name || x.id) + '</span>' +
+                '<span class="gd-ext-act-badge" data-badge="' + esc(x.id) + '"></span>' +
+                '<button type="button" class="gd-ext-nav-win" data-win="' + esc(x.id) + '" ' +
+                'title="在独立窗口打开">⧉</button></div>';
         }).join('');
         dom.activity.innerHTML = html;
         dom.activity.querySelectorAll('[data-ext]').forEach(function (b) {
-            b.addEventListener('click', function () { openSidebar(b.dataset.ext); });
+            b.addEventListener('click', function (e) {
+                if (e.target.closest('[data-win]')) return;
+                openSidebar(b.dataset.ext);
+            });
+            b.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSidebar(b.dataset.ext); }
+            });
         });
-        var cmd = dom.activity.querySelector('.gd-ext-act-cmd');
-        if (cmd) cmd.addEventListener('click', function () { togglePalette(true); });
-        // 活动栏常驻：即使一个扩展都没装，命令面板也该有入口
+        dom.activity.querySelectorAll('[data-win]').forEach(function (b) {
+            b.addEventListener('click', function (e) { e.stopPropagation(); openWindow(b.dataset.win, {}); });
+        });
+        var cmd = dom.activity.querySelector('[data-cmd]');
+        if (cmd) cmd.addEventListener('click', function () { setSearchMode('commands', true); });
         dom.activity.hidden = false;
         renderStatus();
         return list.length;
@@ -308,7 +439,9 @@
         ensureDOM();
         dom.panel.hidden = false;
         dom.panel.dataset.ext = id;
-        dom.panelTitle.textContent = (exts.get(id) && exts.get(id).plugin.name) || id;
+        if (dom.sidebar) dom.sidebar.classList.add('gd-ext-mode');
+        if (dom.panelTitle) dom.panelTitle.textContent = (exts.get(id) && exts.get(id).plugin.name) || id;
+        if (dom.viewWindow) dom.viewWindow.dataset.ext = id;
         dom.panelBody.querySelectorAll('.gd-ext-sidebar-frame').forEach(function (f) {
             f.style.display = 'none';
         });
@@ -317,13 +450,16 @@
             b.classList.toggle('active', b.dataset.ext === id);
         });
         activeSidebar = id;
+        renderStatus();
         try { localStorage.setItem('gd_ext_active_sidebar', id); } catch (err) { /* 忽略 */ }
     }
 
     function hideSidebar() {
         if (dom.panel) dom.panel.hidden = true;
+        if (dom.sidebar) dom.sidebar.classList.remove('gd-ext-mode');
         if (dom.activity) dom.activity.querySelectorAll('[data-ext]').forEach(function (b) { b.classList.remove('active'); });
         activeSidebar = null;
+        renderStatus();
         try { localStorage.removeItem('gd_ext_active_sidebar'); } catch (err) { /* 忽略 */ }
     }
 
@@ -764,25 +900,77 @@
 
     function renderStatus() {
         if (!dom.statusbar) return;
-        var html = '<span class="gd-ext-status-host">🧩 扩展</span>';
+        var T = td(), tasks = [];
+        try { if (T && T.all) tasks = T.all(); } catch (err) { /* 任务坞未就绪 */ }
+        var running = tasks.filter(function (t) { return t.status === 'running'; });
+        var failed = tasks.filter(function (t) { return t.error || t.status === 'error'; });
+        var inst = installed();
+        var enabled = Object.keys(inst).filter(function (id) { return isV2(inst[id]); }).length;
+        var u = ui();
+
+        function cell(inner, cls, title, act) {
+            return '<span class="gd-ext-status-cell ' + (cls || '') + '"' +
+                (title ? ' title="' + esc(title) + '"' : '') +
+                (act ? ' data-act="' + esc(act) + '"' : '') + '>' + inner + '</span>';
+        }
+        var html = '';
+        if (running.length) {
+            var t = running[0];
+            var pct = Math.max(0, Math.min(100, Math.round(t.percent || 0)));
+            var kind = t.type === 'upload' ? '↑ 上传' : t.type === 'download' ? '↓ 下载' : '⟳ 同步';
+            html += cell('<i class="gd-ext-status-dot busy"></i>' + kind +
+                ' <span class="gd-ext-status-track"><i style="width:' + pct + '%"></i></span> ' + pct + '%' +
+                (running.length > 1 ? ' +' + (running.length - 1) : ''),
+                'clickable', t.title || '查看后台进程', 'tasks');
+        } else {
+            html += cell('<i class="gd-ext-status-dot' + (failed.length ? ' error' : '') + '"></i>' +
+                (failed.length ? failed.length + ' 个任务失败' : '已同步'),
+                failed.length ? 'warn clickable' : 'clickable', '查看后台进程', 'tasks');
+        }
+        // 扩展自己上报的零碎信息（字数、调试计数等）收进 title，悬停才看得到；
+        // 底栏可见部分只保留：上传进度 / 扩展启用数与当前扩展 / 选中文件 / 搜索范围。
+        var st = '';
         exts.forEach(function (e) {
-            if (!e.status) return;
-            html += '<span class="gd-ext-status-item" data-ext="' + esc(e.id) + '">' + esc(e.status) + '</span>';
+            if (e.status && activeSidebar && e.id === activeSidebar) st = e.status;
         });
+        html += cell('🧩 扩展 ' + enabled + ' 已启用' +
+            (activeSidebar ? ' · ' + esc((inst[activeSidebar] && inst[activeSidebar].name) || activeSidebar) : ''),
+            'clickable gd-ext-status-hide-sm',
+            (st ? '扩展状态：' + st : '打开插件广场'), 'plugins');
+        if (failed.length) html += cell('⚠ ' + failed.length + ' 错误', 'warn clickable gd-ext-status-hide-sm', '查看后台进程', 'tasks');
+
+        var sel = '';
+        try {
+            var picked = (u && (u.selectedFiles || (u.selectedFile ? [u.selectedFile] : []))) || [];
+            if (picked.length) sel = picked[0].name || '';
+        } catch (err) { /* 忽略 */ }
+        html += '<span class="gd-ext-status-right">';
+        if (sel) html += cell('📄 ' + esc(sel), 'gd-ext-status-hide-sm', sel);
+        html += cell('⌘ ' + (isCommandMode() ? '命令' : '文件') + '搜索', 'clickable', '点击切换搜索范围', 'search');
+        // version.js 用顶层 const 声明 APP_VERSION，不会挂到 window 上
+        var ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION.version) ||
+                  (root.APP_VERSION && root.APP_VERSION.version) || '';
+        html += cell('v' + ver, 'gd-ext-status-ver');
+        html += '</span>';
+
         dom.statusbar.innerHTML = html;
         dom.statusbar.hidden = false;
+        dom.statusbar.querySelectorAll('[data-act]').forEach(function (el) {
+            el.addEventListener('click', function () {
+                var a = el.dataset.act;
+                if (a === 'tasks' && u && u.showTaskManager) u.showTaskManager();
+                else if (a === 'plugins' && u && u.switchView) u.switchView('plugins');
+                else if (a === 'search') setSearchMode(isCommandMode() ? 'files' : 'commands', isCommandMode() ? false : true);
+            });
+        });
     }
 
     /* ---------- 命令面板 ---------- */
 
     function togglePalette(show) {
-        ensureDOM();
-        dom.palette.hidden = !show;
-        if (show) {
-            dom.paletteInput.value = '';
-            renderPalette();
-            setTimeout(function () { dom.paletteInput.focus(); }, 0);
-        }
+        // 不再弹独立面板：命令搜索复用顶部已有的搜索框
+        if (show) setSearchMode('commands', true);
+        else if (isCommandMode()) setSearchMode('files');
     }
 
     function renderPalette() {
@@ -918,7 +1106,8 @@
             case 'i18n.lang': return context().lang;
             case 'host.info': return {
                 apiVersion: API_VERSION,
-                version: (root.APP_VERSION && root.APP_VERSION.version) || 'unknown',
+                version: (typeof APP_VERSION !== 'undefined' && APP_VERSION.version) ||
+                         (root.APP_VERSION && root.APP_VERSION.version) || 'unknown',
                 extId: ext.id, caps: ext.caps.slice(),
                 sessions: sessions.size, extensions: exts.size,
                 context: context()
@@ -976,6 +1165,8 @@
         loadSDK();
         refresh();
         hookHost();
+        // 上传/下载进度与扩展状态是活数据，1 秒刷一次
+        if (!statusTimer) statusTimer = setInterval(renderStatus, 1000);
         // 上次打开的侧边栏：只在扩展仍安装时恢复
         try {
             var last = localStorage.getItem('gd_ext_active_sidebar');
@@ -998,6 +1189,9 @@
         executeCommand: executeCommand,
         commandList: commandList,
         togglePalette: togglePalette,
+        setSearchMode: setSearchMode,
+        isCommandMode: isCommandMode,
+        renderStatus: renderStatus,
         isV2: isV2,
         debug: function () {
             return { sessions: sessions.size, exts: Array.from(exts.keys()), activeSidebar: activeSidebar };

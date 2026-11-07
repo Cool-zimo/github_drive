@@ -443,6 +443,8 @@ class UI {
         // 搜索
         document.getElementById('adv-search-btn')?.addEventListener('click', () => this.showAdvancedSearch());
         document.getElementById('search-input').addEventListener('input', (e) => {
+            // 命令模式下这个输入框归 ExtHost 管，别再触发文件搜索
+            if (window.ExtHost && ExtHost.isCommandMode && ExtHost.isCommandMode()) return;
             // ★ 顶栏常驻后搜索框在任何视图都能输入，
             //   但搜索结果只存在于文件视图 —— 自动切回去，别让人以为坏了。
             if (this.app && this.app._currentView && this.app._currentView !== 'all-files') {

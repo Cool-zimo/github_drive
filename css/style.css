@@ -4897,65 +4897,86 @@ svg.gd-set-ico {
    扩展宿主 v2 —— 活动栏 / 常驻侧边栏 / 状态栏 / 命令面板 / 授权框
    放在右侧：主侧边栏在左（文件导航），扩展视图在右，互不遮挡。
    ================================================================== */
-.gd-ext-activity {
-    position: fixed; right: 0; top: 62px; z-index: 1900;
-    width: 44px; display: flex; flex-direction: column; align-items: center;
-    gap: 4px; padding: 8px 0;
-    background: var(--bg-secondary); border-left: 1px solid var(--border-color);
-    box-shadow: -2px 0 8px rgba(0,0,0,.06);
+/* 扩展入口就是主侧边栏里的一组导航行，不再 fixed 到屏幕右侧 */
+.gd-ext-activity, .gd-ext-nav-list { display: block; }
+.gd-ext-nav-item {
+    position: relative; display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 7px 10px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-size: 13px; text-align: left;
 }
-.gd-ext-act-btn {
-    position: relative; width: 36px; height: 36px; border: 0; border-radius: 8px;
-    background: transparent; color: var(--text-secondary); cursor: pointer;
-    font-size: 18px; line-height: 1; display: flex; align-items: center;
-    justify-content: center; transition: background .15s, color .15s;
+.gd-ext-nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.gd-ext-nav-item.active { background: var(--bg-active); color: #0969da; }
+.gd-ext-nav-ico { flex: 0 0 20px; font-size: 15px; text-align: center; }
+.gd-ext-nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gd-ext-nav-win {
+    flex: 0 0 auto; border: 0; background: transparent; color: inherit;
+    cursor: pointer; font-size: 13px; opacity: .5; padding: 2px 3px; border-radius: 4px;
 }
-.gd-ext-act-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.gd-ext-act-btn.active { color: #0969da; background: var(--bg-active); }
-.gd-ext-act-btn.active::before {
-    content: ''; position: absolute; left: -5px; top: 7px; bottom: 7px;
-    width: 2px; border-radius: 2px; background: #0969da;
-}
-.gd-ext-act-btn.gd-ext-act-cmd { color: #8250df; font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.gd-ext-nav-win:hover { opacity: 1; background: var(--bg-hover); }
 .gd-ext-act-badge {
-    position: absolute; right: 1px; top: 0; min-width: 14px; height: 14px;
-    padding: 0 3px; border-radius: 7px; background: #cf222e; color: #fff;
-    font-size: 9px; line-height: 14px; font-weight: 700;
+    flex: 0 0 auto; min-width: 14px; height: 14px; padding: 0 3px;
+    border-radius: 7px; background: #cf222e; color: #fff;
+    font-size: 9px; line-height: 14px; font-weight: 700; text-align: center;
 }
 .gd-ext-act-badge:empty { display: none; }
+.gd-ext-nav-cmd .gd-ext-nav-ico { color: #8250df; font-weight: 700; }
+.gd-ext-nav-manage {
+    border: 0; background: transparent; color: var(--text-tertiary);
+    cursor: pointer; font-size: 11px; padding: 2px 4px; border-radius: 4px;
+}
+.gd-ext-nav-manage:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-.gd-ext-panel {
-    position: fixed; right: 44px; top: 62px; bottom: 26px; z-index: 1899;
-    width: 340px; display: flex; flex-direction: column;
-    background: var(--bg-primary); border-left: 1px solid var(--border-color);
-    box-shadow: -6px 0 20px rgba(0,0,0,.12);
+/* 点扩展后，主侧边栏自己切换成扩展视图（VSCode 活动栏的语义） */
+.sidebar.gd-ext-mode { width: min(420px, 42vw); }
+.sidebar.gd-ext-mode .sidebar-nav { display: none; }
+.gd-ext-view {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    background: var(--bg-primary);
 }
-.gd-ext-panel[hidden], .gd-ext-palette[hidden], .gd-ext-grant-layer[hidden] { display: none !important; }
-.gd-ext-panel-head {
+.gd-ext-view[hidden], .gd-ext-palette[hidden], .gd-ext-grant-layer[hidden] { display: none !important; }
+.gd-ext-view-head {
     height: 38px; flex: 0 0 auto; display: flex; align-items: center;
-    padding: 0 10px; gap: 8px; border-bottom: 1px solid var(--border-light);
+    padding: 0 8px; gap: 4px; border-bottom: 1px solid var(--border-light);
     font-size: 12px; font-weight: 600; color: var(--text-primary);
-    letter-spacing: .04em; text-transform: uppercase;
 }
-.gd-ext-panel-head span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gd-ext-panel-head button {
-    border: 0; background: transparent; color: var(--text-secondary);
-    cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px;
+.gd-ext-view-head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gd-ext-view-btn {
+    flex: 0 0 auto; border: 0; background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-size: 13px; padding: 4px 6px; border-radius: 6px;
 }
-.gd-ext-panel-head button:hover { background: var(--bg-hover); color: var(--text-primary); }
-.gd-ext-panel-body { flex: 1; position: relative; overflow: hidden; }
+.gd-ext-view-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+#gd-ext-panel-body {
+    flex: 1; min-height: 0; position: relative; overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
 .gd-ext-frame, .gd-ext-sidebar-frame {
-    width: 100%; height: 100%; border: 0; display: block; background: var(--bg-primary);
+    width: 100%; height: 100%; min-height: 260px;
+    border: 0; display: block; background: var(--bg-primary);
 }
 
 .gd-ext-statusbar {
-    position: fixed; left: 0; right: 0; bottom: 0; height: 24px; z-index: 1898;
-    display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    position: fixed; left: 0; right: 0; bottom: 0; height: 26px; z-index: 1898;
+    display: flex; align-items: stretch; padding: 0;
     background: var(--bg-tertiary); border-top: 1px solid var(--border-light);
     color: var(--text-secondary); font-size: 11px; font-family: var(--font-mono, monospace);
 }
-.gd-ext-status-host { color: #8250df; font-weight: 700; }
-.gd-ext-status-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.gd-ext-status-right { margin-left: auto; display: flex; align-items: stretch; }
+.gd-ext-status-cell {
+    display: inline-flex; align-items: center; gap: 6px; height: 100%;
+    padding: 0 10px; white-space: nowrap; max-width: 34vw;
+    overflow: hidden; text-overflow: ellipsis;
+    border-right: 1px solid var(--border-light);
+}
+.gd-ext-status-cell.clickable { cursor: pointer; }
+.gd-ext-status-cell.clickable:hover { background: var(--bg-hover); color: var(--text-primary); }
+.gd-ext-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #2da44e; flex: 0 0 auto; }
+.gd-ext-status-dot.busy { background: #bf8700; }
+.gd-ext-status-dot.error { background: #cf222e; }
+.gd-ext-status-track { width: 46px; height: 4px; border-radius: 2px; background: var(--border-color); overflow: hidden; flex: 0 0 auto; }
+.gd-ext-status-track > i { display: block; height: 100%; background: #0969da; }
+.gd-ext-status-cell.warn { color: #cf222e; }
+.gd-ext-status-ver { color: var(--text-tertiary); }
 
 .gd-ext-palette, .gd-ext-grant-layer {
     position: fixed; inset: 0; z-index: 9600; background: rgba(0,0,0,.35);
@@ -5003,8 +5024,11 @@ svg.gd-set-ico {
 .gd-ext-grant-actions button[data-a="always"] { background: #0969da; border-color: #0969da; color: #fff; }
 .gd-ext-grant-actions button.danger { background: transparent; color: #cf222e; }
 
+/* 独立窗口兜底：永远不超出视口，内容可滚 */
 .gd-ext-fallback {
-    position: fixed; right: 56px; bottom: 36px; width: 520px; height: 380px; z-index: 9500;
+    position: fixed; right: 16px; bottom: 40px; z-index: 9500;
+    width: min(520px, calc(100vw - 32px));
+    height: min(380px, calc(100vh - 96px));
     background: var(--bg-primary); border: 1px solid var(--border-color);
     border-radius: 10px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.3);
     display: flex; flex-direction: column;
@@ -5014,26 +5038,63 @@ svg.gd-set-ico {
     padding: 0 10px; background: var(--bg-tertiary); font-size: 12px;
 }
 .gd-ext-fallback-head button { border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); }
-.gd-ext-fallback .gd-ext-frame { flex: 1; }
+.gd-ext-fallback .gd-ext-frame { flex: 1; min-height: 0; }
+
+/* 顶部搜索框：文件 / 命令两种模式，选项栏可展开 */
+.search-box { display: flex; align-items: center; gap: 6px; max-width: 340px; }
+.search-box input { flex: 1; min-width: 0; width: auto; padding-right: 10px; }
+.search-box input:focus { width: auto; }
+.gd-search-mode {
+    flex: 0 0 auto; height: 30px; padding: 0 9px; border-radius: 6px;
+    border: 1px solid var(--border-color); background: var(--bg-secondary);
+    color: var(--text-secondary); cursor: pointer; font-size: 12px; white-space: nowrap;
+}
+.gd-search-mode:hover, .gd-search-mode.on { border-color: var(--accent-color); color: var(--accent-color); }
+.gd-search-options, .gd-search-results {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 2100;
+    min-width: 190px; background: var(--bg-primary);
+    border: 1px solid var(--border-color); border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.18); overflow: hidden;
+}
+.gd-search-options[hidden], .gd-search-results[hidden] { display: none !important; }
+.gd-search-options { display: flex; flex-direction: column; padding: 5px; }
+.gd-search-options button {
+    text-align: left; padding: 8px 10px; border: 0; border-radius: 5px;
+    background: transparent; color: var(--text-primary); cursor: pointer; font-size: 13px;
+}
+.gd-search-options button:hover { background: var(--bg-hover); }
+.gd-search-options button.active { background: var(--bg-active); color: #0969da; font-weight: 600; }
+.gd-search-results { width: min(340px, 92vw); max-height: 320px; overflow-y: auto; }
+.gd-search-cmd {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border-light);
+}
+.gd-search-cmd:hover, .gd-search-cmd.first { background: var(--bg-hover); }
+.gd-search-cmd span { font-size: 13px; color: var(--text-primary); }
+.gd-search-cmd small { font-size: 11px; color: var(--text-tertiary); }
+.gd-search-empty { padding: 18px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
 
 /* 登录页不显示任何扩展 UI */
-body.gd-logged-out .gd-ext-activity,
-body.gd-logged-out .gd-ext-panel,
+body.gd-logged-out .gd-ext-nav-item,
+body.gd-logged-out .gd-ext-view,
 body.gd-logged-out .gd-ext-statusbar,
 body.gd-logged-out .gd-ext-palette,
 body.gd-logged-out .gd-ext-grant-layer { display: none !important; }
 
 @media (max-width: 768px) {
-    .gd-ext-activity {
-        top: auto; bottom: 0; left: 0; right: 0; width: auto; height: 46px;
-        flex-direction: row; justify-content: center; padding: 0 8px;
-        border-left: 0; border-top: 1px solid var(--border-color);
+    .sidebar.gd-ext-mode { width: var(--sidebar-width); }
+    .gd-ext-view {
+        position: fixed; inset: 0; z-index: 2100;
+        width: 100vw; height: 100dvh; border-radius: 0;
+        box-shadow: none;
     }
-    .gd-ext-act-btn.gd-ext-act-cmd { margin-bottom: 0; margin-right: 6px; }
-    .gd-ext-act-btn.active::before { left: 7px; right: 7px; top: auto; bottom: -4px; width: auto; height: 2px; }
-    .gd-ext-panel { left: 0; right: 0; top: 0; bottom: 46px; width: auto; border-left: 0; }
     .gd-ext-statusbar { bottom: 46px; }
-    .gd-ext-fallback { left: 8px; right: 8px; bottom: 54px; width: auto; height: 60vh; }
+    .gd-ext-status-cell.gd-ext-status-hide-sm { display: none; }
+    .gd-ext-fallback {
+        left: 8px; right: 8px; bottom: 54px; width: auto;
+        height: min(60vh, calc(100vh - 130px));
+    }
+    .gd-search-results { right: auto; left: 0; }
 }
 
 /* 插件广场：v2 能力标签 */

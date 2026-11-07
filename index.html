@@ -9,16 +9,16 @@
          只扫 HTML 文本、不执行 JS，看不见它，必须等 HTML 下载完、那段 JS
          跑完才发起请求，白等一个 RTT。CSS 是渲染阻塞资源，这个 RTT
          直接压在首屏上。写死之后，扫描器在 HTML 头几个字节就能发现。 -->
-    <link rel="stylesheet" href="css/style.min.css?h=c71a481c34" data-gd-css="local">
+    <link rel="stylesheet" href="css/style.min.css?h=fecee79fb1" data-gd-css="local">
     <!-- ★ --stamp 原本写在 css 里，每次 bump 都会改 CSS 内容，导致内容 hash 变化、
          66KB 的样式表每次升级都要重新下载。移到内联之后：改 JS 不动 CSS，hash 就不变，
          样式表继续命中缓存。content-hash 已经保证 CSS 不会是旧的，
          这条戳现在只用于让兼容性自检有值可读。 -->
-    <style>#gd-css-stamp{--stamp:"0.10.0"}</style>
+    <style>#gd-css-stamp{--stamp:"0.10.1"}</style>
     <!-- 品牌图标：用真实 PNG 而非 emoji，避免各浏览器字形不一致 -->
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=0.10.0">
-    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=0.10.0">
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=0.10.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-drive-32.png?v=0.10.1">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-drive-192.png?v=0.10.1">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=0.10.1">
     <!-- ★ 历史版本入口：?version=0.8.8 / ?v= / ?virson=
          重定向到 versions/<v>/index.html。
          快照是从仓库历史里抄出来的静态文件，
@@ -49,7 +49,7 @@
     })();
     </script>
     <!-- ★ 必须第一个加载：?safe=1 逃生 + 分支名校验要在拼 CDN URL 之前跑完 -->
-    <script src="js/branch-guard.min.js?v=0.10.0"></script>
+    <script src="js/branch-guard.min.js?v=0.10.1"></script>
     <!-- ★ CORE 静态化 + defer。
          原来这 15 个是内联 JS 用 document.write 拼 URL 后插入的，
          扫描器看不见；改成写死后与 CSS 一起被扫描器发现，并行下载。
@@ -64,16 +64,16 @@
     <script defer src="js/config-sync.min.js?h=d3c84a594e" data-gd-core="config-sync"></script>
     <script defer src="js/task-dock.min.js?h=ece8a2421a" data-gd-core="task-dock"></script>
     <script defer src="js/oauth.min.js?h=0482c94889" data-gd-core="oauth"></script>
-    <script defer src="js/ui.min.js?h=443f32fbdf" data-gd-core="ui"></script>
+    <script defer src="js/ui.min.js?h=6ec8d9222c" data-gd-core="ui"></script>
     <script defer src="js/i18n.min.js?h=de07e71852" data-gd-core="i18n"></script>
-    <script defer src="js/version.min.js?h=482768f33e" data-gd-core="version"></script>
+    <script defer src="js/version.min.js?h=1ea42e6068" data-gd-core="version"></script>
     <script defer src="js/anim.min.js?h=8db9aa997e" data-gd-core="anim"></script>
     <script defer src="js/gesture.min.js?h=4896dd831d" data-gd-core="gesture"></script>
     <script defer src="js/custom.min.js?h=b49d35fe68" data-gd-core="custom"></script>
     <script defer src="js/theme.min.js?h=b0ec742409" data-gd-core="theme"></script>
     <script defer src="js/i18n-scan.min.js?h=385acf8972" data-gd-core="i18n-scan"></script>
     <script defer src="js/onboarding.min.js?h=e2b101055d" data-gd-core="onboarding"></script>
-    <script defer src="js/app.min.js?h=87b3a028e9" data-gd-core="app"></script>
+    <script defer src="js/app.min.js?h=a8c8026f46" data-gd-core="app"></script>
     <!-- ★ CORE 标签只此一组，由 build.py 按 CORE_FILES 整块重写。
          oauth 排在 ui 前、onboarding 排在 app 前，顺序由 build.py 保证。
          community 走 DEFER（登录后才需要），不在这里。 -->
@@ -110,7 +110,7 @@
     <!-- 登录页 -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
-            <div class="login-logo"><img src="assets/icon-drive-192.png?v=0.10.0" alt="GitHub Drive" width="72" height="72"></div>
+            <div class="login-logo"><img src="assets/icon-drive-192.png?v=0.10.1" alt="GitHub Drive" width="72" height="72"></div>
             <h1>GitHub Drive</h1>
             <p class="login-subtitle"><span data-i18n="login.subtitle">Turn your GitHub repo into a private cloud drive</span></p>
 
@@ -303,7 +303,7 @@
         <!-- 侧边栏 -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <span class="sidebar-logo"><img src="assets/icon-drive-192.png?v=0.10.0" alt="" width="24" height="24"></span>
+                <span class="sidebar-logo"><img src="assets/icon-drive-192.png?v=0.10.1" alt="" width="24" height="24"></span>
                 <span class="sidebar-title">GitHub Drive</span>
             </div>
             <nav class="sidebar-nav">
@@ -491,6 +491,14 @@
                     </a>
                 </div>
 
+                <!-- 扩展：入口直接放在主侧边栏里，不再另起一条右侧活动栏 -->
+                <div class="nav-section" id="gd-ext-nav-section">
+                    <div class="nav-section-title"><span>扩展</span>
+                        <button class="gd-ext-nav-manage" id="gd-ext-nav-manage" title="打开插件广场">管理</button>
+                    </div>
+                    <div id="gd-ext-activity" class="gd-ext-activity gd-ext-nav-list"></div>
+                </div>
+
                 <!-- 社区：聊天室走侧边栏（高频入口，天天来） -->
                 <div class="nav-section">
                     <div class="nav-section-title"><span>社区</span></div>
@@ -501,6 +509,16 @@
                 </div>
 
             </nav>
+            <!-- 扩展视图：占用主侧边栏自己的空间（VSCode 式切换），不是另一条侧边栏 -->
+            <div id="gd-ext-panel" class="gd-ext-view" hidden>
+                <div class="gd-ext-view-head">
+                    <button id="gd-ext-view-back" class="gd-ext-view-btn" title="返回文件导航">←</button>
+                    <span id="gd-ext-panel-title"></span>
+                    <button id="gd-ext-view-window" class="gd-ext-view-btn" title="在独立窗口打开">⧉</button>
+                    <button id="gd-ext-panel-close" class="gd-ext-view-btn" title="收起">✕</button>
+                </div>
+                <div id="gd-ext-panel-body"></div>
+            </div>
             <div class="sidebar-footer">
                 <div class="app-switch-slot" id="app-switch-slot"></div>
                 <div class="user-info" id="user-info" onclick="ui.showAccountSwitcher()" style="cursor:pointer;" title="点击切换账号"></div>
@@ -522,8 +540,14 @@
                 <button class="menu-toggle" id="menu-toggle" aria-label="Menu"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="breadcrumb" id="breadcrumb"></div>
                 <div class="toolbar-actions">
-                    <div class="search-box">
-                        <input type="text" id="search-input" placeholder="Search files...">
+                    <div class="search-box" id="gd-search-box">
+                        <input type="text" id="search-input" placeholder="Search files..." autocomplete="off">
+                        <button class="gd-search-mode" id="gd-search-mode" type="button" title="切换搜索范围">文件 ⌄</button>
+                        <div class="gd-search-options" id="gd-search-options" hidden>
+                            <button type="button" data-mode="files" class="active">🔍 搜文件</button>
+                            <button type="button" data-mode="commands">⌘ 搜命令</button>
+                        </div>
+                        <div class="gd-search-results" id="gd-search-results" hidden></div>
                     </div>
                     <button class="btn-secondary" id="adv-search-btn" title="高级筛选"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.1-2.8H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H7a1.7 1.7 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V7a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span></button>
                     <button class="btn-secondary" id="folder-tree-btn" title="文件夹导航"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span></button>
@@ -580,20 +604,8 @@
     <!-- 模态框容器 -->
     <div id="modal-container"></div>
 
-    <!-- 扩展宿主 v2：活动栏 / 常驻侧边栏 / 状态栏 / 命令面板 / 域名授权框 -->
-    <div id="gd-ext-activity" class="gd-ext-activity" hidden></div>
-    <aside id="gd-ext-panel" class="gd-ext-panel" hidden>
-        <div class="gd-ext-panel-head"><span id="gd-ext-panel-title"></span>
-            <button id="gd-ext-panel-close" title="收起">✕</button></div>
-        <div id="gd-ext-panel-body"></div>
-    </aside>
+    <!-- 扩展宿主 v2：状态栏 / 域名授权框；扩展列表与视图都在主侧边栏内 -->
     <div id="gd-ext-statusbar" class="gd-ext-statusbar" hidden></div>
-    <div id="gd-ext-palette" class="gd-ext-palette" hidden>
-        <div class="gd-ext-palette-box">
-            <input id="gd-ext-palette-input" placeholder="输入命令…" autocomplete="off">
-            <div id="gd-ext-palette-list"></div>
-        </div>
-    </div>
     <div id="gd-ext-grant-layer" class="gd-ext-grant-layer" hidden></div>
 
     <!-- Toast 通知 -->
@@ -632,15 +644,15 @@
         //   改哪个文件，只有那个文件的 URL 变，其余继续命中缓存。
         var GD_HASH = {
             'anim': '8db9aa997e',
-            'app': '87b3a028e9',
+            'app': 'a8c8026f46',
             'ban-sync': 'db6d16cac9',
             'branch-guard': '2a17031683',
-            'bridge': '5cd1cbc1ce',
+            'bridge': '974a70c051',
             'cangshu-link': 'd87df4f3cb',
             'community': 'c27d585a8c',
             'config-sync': 'd3c84a594e',
             'custom': 'b49d35fe68',
-            'ext-host': '2f2a4b6778',
+            'ext-host': '1a2a6361df',
             'ext-sdk': 'cdce641284',
             'extension': 'ac2832ce10',
             'file-manager': '402922a169',
@@ -649,7 +661,7 @@
             'i18n': 'de07e71852',
             'i18n-scan': '385acf8972',
             'icons': 'bde278015a',
-            'maintain': 'b10def0baf',
+            'maintain': '78b3480f48',
             'oauth': '0482c94889',
             'onboarding': 'e2b101055d',
             'plugin-api': 'c3c2940bd5',
@@ -657,8 +669,8 @@
             'storage': '915f127e93',
             'task-dock': 'ece8a2421a',
             'theme': 'b0ec742409',
-            'ui': '443f32fbdf',
-            'version': '482768f33e'
+            'ui': '6ec8d9222c',
+            'version': '1ea42e6068'
         };
         function url(f) {
             // 自定义分支走 jsdelivr，那边自带缓存策略，不加查询串
