@@ -6,15 +6,16 @@
 <title>千览 · GitHub Drive 阅读器</title>
 <meta name="description" content="预览 GitHub Drive 里的文件，支持 PDF / Word / 表格 / 文本，自动记住阅读位置。">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230969da' stroke-width='2'%3E%3Cpath d='M2 4h7l2 2h11v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=1107">
 <!--
   ★ 三个脚本用 defer 且顺序固定：store → render → app。
     app 在 boot 里直接用 TPStore / TPRender 这两个全局符号，
     顺序反了会 undefined。defer 保证按书写顺序执行。
+  ★ v=1107：Pages 有 CDN 缓存，改完不加戳用户刷新还是旧 JS/CSS。
 -->
-<script defer src="js/store.js"></script>
-<script defer src="js/render.js"></script>
-<script defer src="js/app.js"></script>
+<script defer src="js/store.js?v=1107"></script>
+<script defer src="js/render.js?v=1107"></script>
+<script defer src="js/app.js?v=1107"></script>
 </head>
 <body>
 
@@ -152,6 +153,12 @@
     <div class="tp-set-row">
       <label for="tp-remember">记住阅读位置</label>
       <input id="tp-remember" type="checkbox">
+    </div>
+
+    <div class="tp-set-row">
+      <label>预览缓存</label>
+      <span class="tp-cache-info" id="tp-cache-info">统计中…</span>
+      <button class="tp-btn tp-btn-sm" id="tp-clear-cache">清空</button>
     </div>
 
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:6px">

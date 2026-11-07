@@ -21,7 +21,7 @@
     class Api {
         constructor(token) { this.token = token; }
 
-        async _get(path, raw) {
+        async _get(path, raw, signal) {
             const headers = {
                 'Authorization': 'token ' + this.token,
                 'Accept': raw ? 'application/vnd.github.v3.raw' : 'application/vnd.github.v3+json',
@@ -31,13 +31,14 @@
             // 429/5xx 重试。GitHub 偶发 502，不重试会让用户以为文件坏了
             for (let i = 0; i <= 2; i++) {
                 try {
-                    const r = await fetch(GH + path, { headers });
+                    const r = await fetch(GH + path, { headers, signal });
                     if (r.ok) return raw ? r.arrayBuffer() : r.json();
                     const txt = await r.text().catch(() => '');
                     const err = new Error('HTTP ' + r.status + ' ' + txt.slice(0, 120));
                     err.status = r.status;
                     throw err;
                 } catch (e) {
+                    if (signal && signal.aborted) throw e;
                     lastErr = e;
                     const transient = !e.status || e.status === 429 ||
                         e.status === 500 || e.status === 502 || e.status === 503;
@@ -52,29 +53,113 @@
         async validateToken() { await this.getMe(); return true; }
 
         /**
-         * 按 sha 取原始字节
+         * 按 sha 取原始字节（RAW 优先，失败回退 base64）
          *
          * ★ 用 git/blobs 而不是 contents：contents 接口对 >1MB 的文件
          *   会返回空 content 逼你再走一次 blob 接口，等于白跑一趟。
          *   git/blobs 一步到位，且不受仓库默认分支影响。
+         *
+         * ★ 为什么必须走 RAW：
+         *   默认 Accept 会把二进制包进 base64 的 JSON，体积凭空涨 33%，
+         *   浏览器还要 atob + 逐字节 charCodeAt 循环（同步阻塞主线程）。
+         *   Accept: application/vnd.github.raw 直接给原始字节。
+         *   线上实测同一 blob：RAW 155628 B / 0.899s，JSON 214712 B / 1.075s。
+         *   Drive 主站的 github-api.js 早就换过来了，千览这份独立客户端
+         *   一直没跟上 —— 这正是「预览慢」最主要的来源。
+         *
+         * ★ 为什么保留回退：
+         *   少数老仓库 / 超大 blob 上 raw 媒体类型不生效，GitHub 会回 JSON，
+         *   按 content-type 识别出来走老路径，行为完全不变。
+         *
+         * ★ 流式读取：response.body 逐块上报字节，进度条才有真实百分比，
+         *   而不是干等一句「正在读取…」。
          */
-        async getBlobBytes(owner, repo, sha) {
-            const b = await this._get(`/repos/${owner}/${repo}/git/blobs/${sha}`);
+        async _fetchBlobRaw(path, signal, onBytes) {
+            const headers = {
+                'Authorization': 'token ' + this.token,
+                'Accept': 'application/vnd.github.raw',
+                'X-GitHub-Api-Version': '2022-11-28',
+            };
+            let lastErr;
+            for (let i = 0; i <= 2; i++) {
+                try {
+                    const r = await fetch(GH + path, { headers, signal });
+                    if (!r.ok) {
+                        const e = new Error('HTTP ' + r.status);
+                        e.status = r.status;
+                        throw e;
+                    }
+                    const ct = r.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) {
+                        const e = new Error('服务端返回 JSON，RAW 未生效');
+                        e.rawUnsupported = true;
+                        throw e;
+                    }
+                    const len = parseInt(r.headers.get('content-length') || '0', 10) || 0;
+                    // 老 WebView 没有 ReadableStream，退回一次性读取
+                    if (!r.body || !r.body.getReader) {
+                        const ab = await r.arrayBuffer();
+                        if (!ab.byteLength) throw new Error('blob RAW 内容为空');
+                        if (onBytes) onBytes(ab.byteLength, ab.byteLength || len);
+                        return new Uint8Array(ab);
+                    }
+                    const reader = r.body.getReader();
+                    const pieces = [];
+                    let got = 0;
+                    for (;;) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        pieces.push(value);
+                        got += value.length;
+                        if (onBytes) onBytes(got, len || got);
+                    }
+                    if (!got) throw new Error('blob RAW 内容为空');
+                    const out = new Uint8Array(got);
+                    let off = 0;
+                    for (const p of pieces) { out.set(p, off); off += p.length; }
+                    return out;
+                } catch (e) {
+                    if (signal && signal.aborted) throw e;
+                    if (e.rawUnsupported) throw e;   // 直接回退，别浪费重试
+                    lastErr = e;
+                    const transient = !e.status || e.status === 429 ||
+                        e.status === 500 || e.status === 502 || e.status === 503;
+                    if (!transient || i === 2) throw e;
+                    await new Promise(r => setTimeout(r, 500 * Math.pow(2, i)));
+                }
+            }
+            throw lastErr;
+        }
+
+        async getBlobBytes(owner, repo, sha, opts) {
+            opts = opts || {};
+            const path = `/repos/${owner}/${repo}/git/blobs/${sha}`;
+            try {
+                return await this._fetchBlobRaw(path, opts.signal, opts.onBytes);
+            } catch (e) {
+                if (opts.signal && opts.signal.aborted) throw e;
+                // RAW 不可用 → 下面走原来的 base64 路径
+            }
+
+            const b = await this._get(path, false, opts.signal);
             const content = b && b.content;
             if (!content) throw new Error('blob 内容为空: ' + sha);
+            let out;
             if (b.encoding === 'base64') {
                 // 大文件不能一次性 atob 后逐字符 charCodeAt —— 几十 MB 时
                 // 会卡住主线程好几秒。分块处理，每块 64KB。
                 const bin = atob(content);
-                const out = new Uint8Array(bin.length);
+                out = new Uint8Array(bin.length);
                 const CH = 65536;
                 for (let i = 0; i < bin.length; i += CH) {
                     const end = Math.min(i + CH, bin.length);
                     for (let j = i; j < end; j++) out[j] = bin.charCodeAt(j);
                 }
-                return out;
+            } else {
+                out = new TextEncoder().encode(content);
             }
-            return new TextEncoder().encode(content);
+            if (opts.onBytes) opts.onBytes(out.length, out.length);
+            return out;
         }
 
         /**
@@ -161,26 +246,66 @@
      *
      * ★ 但并发数不能太高：GitHub 对单 token 有速率限制，并发 20 路
      *   很容易触发 403 secondary rate limit，反而更慢。
+     *
+     * ★ 进度按【字节】而不是【分片数】：RAW 是流式的，2.4MB 的图在第
+     *   一片还没下完时就有反馈了，干等一句「正在读取…」才是最难受的。
      */
-    async function fetchFile(api, fileInfo, onProgress) {
+    async function fetchFile(api, fileInfo, onProgress, signal, onPartial) {
         const chunks = fileInfo.chunks || [];
         if (!chunks.length) throw new Error('分片信息缺失');
 
-        const CONC = 6;
+        const CONC = Math.min(6, chunks.length);
+        const expected = fileInfo.size || 0;
+        const mime = TPRender.mimeOf(fileInfo.name);
         const parts = new Array(chunks.length);
+        const got = new Array(chunks.length).fill(0);
         let done = 0;
         let idx = 0;
+        let lastPrefix = 0;
+
+        function report() {
+            if (!onProgress) return;
+            const loaded = got.reduce((a, b) => a + b, 0);
+            onProgress({ phase: 'net', loaded, total: expected || loaded,
+                         done, count: chunks.length });
+        }
+
+        /**
+         * 连续前缀到齐就交给上层试着先画一帧。
+         * 分片本来就是按原文件顺序切的，所以 parts[0..k) 拼起来就是原文件
+         * 的前 k 段字节。baseline JPEG 被截断时 Chromium 会按已解码的扫描行
+         * 渲染出上半部分（实测 1/3 片 → 33%，2/3 片 → 66%），尺寸仍正确。
+         */
+        function tryPartial() {
+            if (!onPartial) return;
+            let k = 0;
+            while (k < parts.length && parts[k]) k++;
+            if (k <= lastPrefix || k >= parts.length) return;
+            lastPrefix = k;
+            const head = parts.slice(0, k);
+            const n = head.reduce((s, p) => s + p.length, 0);
+            const merged = new Uint8Array(n);
+            let off = 0;
+            for (const p of head) { merged.set(p, off); off += p.length; }
+            try { onPartial(new Blob([merged], { type: mime }), k, parts.length); }
+            catch (e) { /* 渐进帧失败不影响主下载 */ }
+        }
 
         async function worker() {
             while (idx < chunks.length) {
                 const i = idx++;
                 const c = chunks[i];
-                parts[i] = await api.getBlobBytes(c.owner, c.repo, c.sha);
+                parts[i] = await api.getBlobBytes(c.owner, c.repo, c.sha, {
+                    signal,
+                    onBytes: (n) => { got[i] = n; report(); }
+                });
                 done++;
-                if (onProgress) onProgress(done, chunks.length);
+                got[i] = parts[i].length;
+                report();
+                tryPartial();
             }
         }
-        await Promise.all(Array.from({ length: Math.min(CONC, chunks.length) }, worker));
+        await Promise.all(Array.from({ length: CONC }, worker));
 
         const total = parts.reduce((s, p) => s + (p ? p.length : 0), 0);
         if (total === 0) throw new Error('文件内容为空');
@@ -188,6 +313,271 @@
         let off = 0;
         for (const p of parts) { merged.set(p, off); off += p.length; }
         return new Blob([merged], { type: TPRender.mimeOf(fileInfo.name) });
+    }
+
+    // ==================== 预览缓存 ====================
+    /**
+     * 三级：内存 → IndexedDB → 网络。
+     *
+     * ★ 为什么必须用内容寻址的 key：
+     *   路径能改名、能移动，但分片 sha 只在内容变了才变。用 sha 串做 key，
+     *   重命名后缓存仍然命中；反过来，文件被覆盖上传后 key 也跟着变，
+     *   绝不会把旧内容显示成新文件。
+     *
+     * ★ 为什么既存内存又存 IndexedDB：
+     *   内存命中是 0 等待（同一会话反复翻图）；IndexedDB 能跨刷新、跨标签页，
+     *   且 Blob 可以直接结构化克隆进去，不用再转 base64。
+     *   隐私模式 / 配额不足时 IDB 会失败，全链路降级成纯内存，不影响功能。
+     *
+     * ★ inflight 去重：预取到一半用户点了同一个文件，复用同一个 Promise，
+     *   既不重复发请求，进度也会广播给所有等待者。
+     */
+    const DB_NAME = 'gd_thousand_blob';
+    const DB_STORE = 'blobs';
+    const CACHE_MAX_BYTES = 96 * 1024 * 1024;
+    const CACHE_MAX_ITEMS = 40;
+    const MEM_MAX_BYTES = 32 * 1024 * 1024;
+
+    const memCache = new Map();     // key -> Blob（Map 顺序即 LRU）
+    const inflight = new Map();     // key -> { promise, cbs }
+    let dbPromise = null;
+
+    function openDB() {
+        if (dbPromise) return dbPromise;
+        dbPromise = new Promise(resolve => {
+            try {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = () => {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains(DB_STORE)) {
+                        const os = db.createObjectStore(DB_STORE, { keyPath: 'key' });
+                        os.createIndex('at', 'at');
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+                req.onblocked = () => resolve(null);
+            } catch (e) { resolve(null); }
+        });
+        return dbPromise;
+    }
+
+    function idbGet(key) {
+        return openDB().then(db => {
+            if (!db) return null;
+            return new Promise(resolve => {
+                try {
+                    const r = db.transaction(DB_STORE, 'readonly')
+                        .objectStore(DB_STORE).get(key);
+                    r.onsuccess = () => resolve(r.result ? r.result.blob : null);
+                    r.onerror = () => resolve(null);
+                } catch (e) { resolve(null); }
+            });
+        }).catch(() => null);
+    }
+
+    function idbPut(key, blob) {
+        return openDB().then(db => {
+            if (!db) return;
+            return new Promise(resolve => {
+                try {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    tx.objectStore(DB_STORE).put({
+                        key, blob, size: blob.size, at: Date.now()
+                    });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                    tx.onabort = () => resolve();
+                } catch (e) { resolve(); }
+            });
+        }).catch(() => {});
+    }
+
+    /** 超配额时按时间从老到新删，不让缓存把浏览器存储撑爆 */
+    function idbTrim() {
+        return openDB().then(db => {
+            if (!db) return;
+            return new Promise(resolve => {
+                try {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    const os = tx.objectStore(DB_STORE);
+                    const rows = [];
+                    const req = os.index('at').openCursor();
+                    req.onsuccess = (ev) => {
+                        const cur = ev.target.result;
+                        if (cur) {
+                            rows.push({ key: cur.primaryKey, size: cur.value.size });
+                            cur.continue();
+                        } else {
+                            let total = rows.reduce((s, r) => s + r.size, 0);
+                            let n = rows.length;
+                            for (const r of rows) {
+                                if (total <= CACHE_MAX_BYTES && n <= CACHE_MAX_ITEMS) break;
+                                os.delete(r.key);
+                                total -= r.size;
+                                n--;
+                            }
+                            resolve();
+                        }
+                    };
+                    req.onerror = () => resolve();
+                    tx.onabort = () => resolve();
+                } catch (e) { resolve(); }
+            });
+        }).catch(() => {});
+    }
+
+    function cacheStats() {
+        return openDB().then(db => {
+            if (!db) return { count: 0, bytes: 0 };
+            return new Promise(resolve => {
+                try {
+                    const rows = [];
+                    const req = db.transaction(DB_STORE, 'readonly')
+                        .objectStore(DB_STORE).openCursor();
+                    req.onsuccess = (ev) => {
+                        const cur = ev.target.result;
+                        if (cur) { rows.push(cur.value.size); cur.continue(); }
+                        else resolve({ count: rows.length,
+                                       bytes: rows.reduce((a, b) => a + b, 0) });
+                    };
+                    req.onerror = () => resolve({ count: 0, bytes: 0 });
+                } catch (e) { resolve({ count: 0, bytes: 0 }); }
+            });
+        }).catch(() => ({ count: 0, bytes: 0 }));
+    }
+
+    function clearPreviewCache() {
+        memCache.clear();
+        return openDB().then(db => {
+            if (!db) return;
+            return new Promise(resolve => {
+                try {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    tx.objectStore(DB_STORE).clear();
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                    tx.onabort = () => resolve();
+                } catch (e) { resolve(); }
+            });
+        }).catch(() => {});
+    }
+
+    function cacheKey(f) {
+        const cs = f.chunks || [];
+        return 'v1:' + cs.map(c => c.sha || '').join('_') +
+               ':' + cs.length + ':' + (f.size || 0);
+    }
+
+    function rememberMem(key, blob) {
+        memCache.delete(key);       // 重新插入，刷新 LRU 位置
+        memCache.set(key, blob);
+        let sum = 0;
+        for (const b of memCache.values()) sum += b.size;
+        while (sum > MEM_MAX_BYTES && memCache.size > 1) {
+            const oldest = memCache.keys().next().value;
+            const b = memCache.get(oldest);
+            memCache.delete(oldest);
+            sum -= b.size;
+        }
+    }
+
+    function getFileBlob(api, f, onProgress, opts) {
+        opts = opts || {};
+        const key = cacheKey(f);
+
+        const hit = memCache.get(key);
+        if (hit) {
+            if (onProgress) onProgress({ phase: 'mem', pct: 1 });
+            return Promise.resolve(hit);
+        }
+        if (inflight.has(key)) {
+            const e = inflight.get(key);
+            if (onProgress) e.cbs.add(onProgress);
+            if (opts.onPartial) e.partials.add(opts.onPartial);
+            return e.promise;
+        }
+
+        const cbs = new Set();
+        if (onProgress) cbs.add(onProgress);
+        const emit = (p) => { cbs.forEach(cb => { try { cb(p); } catch (e) {} }); };
+        const partials = new Set();
+        if (opts.onPartial) partials.add(opts.onPartial);
+        const emitPartial = (blob, k, n) => {
+            partials.forEach(fn => { try { fn(blob, k, n); } catch (e) {} });
+        };
+        const entry = { promise: null, cbs, partials };
+        inflight.set(key, entry);
+
+        const p = (async () => {
+            const disk = await idbGet(key);
+            if (disk) {
+                rememberMem(key, disk);
+                emit({ phase: 'disk', pct: 1 });
+                return disk;
+            }
+            const blob = await fetchFile(api, f, emit, opts.signal, emitPartial);
+            rememberMem(key, blob);
+            // 不 await：写盘不该挡住首屏渲染
+            idbPut(key, blob).then(idbTrim).catch(() => {});
+            return blob;
+        })();
+        entry.promise = p;
+        const clean = () => {
+            if (inflight.get(key) === entry) inflight.delete(key);
+            cbs.clear();
+        };
+        p.then(clean, clean);
+        return p;
+    }
+
+    // ==================== 空闲预取 ====================
+    /**
+     * 列表渲染完，趁用户还在看文件名，把当前目录里最可能点开的几个文件
+     * 悄悄拉进缓存。点开时直接命中，等于把网络等待从「点击之后」挪到
+     * 「点击之前」—— 这是体感上最有效的一招。
+     *
+     * 严格限流：单文件 ≤3MB、总量 ≤10MB、最多 6 个、串行 1 路，
+     * 且用户正在打开文件时暂停。不会为了预取把 API 额度或带宽吃光。
+     */
+    const PREFETCH_MAX_FILE = 3 * 1024 * 1024;
+    const PREFETCH_BUDGET = 10 * 1024 * 1024;
+    let prefetchGen = 0;
+    let prefetchTimer = null;
+    let hoverTimer = null;
+
+    function prefetchOne(f) {
+        if (!app.api || !f || f.isDir || !f.size || f.size > PREFETCH_MAX_FILE) return;
+        const key = cacheKey(f);
+        if (memCache.has(key) || inflight.has(key)) return;
+        return getFileBlob(app.api, f, null).catch(() => {});
+    }
+
+    function schedulePrefetch() {
+        const my = ++prefetchGen;
+        if (prefetchTimer) clearTimeout(prefetchTimer);
+        prefetchTimer = setTimeout(() => {
+            if (my !== prefetchGen || !app.api || app.current) return;
+            const e = entriesOf(app.dir);
+            let budget = PREFETCH_BUDGET;
+            const queue = [];
+            for (const f of e.files) {
+                if (queue.length >= 6 || budget <= 0) break;
+                if (!f.size || f.size > PREFETCH_MAX_FILE || f.size > budget) continue;
+                const key = cacheKey(f);
+                if (memCache.has(key) || inflight.has(key)) continue;
+                budget -= f.size;
+                queue.push(f);
+            }
+            (async () => {
+                for (const f of queue) {
+                    if (my !== prefetchGen) return;
+                    while (app.prefetchPaused) await new Promise(r => setTimeout(r, 100));
+                    await prefetchOne(f);
+                    await new Promise(r => setTimeout(r, 40));
+                }
+            })();
+        }, 300);
     }
 
     // ==================== 图标（黑白线性，与 Drive 设置页同一套风格）====================
@@ -456,9 +846,18 @@
                 '<span class="tp-item-name">' + TPRender.esc(it.name) + '</span>' +
                 '<span class="tp-item-meta">' + TPRender.esc(meta) + '</span>';
             row.onclick = () => it.isDir ? enterDir(it.path) : openFile(it);
+            // 桌面端鼠标移上去到真正点击，通常有几百毫秒，够把小文件拉完。
+            // 移动端 pointerenter 也会触发，但此时多半已经点开，正好复用 inflight。
+            row.addEventListener('pointerenter', () => {
+                if (it.isDir) return;
+                clearTimeout(hoverTimer);
+                hoverTimer = setTimeout(() => prefetchOne(it), 160);
+            });
+            row.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
             frag.appendChild(row);
         }
         box.appendChild(frag);
+        schedulePrefetch();
     }
 
     function crumbs(dir) {
@@ -747,28 +1146,102 @@
 
     let openToken = 0;
 
+    function showLoading() {
+        $('#tp-body').innerHTML =
+            '<div class="tp-loading tp-loadbox">' +
+              '<div class="tp-load-title">' +
+                '<span id="tp-load-word">正在读取…</span>' +
+                '<span id="tp-load-pct">0%</span>' +
+              '</div>' +
+              '<div class="tp-load-bar"><i id="tp-load-fill"></i></div>' +
+              '<div class="tp-load-sub" id="tp-load-sub">准备中…</div>' +
+            '</div>';
+    }
+
+    function updateLoading(p) {
+        const fill = $('#tp-load-fill');
+        if (!fill) return;
+        const pctEl = $('#tp-load-pct');
+        const sub = $('#tp-load-sub');
+        if (p.phase === 'mem' || p.phase === 'disk') {
+            $('#tp-load-word').textContent = p.phase === 'mem' ? '内存命中' : '本地缓存命中';
+            pctEl.textContent = '100%';
+            fill.style.width = '100%';
+            sub.textContent = '无需联网，直接打开';
+            return;
+        }
+        const pctv = p.total ? Math.min(100, Math.round(p.loaded / p.total * 100)) : 0;
+        fill.style.width = pctv + '%';
+        pctEl.textContent = pctv + '%';
+        sub.textContent = p.done + ' / ' + p.count + ' 片 · ' +
+            TPRender.fmtSize(p.loaded) +
+            (p.total ? ' / ' + TPRender.fmtSize(p.total) : '');
+    }
+
     async function openFile(f) {
         const my = ++openToken;
         app.current = f;
 
         $('#tp-view').classList.add('open');
         $('#tp-view-title').textContent = f.name;
-        $('#tp-body').innerHTML = '<div class="tp-loading">正在读取…</div>';
+        showLoading();
         renderList();
+        app.prefetchPaused = true;
+
+        /**
+         * 渐进首帧：第一片到齐就先把上 1/3 画出来，后面每多一片就补一段。
+         * 只对多分片 JPEG 开 —— baseline JPEG 截断时 Chromium 能按已解码的
+         * 扫描行渲染（实测 1/3 片→33%、2/3 片→66%，尺寸仍正确）；
+         * PNG/WebP/GIF 截断会直接解码失败，开了只会闪一张坏图。
+         */
+        const canPartial = f.chunks && f.chunks.length > 1 &&
+            f.kind === 'image' && /\.jpe?g$/i.test(f.name);
+        const partialUrls = [];
+        let finished = false;
+        let partialWrap = null, partialImg = null, partialTag = null;
+
+        function showPartial(pblob, k, n) {
+            if (!canPartial || finished || my !== openToken) return;
+            if (!$('#tp-view').classList.contains('open')) return;
+            const url = URL.createObjectURL(pblob);
+            partialUrls.push(url);
+            const probe = new Image();
+            probe.onload = () => {
+                if (finished || my !== openToken || probe.naturalHeight <= 0) return;
+                if (!$('#tp-view').classList.contains('open')) return;
+                if (!partialWrap) {
+                    $('#tp-body').innerHTML = '';
+                    partialWrap = document.createElement('div');
+                    partialWrap.className = 'tp-image-wrap tp-image-partial';
+                    // 直接用已经解码完成的 probe，不再新建 img 重新解码一次，
+                    // 否则首帧会先白一下再出内容
+                    partialImg = probe;
+                    partialImg.alt = f.name;
+                    partialTag = document.createElement('div');
+                    partialTag.className = 'tp-partial-tag';
+                    partialWrap.appendChild(partialImg);
+                    partialWrap.appendChild(partialTag);
+                    $('#tp-body').appendChild(partialWrap);
+                } else {
+                    partialImg.src = url;
+                }
+                partialTag.textContent = '已解码 ' + k + '/' + n + ' · 继续加载中…';
+            };
+            probe.onerror = () => {};
+            probe.src = url;
+        }
 
         try {
-            const blob = await fetchFile(app.api, f, (done, total) => {
+            const blob = await getFileBlob(app.api, f, (p) => {
                 if (my !== openToken) return;
-                if (total > 1) {
-                    $('#tp-body').innerHTML = '<div class="tp-loading">正在读取… ' +
-                        done + '/' + total + '</div>';
-                }
-            });
+                updateLoading(p);
+            }, { onPartial: showPartial });
             if (my !== openToken) return;   // 期间用户点了别的文件，丢弃这次结果
 
             if (app.handle && app.handle.destroy) app.handle.destroy();
             app.handle = null;
 
+            finished = true;
             $('#tp-body').innerHTML = '';
             app.handle = await TPRender.render(blob, f, $('#tp-body'), {
                 onBigFile: mb => {
@@ -823,18 +1296,22 @@
                 btn.onclick = () => retryDownload(f);
                 box.appendChild(btn);
             }
+        } finally {
+            partialUrls.forEach(u => URL.revokeObjectURL(u));
+            partialUrls.length = 0;
+            if (my === openToken) app.prefetchPaused = false;
         }
     }
 
     /**
      * 渲染失败后的补救下载
      *
-     * 重新走一遍取文件的流程（不用缓存的 blob，因为那时可能已经失败）。
-     * 这条路径慢一点，但它是用户最后能拿到文件的方式，值得多花几秒。
+     * 失败原因是渲染组件没加载好，文件字节其实是好的，所以直接走缓存，
+     * 不必再联网重下一遍。
      */
     async function retryDownload(f) {
         try {
-            const blob = await fetchFile(app.api, f);
+            const blob = await getFileBlob(app.api, f);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -933,6 +1410,16 @@
 
     // ---------- 设置 ----------
 
+    async function updateCacheInfo() {
+        const el = $('#tp-cache-info');
+        if (!el) return;
+        el.textContent = '统计中…';
+        const s = await cacheStats();
+        el.textContent = s.count
+            ? s.count + ' 个 · ' + TPRender.fmtSize(s.bytes)
+            : '空';
+    }
+
     function applySettings() {
         const s = app.settings;
         const root = document.documentElement;
@@ -992,6 +1479,7 @@
         // 设置面板
         $('#tp-set-toggle').addEventListener('click', () => {
             $('#tp-settings').classList.toggle('show');
+            updateCacheInfo();
         });
         bindRange('#tp-fs', 'fontSize', v => parseInt(v, 10));
         bindRange('#tp-lh', 'lineHeight', v => parseFloat(v));
@@ -1011,6 +1499,16 @@
             TPStore._write('positions', {});
             renderContinue();
         });
+        const clearCacheBtn = $('#tp-clear-cache');
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', async () => {
+                clearCacheBtn.disabled = true;
+                await clearPreviewCache();
+                clearCacheBtn.disabled = false;
+                updateCacheInfo();
+            });
+        }
+        updateCacheInfo();
     }
 
     function bindRange(sel, key, cast) {

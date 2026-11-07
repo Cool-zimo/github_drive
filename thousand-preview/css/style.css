@@ -387,6 +387,13 @@ html, body {
     border-radius: 8px;
     box-shadow: var(--tp-shadow);
 }
+/* 渐进首帧：JPEG 截断时先画出的上半部分，带一行说明避免被当成坏图 */
+.tp-image-partial { flex-direction: column; align-items: center; gap: 8px; }
+.tp-partial-tag {
+    padding: 4px 12px; border-radius: 99px;
+    background: var(--tp-bg-sunken); color: var(--tp-fg-dim);
+    font-size: 12px; font-variant-numeric: tabular-nums;
+}
 
 /* ---- PDF ---- */
 
@@ -478,6 +485,34 @@ audio.tp-media { max-width: 480px; }
 }
 .tp-error { color: #cf222e; }
 
+/* ---- 读取进度：有真实百分比，不再干等一句「正在读取…」 ---- */
+.tp-loadbox { gap: 12px; }
+.tp-load-title {
+    display: flex; align-items: baseline; gap: 10px;
+    font-size: 15px; color: var(--tp-fg);
+}
+.tp-load-title #tp-load-pct {
+    font-variant-numeric: tabular-nums;
+    color: var(--tp-accent); font-weight: 600;
+}
+.tp-load-bar {
+    width: min(320px, 80%); height: 6px;
+    border-radius: 99px; background: var(--tp-bg-sunken); overflow: hidden;
+}
+.tp-load-bar i {
+    display: block; height: 100%; width: 0;
+    border-radius: 99px; background: var(--tp-accent);
+    transition: width .12s linear;
+}
+.tp-load-sub {
+    font-size: 12px; color: var(--tp-fg-dim);
+    font-variant-numeric: tabular-nums;
+}
+.tp-cache-info {
+    flex: 1 1 auto; text-align: right;
+    color: var(--tp-fg-dim); font-variant-numeric: tabular-nums;
+}
+
 .tp-btn {
     padding: 8px 16px;
     border: 1px solid var(--tp-line);
@@ -565,8 +600,15 @@ audio.tp-media { max-width: 480px; }
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; font-size: 13px;
 }
-.tp-set-row input[type="range"] { flex: 1 1 140px; }
-.tp-set-row select, .tp-set-row input[type="checkbox"] { flex: 0 0 auto; }
+.tp-set-row label { flex: 0 0 auto; white-space: nowrap; }
+.tp-set-row input[type="range"] { flex: 1 1 140px; width: auto; }
+.tp-set-row select { flex: 0 0 auto; }
+/* .tp-card-panel input 的 width:100% 会连 checkbox 一起撑满整行，
+   把左边的 label 压到只剩一个字的宽度（中文竖排）。这里显式收回来。 */
+.tp-set-row input[type="checkbox"] {
+    flex: 0 0 auto; width: 16px; height: 16px;
+    padding: 0; accent-color: var(--tp-accent);
+}
 
 /* ============ 移动端 ============ */
 
