@@ -5113,3 +5113,257 @@ body.gd-logged-out .gd-ext-grant-layer { display: none !important; }
     background: var(--bg-tertiary); color: var(--text-secondary);
     border: 1px solid var(--border-light);
 }
+
+/* ==================================================================
+   18. 登录页双栏 + 产品预览（v0.10.4）
+
+   原来整屏中间只有一张白卡片：logo / 标题 / 输入框 / 按钮，
+   其余全是渐变留白。现在左栏放一个"活的"迷你文件管理器，
+   右栏原样保留登录表单 —— 所有 id、事件、OAuth 面板都不动。
+
+   ★ 溢出保护（血泪）：
+     .login-screen 是 flex + align-items:center。内容一旦比视口高，
+     居中会把上半截顶到容器外，而滚动条只能往下滚 —— 顶部永远够不着
+     （ghost-shell 锁定屏踩过同一个坑）。改成 align-items:flex-start
+     + 卡片 margin:auto：空间够就居中，不够就归零、从顶部开始且可滚。
+   ================================================================== */
+.login-screen {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 16px;
+}
+.login-card {
+    margin: auto;
+    padding: 0;                /* 交给两栏各自控制 */
+    overflow: hidden;          /* 保住圆角，左栏渐变不越界 */
+    max-width: 540px;
+}
+.login-pane { padding: 38px 44px 30px; }
+
+/* ---------- 左栏：品牌面板 ---------- */
+.login-showcase {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    text-align: left;
+    color: #fff;
+    padding: 26px 30px 24px;
+    background: linear-gradient(155deg, #1b2145 0%, #2c2a63 52%, #432b6d 100%);
+}
+.login-showcase::before {       /* 细网格，不引图片、零请求 */
+    content: '';
+    position: absolute; inset: 0; z-index: -1;
+    background-image: linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+    background-size: 26px 26px;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,.85), transparent 78%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,.85), transparent 78%);
+}
+.login-showcase::after {        /* 缓慢漂移的紫色光晕 */
+    content: '';
+    position: absolute; z-index: -1;
+    width: 300px; height: 300px; right: -120px; top: -140px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,110,255,.55), transparent 68%);
+    filter: blur(18px);
+    animation: ls-glow 9s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+@keyframes ls-glow {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(-24px, 20px) scale(1.12); }
+}
+.ls-inner { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 16px; }
+
+.ls-top { display: flex; align-items: center; justify-content: space-between; }
+.ls-kicker {
+    font: 600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .16em; color: rgba(255,255,255,.62);
+}
+.ls-arrow { color: #a5b4fc; }
+.ls-live {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 600 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .1em; color: #86efac;
+}
+.ls-live i {
+    width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+    animation: ls-blink 2s ease-in-out infinite;
+}
+@keyframes ls-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+.ls-head h2 {
+    margin: 0; font-size: 26px; line-height: 1.22; font-weight: 750;
+    letter-spacing: -.02em; color: #fff;
+}
+.ls-zh {
+    display: block; margin-top: 7px; font-family: inherit;
+    font-size: 11px; letter-spacing: .04em; color: rgba(255,255,255,.58);
+}
+
+/* ---------- 迷你文件管理器 ---------- */
+.ls-window {
+    border-radius: 12px;
+    background: rgba(9, 13, 30, .62);
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 16px 34px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06);
+    overflow: hidden;
+}
+.ls-winbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+    background: rgba(255,255,255,.035);
+}
+.ls-dots { display: flex; gap: 5px; }
+.ls-dots i { width: 8px; height: 8px; border-radius: 50%; background: #ff5f57; }
+.ls-dots i:nth-child(2) { background: #febc2e; }
+.ls-dots i:nth-child(3) { background: #28c840; }
+.ls-path {
+    font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: rgba(255,255,255,.72);
+}
+.ls-branch {
+    margin-left: auto; font-size: 10px; color: rgba(255,255,255,.42);
+    border: 1px solid rgba(255,255,255,.14); padding: 1px 6px; border-radius: 8px;
+}
+.ls-files { padding: 8px 12px 4px; }
+.ls-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 2px; font-size: 12px; color: rgba(255,255,255,.86);
+}
+.ls-row svg { width: 14px; height: 14px; flex: 0 0 auto; color: #9aa5ff; opacity: .92; }
+.ls-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-meta { margin-left: auto; font-size: 10px; color: rgba(255,255,255,.42); white-space: nowrap; }
+.ls-upload { padding: 6px 12px 10px; }
+.ls-upload-txt {
+    display: flex; justify-content: space-between; margin-bottom: 5px;
+    font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: rgba(255,255,255,.55);
+}
+.ls-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+.ls-bar i {
+    display: block; height: 100%; width: 68%; border-radius: 4px;
+    background: linear-gradient(90deg, #6366f1, #22d3ee);
+    animation: ls-upload 5.5s ease-in-out infinite;
+}
+@keyframes ls-upload {
+    0%       { width: 8%; }
+    55%      { width: 68%; }
+    78%      { width: 68%; }
+    92%,100% { width: 100%; }
+}
+.ls-commit {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 12px;
+    border-top: 1px solid rgba(255,255,255,.09);
+    background: rgba(99,102,241,.09);
+    font-size: 10px; color: rgba(255,255,255,.6);
+}
+.ls-commit-dot {
+    width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%;
+    background: #34d399; animation: ls-pulse 2.4s ease-out infinite;
+}
+@keyframes ls-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(52,211,153,0); }
+    100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+.ls-commit code {
+    font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #a5b4fc;
+}
+.ls-time { margin-left: auto; color: rgba(255,255,255,.36); }
+
+.ls-feats { display: flex; flex-wrap: wrap; gap: 6px; }
+.ls-feats span {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(255,255,255,.06);
+    font-size: 9px; letter-spacing: .06em;
+    color: rgba(255,255,255,.78); white-space: nowrap;
+}
+.ls-feats svg { width: 11px; height: 11px; opacity: .8; }
+
+/* ---------- 双栏（桌面 / 宽平板） ---------- */
+@media (min-width: 860px) {
+    .login-card {
+        max-width: 940px;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1.02fr 1fr;
+    }
+    .login-showcase {
+        padding: 40px 36px; border-radius: 0;
+        display: flex; flex-direction: column; justify-content: center;
+    }
+    .login-pane {
+        padding: 42px 42px 34px;
+        display: flex; flex-direction: column; justify-content: center;
+    }
+    .ls-inner { gap: 20px; }
+    .ls-head h2 { font-size: 30px; }
+}
+
+/* ---------- 单列中等宽度（平板竖屏）：只收间距，内容全留 ---------- */
+@media (min-width: 601px) and (max-width: 859px) {
+    .login-screen { padding: 16px; }
+    .login-showcase { padding: 18px 26px 16px; }
+    .login-pane { padding: 24px 30px 22px; }
+    .ls-inner { gap: 10px; }
+    .ls-head h2 { font-size: 22px; }
+    .ls-commit { display: none; }
+    .login-subtitle { margin-bottom: 16px; }
+    .login-logo img { width: 60px; height: 60px; }
+}
+
+/* ---------- 手机：预览压成紧凑条，尽量让整卡进首屏 ---------- */
+@media (max-width: 600px) {
+    .login-screen { padding: 16px 12px; }
+    .login-pane { padding: 22px 24px 20px; }
+    .login-showcase { padding: 18px 22px 16px; }
+    .ls-inner { gap: 11px; }
+    .ls-head h2 { font-size: 21px; }
+    .ls-zh { margin-top: 4px; font-size: 10px; }
+    .ls-window { border-radius: 10px; }
+    .ls-row { padding: 4px 2px; }
+    .ls-files .ls-row:nth-child(3) { display: none; }     /* 保留被上传的那个文件 */
+    .ls-commit { display: none; }
+    .ls-feats span { font-size: 8.5px; padding: 3px 7px; }
+    /* 右栏同步收紧，别让表单把整张卡片撑出去 */
+    .login-logo img { width: 56px; height: 56px; }
+    .login-logo { margin-bottom: 10px; }
+    .login-card h1 { font-size: 24px; margin-bottom: 4px; }
+    .login-subtitle { margin-bottom: 18px; font-size: 13px; }
+    .token-hint { margin-bottom: 14px; }
+    .token-link { margin-top: 10px; }
+    .login-version { margin-top: 10px !important; }
+}
+@media (max-width: 380px) {
+    .ls-feats span:nth-child(3) { display: none; }
+}
+/* 矮屏（360×640 这类）：再砍掉文件列表，只留标题栏 + 上传进度，
+   保住「活的」观感，同时让登录按钮落在首屏 */
+@media (max-width: 600px) and (max-height: 700px) {
+    .login-showcase { padding: 14px 20px 12px; }
+    .ls-inner { gap: 8px; }
+    .ls-head h2 { font-size: 18px; }
+    .ls-files, .ls-feats { display: none; }
+    .ls-window .ls-winbar { padding: 7px 10px; }
+    .login-pane { padding: 18px 22px 16px; }
+    .login-logo img { width: 48px; height: 48px; }
+    .login-subtitle { margin-bottom: 14px; }
+}
+
+/* 暗色下右栏沿用卡片背景，左栏本身就是深色，无需另配 */
+body.dark-mode .login-showcase { background: linear-gradient(155deg, #14182f 0%, #242251 52%, #36225a 100%); }
+
+/* 每加一个动画都要登记：晕动症用户开了「减少动态效果」就不该看到它 */
+@media (prefers-reduced-motion: reduce) {
+    .login-showcase::after,
+    .ls-bar i,
+    .ls-commit-dot,
+    .ls-live i { animation: none !important; }
+    .ls-bar i { width: 68%; }
+}
