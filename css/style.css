@@ -2986,6 +2986,14 @@ body.dark .td-foot { background: #111827; border-color: #374151; }
 }
 @keyframes tp-in { from { opacity: 0; transform: translateY(8px); } }
 
+/* 扩展窗口：沿用 v1 的浮窗形态，但默认尺寸放大一圈。
+   460×380 装不下扩展内容，之前的侧边栏方案也是被这一点逼出来的。
+   写在 .is-full 之前，保证全屏态仍能覆盖它。 */
+.tp-win.tp-win-ext {
+    width: min(880px, 86vw);
+    height: min(620px, 76vh);
+}
+
 .tp-win.is-full {
     width: 100vw;
     height: 100vh;
@@ -3154,6 +3162,7 @@ body.dark .tp-list-row:hover { background: #374151; }
 
 @media (max-width: 520px) {
     .tp-win { width: calc(100vw - 24px); }
+    .tp-win.tp-win-ext { width: calc(100vw - 24px); height: calc(100vh - 88px); }
     .tp-win.is-mini { width: calc(100vw - 24px); }
     .tp-list { width: calc(100vw - 24px); }
 }
@@ -5027,8 +5036,8 @@ svg.gd-set-ico {
 /* 独立窗口兜底：永远不超出视口，内容可滚 */
 .gd-ext-fallback {
     position: fixed; right: 16px; bottom: 40px; z-index: 9500;
-    width: min(520px, calc(100vw - 32px));
-    height: min(380px, calc(100vh - 96px));
+    width: min(880px, calc(100vw - 32px));
+    height: min(620px, calc(100vh - 96px));
     background: var(--bg-primary); border: 1px solid var(--border-color);
     border-radius: 10px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.3);
     display: flex; flex-direction: column;

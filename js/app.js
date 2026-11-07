@@ -2692,7 +2692,8 @@ class App {
         const installed = this.getInstalledPlugins();
         const plugin = installed[pluginId];
         if (!plugin) { this.ui.showToast(I18n.t('plugin.notInstalled'), 'error'); return; }
-        // v2 扩展交给扩展宿主：常驻侧边栏、多窗口、命令、网络都在那边。
+        // v2 扩展交给扩展宿主：默认开独立窗口（v1 形态），
+        // 联网 / 命令 / 状态栏 / 存储 / 多窗口这些 API 能力由 v2 提供。
         // v1 插件保持原来的 showPluginRunner 路径，行为完全不变。
         if (window.ExtHost && ExtHost.isV2(plugin)) {
             ExtHost.open(plugin);

@@ -4371,7 +4371,7 @@ class UI {
         var views = (p.contributes && p.contributes.views) || {};
         var perms = p.permissions || [];
         var chips = [];
-        if (views.sidebar) chips.push('▤ 常驻侧边栏');
+        if (views.sidebar) chips.push('▤ 可嵌侧栏');
         if (perms.indexOf('ui.window') >= 0) chips.push('▢ 多窗口');
         if (perms.indexOf('net.fetch') >= 0) chips.push('🌐 网络请求');
         if (perms.indexOf('net.github') >= 0) chips.push('🐙 GitHub API');
@@ -4481,7 +4481,7 @@ class UI {
                         ${isInstalled ? '<span class="plugin-badge">' + I18n.t('plugin.installed') + '</span>' : ''}
                         ${p.type === 'game' ? '<span class="plugin-badge" style="background:#f59e0b;">' + I18n.t('plugin.game') + '</span>' : ''}
                         ${p.community ? '<span class="plugin-badge" style="background:#8b5cf6;">' + I18n.t('plugin.communityTag') + '</span>' : ''}
-                        ${(p.api === 2 || p.contributes) ? '<span class="plugin-badge" style="background:#8250df;" title="支持常驻侧边栏 / 窗口 / 命令 / 网络">⚡ v2</span>' : ''}
+                        ${(p.api === 2 || p.contributes) ? '<span class="plugin-badge" style="background:#8250df;" title="v2 = 扩展 API 世代：独立窗口 / 命令 / 联网 / 存储 / 状态栏">⚡ v2</span>' : ''}
                     </div>
                     <div class="plugin-card-desc">${this.escapeHtml(p.description || '')}</div>
                     ${this.renderPluginCaps(p)}

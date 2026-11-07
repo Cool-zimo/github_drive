@@ -313,25 +313,20 @@
         html += list.map(function (x) {
             var icon = x.p.icon || '🧩';
             return '<div class="gd-ext-nav-item" data-ext="' + esc(x.id) + '" role="button" tabindex="0" ' +
-                'title="' + esc(x.p.name || x.id) + ' · 点击在侧边栏打开">' +
+                'title="' + esc(x.p.name || x.id) + ' · 点击打开独立窗口">' +
                 '<span class="gd-ext-nav-ico">' + esc(icon) + '</span>' +
                 '<span class="gd-ext-nav-name">' + esc(x.p.name || x.id) + '</span>' +
                 '<span class="gd-ext-act-badge" data-badge="' + esc(x.id) + '"></span>' +
-                '<button type="button" class="gd-ext-nav-win" data-win="' + esc(x.id) + '" ' +
-                'title="在独立窗口打开">⧉</button></div>';
+                '</div>';
         }).join('');
         dom.activity.innerHTML = html;
+        // 默认形态回到 v1：点一下就是独立浮窗。v2 只带来 API 能力，
+        // 不把扩展塞进主侧边栏里挤着显示。
         dom.activity.querySelectorAll('[data-ext]').forEach(function (b) {
-            b.addEventListener('click', function (e) {
-                if (e.target.closest('[data-win]')) return;
-                openSidebar(b.dataset.ext);
-            });
+            b.addEventListener('click', function () { openWindow(b.dataset.ext, {}); });
             b.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSidebar(b.dataset.ext); }
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWindow(b.dataset.ext, {}); }
             });
-        });
-        dom.activity.querySelectorAll('[data-win]').forEach(function (b) {
-            b.addEventListener('click', function (e) { e.stopPropagation(); openWindow(b.dataset.win, {}); });
         });
         var cmd = dom.activity.querySelector('[data-cmd]');
         if (cmd) cmd.addEventListener('click', function () { setSearchMode('commands', true); });
@@ -468,6 +463,20 @@
     function openWindow(id, opts) {
         opts = opts || {};
         var e = getExt(id);
+        // 同一个扩展已有窗口时唤醒它，不在屏幕上堆一堆重复窗口。
+        // 扩展主动调 GD.ui.window() 想开第二个时传 forceNew，仍可多开。
+        if (!opts.forceNew) {
+            var alive = null;
+            e.sessions.forEach(function (s) {
+                if (!alive && s.kind === 'window' && s.winId) alive = s;
+            });
+            if (alive) {
+                var T0 = td();
+                if (T0 && T0.expandPlugin) T0.expandPlugin(alive.winId);
+                renderStatus();
+                return alive.sid;
+            }
+        }
         var made = createFrame(e, 'window', { html: opts.html || e.plugin.html, url: opts.url || e.plugin.externalUrl });
         var s = made.session;
         var T = td();
@@ -479,7 +488,12 @@
                 mount: made.frame,
                 onClose: function () { disposeSession(s); }
             });
-            if (!s.winId) {
+            if (s.winId) {
+                // 扩展窗口默认比 v1 的 460×380 大一圈，内容不再被挤扁；
+                // 用户依然能拖拽、resize、全屏。
+                var el = document.querySelector('.tp-win[data-id="' + s.winId + '"]');
+                if (el) el.classList.add('tp-win-ext');
+            } else {
                 // 任务坞拒收时兜底：漂浮层
                 mountFallback(s, title, opts);
             }
@@ -541,14 +555,15 @@
         });
     }
 
-    /** 供 app.runPlugin 调用：v2 扩展按清单决定默认形态 */
+    /** 供 app.runPlugin 调用：默认一律开独立窗口（v1 形态）。
+     *  v2 的价值在 API 能力（联网 / 命令 / 状态栏 / 存储 / 多窗口），
+     *  不在把界面塞进侧边栏。扩展仍可显式请求侧栏视图。 */
     function open(plugin, opts) {
         if (!isV2(plugin)) return false;   // v1 交给原 showPluginRunner
         var e = getExt(plugin.id, plugin);
         opts = opts || {};
-        var views = (plugin.contributes && plugin.contributes.views) || {};
-        if (opts.window || (!views.sidebar && !opts.sidebar)) return openWindow(e.id, opts);
-        return openSidebar(e.id);
+        if (opts.sidebar === true) return openSidebar(e.id);
+        return openWindow(e.id, opts);
     }
 
     /* ==================== 消息通道 ==================== */
@@ -929,14 +944,20 @@
         }
         // 扩展自己上报的零碎信息（字数、调试计数等）收进 title，悬停才看得到；
         // 底栏可见部分只保留：上传进度 / 扩展启用数与当前扩展 / 选中文件 / 搜索范围。
-        var st = '';
+        var st = '', winCount = 0, winNames = [];
         exts.forEach(function (e) {
-            if (e.status && activeSidebar && e.id === activeSidebar) st = e.status;
+            if (e.status && !st) st = e.status;
+            e.sessions.forEach(function (s) {
+                if (s.kind === 'window' || s.kind === 'popout') {
+                    winCount++;
+                    winNames.push((inst[e.id] && inst[e.id].name) || e.id);
+                }
+            });
         });
-        html += cell('🧩 扩展 ' + enabled + ' 已启用' +
-            (activeSidebar ? ' · ' + esc((inst[activeSidebar] && inst[activeSidebar].name) || activeSidebar) : ''),
-            'clickable gd-ext-status-hide-sm',
-            (st ? '扩展状态：' + st : '打开插件广场'), 'plugins');
+        var tip = st ? '扩展状态：' + st
+            : (winCount ? '打开的窗口：' + winNames.slice(-3).join('、') : '打开插件广场');
+        html += cell('🧩 扩展 ' + enabled + ' 已启用' + (winCount ? ' · ' + winCount + ' 个窗口' : ''),
+            'clickable gd-ext-status-hide-sm', tip, 'plugins');
         if (failed.length) html += cell('⚠ ' + failed.length + ' 错误', 'warn clickable gd-ext-status-hide-sm', '查看后台进程', 'tasks');
 
         var sel = '';
@@ -1039,7 +1060,7 @@
                 if (i >= 0) { ext.grants.splice(i, 1); saveGrants(ext); }
                 return ext.grants.slice();
             }
-            case 'ui.window': return openWindow(ext.id, { html: p.html, url: p.url, title: p.title, icon: p.icon });
+            case 'ui.window': return openWindow(ext.id, { html: p.html, url: p.url, title: p.title, icon: p.icon, forceNew: true });
             case 'ui.close': {
                 if (s.winId && td() && td().closePlugin) td().closePlugin(s.winId);
                 else if (s.fallback) { s.fallback.remove(); disposeSession(s); }
@@ -1167,11 +1188,9 @@
         hookHost();
         // 上传/下载进度与扩展状态是活数据，1 秒刷一次
         if (!statusTimer) statusTimer = setInterval(renderStatus, 1000);
-        // 上次打开的侧边栏：只在扩展仍安装时恢复
-        try {
-            var last = localStorage.getItem('gd_ext_active_sidebar');
-            if (last && installed()[last] && isV2(installed()[last])) openSidebar(last);
-        } catch (err) { /* 忽略 */ }
+        // v1 形态：窗口不自动恢复。清掉旧版残留的侧栏状态，
+        // 否则用户刷新后又会冒出一个占主导航的扩展面板。
+        try { localStorage.removeItem('gd_ext_active_sidebar'); } catch (err) { /* 忽略 */ }
     }
 
     root.ExtHost = {
