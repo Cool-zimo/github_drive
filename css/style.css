@@ -5131,12 +5131,22 @@ body.gd-logged-out .gd-ext-grant-layer { display: none !important; }
     align-items: flex-start;
     justify-content: center;
     padding: 24px 16px;
+    min-height: 100dvh;        /* 移动端地址栏收起/展开时按可见高度算 */
 }
+/* 应用主体需要 body{overflow:hidden}（内部自带滚动容器），但首屏不能一起锁死。
+   平板横屏 + WebView 内容区偏矮 / 系统字号放大时，卡片会高于视口；
+   原先 body 锁死 + .login-screen{overflow:hidden} 双重夹击，底部永远够不着。
+   只在未登录态放开，showApp() 移除该 class 后自动恢复原样。 */
+body.gd-logged-out { overflow-x: hidden; overflow-y: auto; }
 .login-card {
     margin: auto;
     padding: 0;                /* 交给两栏各自控制 */
     overflow: hidden;          /* 保住圆角，左栏渐变不越界 */
     max-width: 540px;
+    /* Android WebView 默认 text-size-adjust:auto 会按密度自行放大字号，
+       把卡片撑得比视口还高。锁死 100%，排版按设计尺寸走。 */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 .login-pane { padding: 38px 44px 30px; }
 
@@ -5354,6 +5364,38 @@ body.gd-logged-out .gd-ext-grant-layer { display: none !important; }
     .login-pane { padding: 18px 22px 16px; }
     .login-logo img { width: 48px; height: 48px; }
     .login-subtitle { margin-bottom: 14px; }
+}
+
+/* ---------- 宽屏但内容区矮（平板横屏 / 分屏 / 带标题栏的 WebView） ----------
+   双栏断点只看宽度，≥860px 就按桌面 507px 卡片排。可平板横屏宽度够、
+   高度却常被状态栏 + 浏览器标题栏吃掉一截，或系统字号被放大 ——
+   卡片一超高，底部三枚徽章和「已保存账号」就被切在视口外。
+   这里按高度主动给左栏瘦身，让常见平板高度下整卡仍落在首屏。 */
+@media (min-width: 860px) and (max-height: 820px) {
+    .login-screen { padding: 14px 16px; }
+    .login-showcase { padding: 22px 28px; }
+    .login-pane { padding: 26px 34px; }
+    .ls-inner { gap: 12px; }
+    .ls-head h2 { font-size: 25px; }
+    .ls-zh { margin-top: 4px; }
+    .ls-files .ls-row:nth-child(n+3) { display: none; }
+    .ls-commit { display: none; }
+    .ls-feats span { font-size: 8.5px; padding: 3px 7px; }
+    .login-logo img { width: 64px; height: 64px; }
+    .login-subtitle { margin-bottom: 14px; }
+}
+@media (min-width: 860px) and (max-height: 620px) {
+    .login-screen { padding: 10px 16px; }
+    .login-showcase { padding: 16px 24px; }
+    .login-pane { padding: 20px 28px; }
+    .ls-inner { gap: 9px; }
+    .ls-head h2 { font-size: 21px; }
+    .ls-files, .ls-feats { display: none; }
+    .ls-window .ls-winbar { padding: 7px 10px; }
+    .login-logo img { width: 52px; height: 52px; }
+    .login-logo { margin-bottom: 8px; }
+    .login-card h1 { font-size: 24px; }
+    .login-subtitle { margin-bottom: 12px; }
 }
 
 /* 暗色下右栏沿用卡片背景，左栏本身就是深色，无需另配 */
