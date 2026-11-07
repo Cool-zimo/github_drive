@@ -9,7 +9,7 @@
     "community": "c27d585a8c",
     "config-sync": "d3c84a594e",
     "custom": "b49d35fe68",
-    "ext-host": "f5ef9b9dcb",
+    "ext-host": "137a9db724",
     "ext-sdk": "cdce641284",
     "extension": "ac2832ce10",
     "file-manager": "402922a169",
@@ -24,9 +24,9 @@
     "plugin-api": "c3c2940bd5",
     "share": "4504069936",
     "storage": "915f127e93",
-    "task-dock": "ece8a2421a",
+    "task-dock": "0e7dad96ce",
     "theme": "b0ec742409",
     "ui": "8615d08d33",
-    "version": "4080e07e8d"
+    "version": "3d3928ad30"
   }
 }

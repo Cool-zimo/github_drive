@@ -1220,3 +1220,8 @@ const TaskDock = (() => {
         get count() { return tasks.size; }
     };
 })();
+
+// 顶层 const 只存在于全局词法环境，不会成为 window 的属性。
+// 但 ext-host.js / 旧版插件代码都是按 window.TaskDock 取的，这里显式挂一份，
+// 否则扩展窗口会静默退化成兜底浮层（不是 v1 那种可拖动缩放的独立窗口）。
+window.TaskDock = TaskDock;

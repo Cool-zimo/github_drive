@@ -64,7 +64,12 @@
 
     function app() { return root.app || null; }
     function ui() { return root.ui || null; }
-    function td() { return root.TaskDock || null; }
+    // TaskDock 在 task-dock.js 里是顶层 const（挂在全局词法环境，不是 window
+    // 属性）。只查 root.TaskDock 会拿到 undefined，openWindow 就会静默退化成
+    // 兜底浮层 —— 用户看到的不是独立窗口。两处都试，兼容老版本与测试台注入。
+    function td() {
+        return root.TaskDock || (typeof TaskDock !== 'undefined' ? TaskDock : null);
+    }
     function nowId() { return 's' + (++seq) + '-' + Math.random().toString(36).slice(2, 7); }
     function toast(msg, level) {
         if (ui() && ui().showToast) ui().showToast(String(msg), level || 'info');
@@ -592,10 +597,13 @@
 
     function context() {
         var a = app(), u = ui();
+        // getUser() 在首次加载 / 用户数据被清空时会返回 null，
+        // 直接读 .login 会让扩展 iframe 的 hello 消息整条炸掉。
+        var user = (a && a.storage && a.storage.getUser) ? a.storage.getUser() : null;
         return {
             view: (u && u._currentView) || null,
             path: (a && a.fileManager && a.fileManager.currentPath) || null,
-            user: (a && a.storage && a.storage.getUser && a.storage.getUser().login) || null,
+            user: (user && user.login) || null,
             lang: (root.I18n && root.I18n.current) || 'zh',
             theme: document.documentElement.dataset.theme ||
                 (document.body.classList.contains('dark-mode') ? 'dark' : 'light')
