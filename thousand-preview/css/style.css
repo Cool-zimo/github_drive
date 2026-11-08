@@ -400,6 +400,11 @@ html, body {
     font-size: 12px; color: var(--tp-fg-dim);
     font-variant-numeric: tabular-nums;
 }
+/* 截断 JPEG 仍按整图高度占位，信息条跟在 img 后面会被推到首屏之外。
+   用 order 提到图片上方，加载中一眼能看到片数与真实百分比。 */
+.tp-image-partial .tp-partial-tag,
+.tp-image-partial .tp-partial-bar,
+.tp-image-partial .tp-partial-pct { order: -1; }
 
 /* ---- PDF ---- */
 
