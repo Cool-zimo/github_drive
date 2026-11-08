@@ -138,7 +138,11 @@
                 return await this._fetchBlobRaw(path, opts.signal, opts.onBytes);
             } catch (e) {
                 if (opts.signal && opts.signal.aborted) throw e;
-                // RAW 不可用 → 下面走原来的 base64 路径
+                // 只有「服务端确实没给 RAW」或「拿不到 HTTP 状态的传输故障」
+                // 才值得再走一次 base64。401/403/404 是明确结论，回退只会
+                // 让每个分片多发一次请求 —— 6 片并发时被放大成 6 次无用
+                // 往返，连「读取失败」都要多等一轮才显示。
+                if (e.status >= 400 && !e.rawUnsupported) throw e;
             }
 
             const b = await this._get(path, false, opts.signal);
@@ -238,6 +242,43 @@
         return new TextDecoder().decode(bytes);
     }
 
+    // ==================== 全局网络闸门 ====================
+    /**
+     * 单个文件内部并发 6 路是快的，但「预取 6 个文件 + 用户又连点 3 个」
+     * 会叠成 6×N 路请求，GitHub 的 secondary rate limit 一触发，反而比
+     * 串行更慢 —— 而且最先被拖住的往往是用户正在看的那个文件。
+     *
+     * 这里给所有分片请求套一个全局闸门：同时在途不超过 6 路，队列按
+     * 优先级出队。前台打开的文件是 1，后台预取是 0；预取进行到一半
+     * 用户点了同一个文件，entry 的优先级会被提升，队列里剩下的分片
+     * 立刻插到前面（prio 是函数而不是快照，就是为了这个）。
+     */
+    const NET_LIMIT = 6;
+    const netQueue = [];
+    let netActive = 0;
+
+    function netAcquire(prio) {
+        return new Promise(resolve => {
+            netQueue.push({ prio, resolve });
+            netPump();
+        });
+    }
+
+    function netPump() {
+        if (netActive >= NET_LIMIT) return;
+        netQueue.sort((a, b) => (b.prio() || 0) - (a.prio() || 0));
+        while (netActive < NET_LIMIT && netQueue.length) {
+            const t = netQueue.shift();
+            netActive++;
+            t.resolve();
+        }
+    }
+
+    function netRelease() {
+        netActive = Math.max(0, netActive - 1);
+        netPump();
+    }
+
     /**
      * 拉取整个文件（多分片并发合并）
      *
@@ -250,11 +291,13 @@
      * ★ 进度按【字节】而不是【分片数】：RAW 是流式的，2.4MB 的图在第
      *   一片还没下完时就有反馈了，干等一句「正在读取…」才是最难受的。
      */
-    async function fetchFile(api, fileInfo, onProgress, signal, onPartial) {
+    async function fetchFile(api, fileInfo, onProgress, signal, onPartial, opts) {
+        opts = opts || {};
         const chunks = fileInfo.chunks || [];
         if (!chunks.length) throw new Error('分片信息缺失');
 
         const CONC = Math.min(6, chunks.length);
+        const prio = opts.priority || (() => 1);
         const expected = fileInfo.size || 0;
         const mime = TPRender.mimeOf(fileInfo.name);
         const parts = new Array(chunks.length);
@@ -277,7 +320,8 @@
          * 渲染出上半部分（实测 1/3 片 → 33%，2/3 片 → 66%），尺寸仍正确。
          */
         function tryPartial() {
-            if (!onPartial) return;
+            // 纯后台预取没有渐进帧接收方，别白做一次全量前缀拼接
+            if (!onPartial || (opts.wantPartial && !opts.wantPartial())) return;
             let k = 0;
             while (k < parts.length && parts[k]) k++;
             if (k <= lastPrefix || k >= parts.length) return;
@@ -295,10 +339,20 @@
             while (idx < chunks.length) {
                 const i = idx++;
                 const c = chunks[i];
-                parts[i] = await api.getBlobBytes(c.owner, c.repo, c.sha, {
-                    signal,
-                    onBytes: (n) => { got[i] = n; report(); }
-                });
+                // 纯预取在用户正在打开文件期间让出带宽；一旦被点开，
+                // priority 会升到 1，这个等待立刻结束。
+                while (prio() === 0 && opts.paused && opts.paused()) {
+                    await new Promise(r => setTimeout(r, 80));
+                }
+                await netAcquire(prio);
+                try {
+                    parts[i] = await api.getBlobBytes(c.owner, c.repo, c.sha, {
+                        signal,
+                        onBytes: (n) => { got[i] = n; report(); }
+                    });
+                } finally {
+                    netRelease();
+                }
                 done++;
                 got[i] = parts[i].length;
                 report();
@@ -393,6 +447,43 @@
         }).catch(() => {});
     }
 
+    /**
+     * 命中即刷新「最近使用」时间戳。
+     * 不刷新的话，LRU 是按写入时间排的：天天看的那个文件反而最老，
+     * 缓存一满就被 trim 掉，等于把最该留的删了。
+     */
+    function idbTouch(key) {
+        return openDB().then(db => {
+            if (!db) return;
+            return new Promise(resolve => {
+                try {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    const os = tx.objectStore(DB_STORE);
+                    const r = os.get(key);
+                    r.onsuccess = () => {
+                        if (r.result) { r.result.at = Date.now(); os.put(r.result); }
+                    };
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                    tx.onabort = () => resolve();
+                } catch (e) { resolve(); }
+            });
+        }).catch(() => {});
+    }
+
+    /** 预取一次会连写 6 个文件，别跟着全表扫 6 次 */
+    let trimTimer = null;
+    let trimPending = false;
+    function scheduleTrim() {
+        if (trimPending) return;
+        trimPending = true;
+        clearTimeout(trimTimer);
+        trimTimer = setTimeout(() => {
+            trimPending = false;
+            idbTrim().catch(() => {});
+        }, 1200);
+    }
+
     /** 超配额时按时间从老到新删，不让缓存把浏览器存储撑爆 */
     function idbTrim() {
         return openDB().then(db => {
@@ -485,6 +576,8 @@
     function getFileBlob(api, f, onProgress, opts) {
         opts = opts || {};
         const key = cacheKey(f);
+        // 1 = 用户正在打开，0 = 后台预取。默认按前台处理。
+        const prio = opts.priority != null ? opts.priority : 1;
 
         const hit = memCache.get(key);
         if (hit) {
@@ -493,6 +586,8 @@
         }
         if (inflight.has(key)) {
             const e = inflight.get(key);
+            // 预取跑到一半被点开：提升优先级，队列里剩余分片马上插队
+            if (prio > e.priority) e.priority = prio;
             if (onProgress) e.cbs.add(onProgress);
             if (opts.onPartial) e.partials.add(opts.onPartial);
             return e.promise;
@@ -506,26 +601,32 @@
         const emitPartial = (blob, k, n) => {
             partials.forEach(fn => { try { fn(blob, k, n); } catch (e) {} });
         };
-        const entry = { promise: null, cbs, partials };
+        const entry = { promise: null, cbs, partials, priority: prio };
         inflight.set(key, entry);
 
         const p = (async () => {
             const disk = await idbGet(key);
             if (disk) {
                 rememberMem(key, disk);
+                idbTouch(key).catch(() => {});   // 刷新 LRU，别把常看的淘汰掉
                 emit({ phase: 'disk', pct: 1 });
                 return disk;
             }
-            const blob = await fetchFile(api, f, emit, opts.signal, emitPartial);
+            const blob = await fetchFile(api, f, emit, opts.signal, emitPartial, {
+                priority: () => entry.priority,
+                wantPartial: () => partials.size > 0,
+                paused: () => app.prefetchPaused,
+            });
             rememberMem(key, blob);
             // 不 await：写盘不该挡住首屏渲染
-            idbPut(key, blob).then(idbTrim).catch(() => {});
+            idbPut(key, blob).then(scheduleTrim).catch(() => {});
             return blob;
         })();
         entry.promise = p;
         const clean = () => {
             if (inflight.get(key) === entry) inflight.delete(key);
             cbs.clear();
+            partials.clear();
         };
         p.then(clean, clean);
         return p;
@@ -542,15 +643,26 @@
      */
     const PREFETCH_MAX_FILE = 3 * 1024 * 1024;
     const PREFETCH_BUDGET = 10 * 1024 * 1024;
+    const PREFETCH_FAIL_COOLDOWN = 60 * 1000;
+    const prefetchFailed = new Map();   // key -> 上次失败时刻
     let prefetchGen = 0;
     let prefetchTimer = null;
     let hoverTimer = null;
 
     function prefetchOne(f) {
+        // 鼠标划过列表这路预取原本没看这个开关：用户正在打开大图时，
+        // 手指/光标带过几行就会再起几组下载，正好把当前文件挤慢。
+        if (app.prefetchPaused) return;
         if (!app.api || !f || f.isDir || !f.size || f.size > PREFETCH_MAX_FILE) return;
         const key = cacheKey(f);
+        const failedAt = prefetchFailed.get(key);
+        // 分片被删 / token 没权限这类失败是稳定的：每次 renderList 都
+        // 重新预取一遍，只会不停刷 404，还占掉正常预取的队列位置。
+        if (failedAt && Date.now() - failedAt < PREFETCH_FAIL_COOLDOWN) return;
         if (memCache.has(key) || inflight.has(key)) return;
-        return getFileBlob(app.api, f, null).catch(() => {});
+        return getFileBlob(app.api, f, null, { priority: 0 }).then(
+            () => prefetchFailed.delete(key),
+            () => prefetchFailed.set(key, Date.now()));
     }
 
     function schedulePrefetch() {
@@ -566,6 +678,8 @@
                 if (!f.size || f.size > PREFETCH_MAX_FILE || f.size > budget) continue;
                 const key = cacheKey(f);
                 if (memCache.has(key) || inflight.has(key)) continue;
+                const failedAt = prefetchFailed.get(key);
+                if (failedAt && Date.now() - failedAt < PREFETCH_FAIL_COOLDOWN) continue;
                 budget -= f.size;
                 queue.push(f);
             }
@@ -1109,11 +1223,10 @@
 
     function renderContinue() {
         const box = $('#tp-continue');
-        const hist = TPStore.getHistory().slice(0, 6);
-        if (!hist.length) { box.innerHTML = ''; return; }
-        // 只显示当前账号仍存在的文件，删掉的条目不展示（点了会报错）
-        const alive = hist.filter(h =>
-            app.files.some(f => TPStore.fingerprint(f) === h.fingerprint));
+        // 先过滤再截断：原来先取 6 条再过滤，前面几条恰好是已删文件时，
+        // 卡片会莫名变少，即使后面还躺着一堆有效记录
+        const alive = TPStore.getHistory().filter(h =>
+            app.files.some(f => TPStore.fingerprint(f) === h.fingerprint)).slice(0, 6);
         if (!alive.length) { box.innerHTML = ''; return; }
 
         let html = '<div class="tp-sec-title">' + icon('clock') + '继续阅读</div><div class="tp-cards">';
@@ -1160,7 +1273,20 @@
 
     function updateLoading(p) {
         const fill = $('#tp-load-fill');
-        if (!fill) return;
+        if (!fill) {
+            // 渐进首帧把加载框整个替换掉了，但后面还有分片在下载：
+            // 不能让百分比就此消失，改更新图片下方那条细条。
+            if (p.phase === 'net') {
+                const pfill = $('#tp-partial-bar i');
+                const ppct = $('#tp-partial-pct');
+                if (pfill && ppct) {
+                    const v = p.total ? Math.min(100, Math.round(p.loaded / p.total * 100)) : 0;
+                    pfill.style.width = v + '%';
+                    ppct.textContent = p.done + ' / ' + p.count + ' 片 · ' + v + '%';
+                }
+            }
+            return;
+        }
         const pctEl = $('#tp-load-pct');
         const sub = $('#tp-load-sub');
         if (p.phase === 'mem' || p.phase === 'disk') {
@@ -1180,6 +1306,10 @@
 
     async function openFile(f) {
         const my = ++openToken;
+        // 直接从列表点开下一个文件时，先撤掉上一个文件的滚动 / pagehide /
+        // 可见性监听和定时器。否则旧闭包会带着旧 fingerprint 继续写进度，
+        // 把新文件的阅读位置串到旧档里，监听器还会一次滚动触发 N 次写盘。
+        if (app._cleanupScroll) { app._cleanupScroll(); app._cleanupScroll = null; }
         app.current = f;
 
         $('#tp-view').classList.add('open');
@@ -1198,11 +1328,16 @@
             f.kind === 'image' && /\.jpe?g$/i.test(f.name);
         const partialUrls = [];
         let finished = false;
-        let partialWrap = null, partialImg = null, partialTag = null;
+        let partialWrap = null, partialImg = null, partialTag = null, lastLabel = '';
 
         function showPartial(pblob, k, n) {
             if (!canPartial || finished || my !== openToken) return;
             if (!$('#tp-view').classList.contains('open')) return;
+            const label = '已载入 ' + k + '/' + n + ' 片 · 继续加载中…';
+            // 文案不挂在 probe.onload 里：截断 JPEG 的解码回调可能延迟到
+            // 下一帧之后才触发，旧帧会把已经更新的「2/3」覆盖回「1/3」。
+            lastLabel = label;
+            if (partialTag) partialTag.textContent = label;
             const url = URL.createObjectURL(pblob);
             partialUrls.push(url);
             const probe = new Image();
@@ -1219,13 +1354,27 @@
                     partialImg.alt = f.name;
                     partialTag = document.createElement('div');
                     partialTag.className = 'tp-partial-tag';
+                    partialTag.textContent = lastLabel;
+                    // 加载框已被替换，进度不能跟着断：在图片下方留一条细条，
+                    // 由 updateLoading 继续喂真实字节百分比
+                    const bar = document.createElement('div');
+                    bar.className = 'tp-load-bar tp-partial-bar';
+                    bar.id = 'tp-partial-bar';
+                    bar.innerHTML = '<i></i>';
+                    const pct = document.createElement('div');
+                    pct.className = 'tp-partial-pct';
+                    pct.id = 'tp-partial-pct';
                     partialWrap.appendChild(partialImg);
                     partialWrap.appendChild(partialTag);
+                    partialWrap.appendChild(bar);
+                    partialWrap.appendChild(pct);
                     $('#tp-body').appendChild(partialWrap);
                 } else {
                     partialImg.src = url;
                 }
-                partialTag.textContent = '已解码 ' + k + '/' + n + ' · 继续加载中…';
+                // 旧帧的 onload 可能晚于下一片抵达才触发，这里必须写
+                // 最新的 lastLabel，否则会把已经更新的「2/3」盖回「1/3」
+                partialTag.textContent = lastLabel;
             };
             probe.onerror = () => {};
             probe.src = url;
@@ -1235,7 +1384,7 @@
             const blob = await getFileBlob(app.api, f, (p) => {
                 if (my !== openToken) return;
                 updateLoading(p);
-            }, { onPartial: showPartial });
+            }, { onPartial: showPartial, priority: 1 });
             if (my !== openToken) return;   // 期间用户点了别的文件，丢弃这次结果
 
             if (app.handle && app.handle.destroy) app.handle.destroy();
@@ -1349,6 +1498,9 @@
         const body = $('#tp-body');
 
         function grab() {
+            // 旧闭包可能还挂在上一个文件上：拿旧 fingerprint 配新文件的
+            // 位置写回去，就会把两个文件的阅读进度串在一起。
+            if (!app.current || TPStore.fingerprint(app.current) !== fp) return;
             if (!app.handle || !app.handle.savePosition) return;
             const pos = app.handle.savePosition();
             if (!pos) return;
@@ -1381,13 +1533,15 @@
 
         // 离开页面前强制存一次，否则最后几秒的进度会丢
         const saveNow = () => { clearTimeout(idleTimer); grab(); };
+        // 必须是命名函数：匿名监听没法 remove，每打开一个文件就多留一个
+        const onVis = () => { if (document.hidden) saveNow(); };
         window.addEventListener('pagehide', saveNow);
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) saveNow();
-        });
+        document.addEventListener('visibilitychange', onVis);
         app._cleanupScroll = () => {
             body.removeEventListener('scroll', onScroll);
             window.removeEventListener('pagehide', saveNow);
+            document.removeEventListener('visibilitychange', onVis);
+            clearTimeout(idleTimer);
             clearInterval(app.saveTimer);
             app.saveTimer = null;
         };
@@ -1431,6 +1585,12 @@
         if (theme === 'auto') {
             root.removeAttribute('data-theme');
         }
+        // 控件回显：主题下拉原本永远是「跟随系统」、记住位置永远不勾，
+        // 而 store 里默认是 true。改过设置再打开面板会以为没生效。
+        const themeSel = $('#tp-theme');
+        if (themeSel) themeSel.value = theme;
+        const remember = $('#tp-remember');
+        if (remember) remember.checked = !!s.rememberPosition;
     }
 
     // ---------- 事件 ----------
@@ -1467,7 +1627,16 @@
             if (e.key === 'Escape') { $('#tp-search').value = ''; renderList(); }
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && $('#tp-view').classList.contains('open')) closeView();
+            if (e.key !== 'Escape') return;
+            const t = e.target;
+            // 焦点在输入框里时 Esc 交给输入框自己（清空搜索），别顺手关掉阅读区
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' ||
+                      t.isContentEditable)) return;
+            if ($('#tp-settings').classList.contains('show')) {
+                $('#tp-settings').classList.remove('show');
+                return;
+            }
+            if ($('#tp-view').classList.contains('open')) closeView();
         });
 
         // 登录框提交
