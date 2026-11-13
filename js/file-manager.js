@@ -1225,19 +1225,24 @@ class FileManager {
         await this._guardChunks(chunks, '清理');
         for (const chunk of chunks) {
             try {
+                // ★ 同 deleteFile：先信 VFS 里的 sha，只有 409 才回去取新的，
+                //   避免为每个分片白跑一次 contents GET（>1MB 分片取不到内容）。
                 let sha = chunk.sha;
-                try {
-                    const fi = await this.api.getFileContents(
-                        chunk.owner, chunk.repo, chunk.path, chunk.branch);
-                    sha = fi.sha || sha;
-                } catch (e) { /* 用记录里的 sha */ }
-
-                if (!sha) {
-                    this._pendingOrphan(chunk, why, '无 sha，跳过');
-                    continue;
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    if (!sha) {
+                        const fi = await this.api.getFileContents(
+                            chunk.owner, chunk.repo, chunk.path, chunk.branch);
+                        sha = fi.sha || sha;
+                    }
+                    try {
+                        await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path,
+                            `清理孤儿分片: ${chunk.path}`, chunk.branch, sha);
+                        break;
+                    } catch (e) {
+                        if (e.status !== 409 || attempt === 1) throw e;
+                        sha = null;   // 下一轮强制重新取
+                    }
                 }
-                await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path,
-                    `清理孤儿分片: ${chunk.path}`, chunk.branch, sha);
                 this.storage.subtractFromRepoUsage?.(
                     chunk.owner, chunk.repo, chunk.size);
             } catch (e) {
@@ -1272,13 +1277,28 @@ class FileManager {
         for (let i = 0; i < fileInfo.chunks.length; i++) {
             const chunk = fileInfo.chunks[i];
             try {
+                // ★ 不再无条件先跑一次 contents GET：VFS 里的 chunk.sha
+                //   就是上传时记下的 blob sha，通常仍然有效。而 contents API
+                //   对 >1MB 分片返回空 content（见 github-api.js getFileRaw
+                //   的注释），等于删文件前又把它白下载一遍。
+                //   只有 sha 过期触发 409 才回去取最新的，正确性不降。
+                //   ★ 与 _cleanupOrphanChunks 保持一致，别让两条路径分叉。
                 let sha = chunk.sha;
-                try {
-                    const fi = await this.api.getFileContents(chunk.owner, chunk.repo, chunk.path, chunk.branch);
-                    sha = fi.sha;
-                } catch (e) { /* 忽略 */ }
-
-                await this.api.deleteFile(chunk.owner, chunk.repo, chunk.path, `删除分片: ${chunk.path}`, chunk.branch, sha);
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    if (!sha) {
+                        const fi = await this.api.getFileContents(
+                            chunk.owner, chunk.repo, chunk.path, chunk.branch);
+                        sha = fi.sha;
+                    }
+                    try {
+                        await this.api.deleteFile(chunk.owner, chunk.repo,
+                            chunk.path, `删除分片: ${chunk.path}`, chunk.branch, sha);
+                        break;
+                    } catch (e) {
+                        if (e.status !== 409 || attempt === 1) throw e;
+                        sha = null;   // 下一轮强制重新取
+                    }
+                }
                 console.log(`[FileManager] 已删除分片 ${i + 1}/${fileInfo.chunks.length}: ${chunk.repo}/${chunk.path}`);
             } catch (e) {
                 // ★ 原来是纯 console.warn —— 分片静默留下，
