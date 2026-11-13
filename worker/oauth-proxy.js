@@ -137,7 +137,10 @@ export default {
             form.set('client_id', String(payload.client_id));
             // 只认这两个 scope，前端传什么都不采纳——
             // 否则有人能用你的 client_id 换到更高权限的 token
-            form.set('scope', 'repo,workflow');
+            // ★ 多个 scope 必须用空格分隔（GitHub Docs 规定，URL 里编码为 %20）。
+            //   逗号是 token 响应里回显 scope 的格式，不是请求格式；
+            //   写成 'repo,workflow' 会被当成一个叫 "repo,workflow" 的作用域。
+            form.set('scope', 'repo workflow');
 
             try {
                 const res = await proxyTo('https://github.com/login/device/code', form.toString());

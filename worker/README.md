@@ -51,7 +51,7 @@ localStorage.setItem('gd_oauth_client_id', 'Iv1.xxxxxxxxxxxxxxxx');
 ## 安全边界
 
 - **来源白名单**：只放行 `*.github.io` 与 localhost。别人的站点调不动。
-- **scope 写死**：无论前端传什么，代理强制改成 `repo,workflow`。
+- **scope 写死**：无论前端传什么，代理强制改成 `repo workflow`（空格分隔）。
   否则有人能拿你的 client_id 换更高权限的 token。
 - **无状态**：不落盘任何 token，被攻破也拿不到历史数据。
 

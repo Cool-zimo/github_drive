@@ -81,11 +81,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
         run: |
           set +e
-          {
-            echo "== deploy =="
-            npx wrangler deploy --config worker-beta/wrangler.toml
-            echo "exit=$?"
-          } 2>&1 | tee -a /tmp/diag.txt
+          echo "== deploy ==" | tee -a /tmp/diag.txt
+          npx wrangler deploy --config worker-beta/wrangler.toml 2>&1 | tee -a /tmp/diag.txt
+          # ★ 管道最后是 tee（恒为 0），旧写法用 echo "exit=$?" 把 wrangler
+          #   的退出码吃掉，部署失败时这个 step 照样绿。用 PIPESTATUS[0]
+          #   取出真实退出码并显式 exit，让 workflow 真的变红。
+          DEPLOY_EXIT=${PIPESTATUS[0]}
+          echo "exit=$DEPLOY_EXIT" | tee -a /tmp/diag.txt
+          exit "$DEPLOY_EXIT"
 
       # 占位符没换成真 id 就明确失败，不让 workflow 假装成功
       - name: 判定
